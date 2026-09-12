@@ -2,28 +2,28 @@
   "name": "blazefire",
   "version": "1.0.0",
   "description": "Blazefire framework powered by Frostfast compiler",
-  "main": "index.js",
-  "types": "dist/index.d.ts",
+  "main": "blazefire/index.js",
+  "types": "blazefire/dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./blazefire/dist/index.js",
+      "require": "./blazefire/index.js",
+      "types": "./blazefire/dist/index.d.ts"
     },
     "./compiler": {
-      "import": "./dist/compiler/index.js",
-      "require": "./src/compiler/index.js",
-      "types": "./dist/compiler/index.d.ts"
+      "import": "./blazefire/dist/compiler/index.js",
+      "require": "./blazefire/src/compiler/index.js",
+      "types": "./blazefire/dist/compiler/index.d.ts"
     },
-    "./styles": "./assets/blazefire-global.css",
-    "./components/*": "./src/components/*"
+    "./styles": "./blazefire/assets/blazefire-global.css",
+    "./components/*": "./blazefire/src/components/*"
   },
   "files": [
-    "index.js",
-    "src/",
-    "dist/",
-    "README.md",
-    "assets/"
+    "blazefire/index.js",
+    "blazefire/src/",
+    "blazefire/dist/",
+    "blazefire/assets/",
+    "blazefire/README.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -59,10 +59,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/blazefire/blazefire.git"
+    "url": "https://github.com/arts009009009/blazefire.git"
   },
   "bugs": {
-    "url": "https://github.com/blazefire/blazefire/issues"
+    "url": "https://github.com/arts009009009/blazefire/issues"
   },
   "homepage": "https://blazefire.dev"
 }
