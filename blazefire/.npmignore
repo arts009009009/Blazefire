@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+*.test.*
+*.spec.*
+__tests__/
+
+# Stories
+*.stories.*
+
+# Source maps
+*.map
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Monorepo files
+lerna.json
+turbo.json
+pnpm-workspace.yaml
+pnpm-lock.yaml

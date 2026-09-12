@@ -1,0 +1,253 @@
+:host(.dark) {
+  --color-font: #e0e0e0;
+  --color-backdrop: rgba(0, 0, 0, 0.92);
+  --color-border-shadow: rgba(0, 255, 255, 0.15);
+
+  --color-title-color: #00ffff;
+  --color-stack-notes: #b0b0b0;
+
+  /* Background Dark - OLED Black */
+  --color-background-100: #000000;
+  --color-background-200: #050505;
+
+  /* Syntax Dark - Cyberpunk Neon */
+  --color-syntax-comment: #6a6a6a;
+  --color-syntax-constant: #e0e0e0;
+  --color-syntax-function: #00ffff;
+  --color-syntax-keyword: #ff00ff;
+  --color-syntax-link: #00ff41;
+  --color-syntax-parameter: #ffaa00;
+  --color-syntax-punctuation: #e0e0e0;
+  --color-syntax-string: #00ff41;
+  --color-syntax-string-expression: #00ff41;
+
+  /* Gray Scale Dark - OLED */
+  --color-gray-100: #0a0a0a;
+  --color-gray-200: #111111;
+  --color-gray-300: #1a1a1a;
+  --color-gray-400: #222222;
+  --color-gray-500: #333333;
+  --color-gray-600: #666666;
+  --color-gray-700: #888888;
+  --color-gray-800: #aaaaaa;
+  --color-gray-900: #cccccc;
+  --color-gray-1000: #f0f0f0;
+
+  /* Gray Alpha Scale Dark */
+  --color-gray-alpha-100: rgba(0, 255, 255, 0.04);
+  --color-gray-alpha-200: rgba(0, 255, 255, 0.06);
+  --color-gray-alpha-300: rgba(0, 255, 255, 0.08);
+  --color-gray-alpha-400: rgba(0, 255, 255, 0.1);
+  --color-gray-alpha-500: rgba(0, 255, 255, 0.18);
+  --color-gray-alpha-600: rgba(0, 255, 255, 0.35);
+  --color-gray-alpha-700: rgba(0, 255, 255, 0.45);
+  --color-gray-alpha-800: rgba(0, 255, 255, 0.55);
+  --color-gray-alpha-900: rgba(0, 255, 255, 0.7);
+  --color-gray-alpha-1000: rgba(240, 240, 240, 0.95);
+
+  /* Blue Scale Dark - Electric Cyan */
+  --color-blue-100: #001a1a;
+  --color-blue-200: #002626;
+  --color-blue-300: #003333;
+  --color-blue-400: #004040;
+  --color-blue-500: #005555;
+  --color-blue-600: #00a8a8;
+  --color-blue-700: #00cccc;
+  --color-blue-800: #00e5e5;
+  --color-blue-900: #00ffff;
+  --color-blue-1000: #e0ffff;
+
+  /* Purple Scale Dark - Neon Magenta */
+  --color-purple-100: #1a001a;
+  --color-purple-200: #260026;
+  --color-purple-300: #330033;
+  --color-purple-400: #400040;
+  --color-purple-500: #550055;
+  --color-purple-600: #aa00aa;
+  --color-purple-700: #cc00cc;
+  --color-purple-800: #e500e5;
+  --color-purple-900: #ff00ff;
+  --color-purple-1000: #ffe0ff;
+
+  /* Red Scale Dark - Hot Pink Neon */
+  --color-red-100: #1a0008;
+  --color-red-200: #26000c;
+  --color-red-300: #330010;
+  --color-red-400: #400014;
+  --color-red-500: #55001a;
+  --color-red-600: #aa0035;
+  --color-red-700: #ff006e;
+  --color-red-800: #ff3388;
+  --color-red-900: #ff66a3;
+  --color-red-1000: #ffe0ec;
+
+  /* Amber Scale Dark - Neon Orange */
+  --color-amber-100: #1a0d00;
+  --color-amber-200: #261300;
+  --color-amber-300: #331a00;
+  --color-amber-400: #402000;
+  --color-amber-500: #552a00;
+  --color-amber-600: #aa5500;
+  --color-amber-700: #ff8800;
+  --color-amber-800: #ffaa00;
+  --color-amber-900: #ffcc33;
+  --color-amber-1000: #fff3d6;
+
+  /* Green Scale Dark - Matrix Green */
+  --color-green-100: #001a08;
+  --color-green-200: #00260c;
+  --color-green-300: #003310;
+  --color-green-400: #004014;
+  --color-green-500: #00551a;
+  --color-green-600: #00aa35;
+  --color-green-700: #00cc41;
+  --color-green-800: #00ff41;
+  --color-green-900: #33ff66;
+  --color-green-1000: #e0ffe8;
+
+  /* Instant Guidance Cards - Blazefire Neon */
+  --color-instant-border-blue: rgba(0, 255, 255, 0.45);
+  --color-instant-border-purple: rgba(255, 0, 255, 0.45);
+  --color-instant-border-red: rgba(255, 0, 110, 0.45);
+  --color-instant-border-amber: rgba(255, 136, 0, 0.5);
+  --color-instant-border-teal: rgba(0, 255, 65, 0.5);
+  --color-instant-text-purple: rgb(255, 0, 255);
+  --color-instant-text-amber: rgb(255, 170, 0);
+  --color-instant-text-teal: rgb(0, 255, 65);
+
+  /* Turbopack Dark - Blazefire Neon */
+  --color-turbopack-text-red: #ff006e;
+  --color-turbopack-text-blue: #00ffff;
+  --color-turbopack-border-red: #330010;
+  --color-turbopack-border-blue: #003333;
+  --color-turbopack-background-red: #0a0004;
+  --color-turbopack-background-blue: #000a0a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host(:not(.light)) {
+    --color-font: #e0e0e0;
+    --color-backdrop: rgba(0, 0, 0, 0.92);
+    --color-border-shadow: rgba(0, 255, 255, 0.15);
+
+    --color-title-color: #00ffff;
+    --color-stack-notes: #b0b0b0;
+
+    /* Background Dark - OLED Black */
+    --color-background-100: #000000;
+    --color-background-200: #050505;
+
+    /* Syntax Dark - Cyberpunk Neon */
+    --color-syntax-comment: #6a6a6a;
+    --color-syntax-constant: #e0e0e0;
+    --color-syntax-function: #00ffff;
+    --color-syntax-keyword: #ff00ff;
+    --color-syntax-link: #00ff41;
+    --color-syntax-parameter: #ffaa00;
+    --color-syntax-punctuation: #e0e0e0;
+    --color-syntax-string: #00ff41;
+    --color-syntax-string-expression: #00ff41;
+
+    /* Gray Scale Dark - OLED */
+    --color-gray-100: #0a0a0a;
+    --color-gray-200: #111111;
+    --color-gray-300: #1a1a1a;
+    --color-gray-400: #222222;
+    --color-gray-500: #333333;
+    --color-gray-600: #666666;
+    --color-gray-700: #888888;
+    --color-gray-800: #aaaaaa;
+    --color-gray-900: #cccccc;
+    --color-gray-1000: #f0f0f0;
+
+    /* Gray Alpha Scale Dark */
+    --color-gray-alpha-100: rgba(0, 255, 255, 0.04);
+    --color-gray-alpha-200: rgba(0, 255, 255, 0.06);
+    --color-gray-alpha-300: rgba(0, 255, 255, 0.08);
+    --color-gray-alpha-400: rgba(0, 255, 255, 0.1);
+    --color-gray-alpha-500: rgba(0, 255, 255, 0.18);
+    --color-gray-alpha-600: rgba(0, 255, 255, 0.35);
+    --color-gray-alpha-700: rgba(0, 255, 255, 0.45);
+    --color-gray-alpha-800: rgba(0, 255, 255, 0.55);
+    --color-gray-alpha-900: rgba(0, 255, 255, 0.7);
+    --color-gray-alpha-1000: rgba(240, 240, 240, 0.95);
+
+    /* Blue Scale Dark - Electric Cyan */
+    --color-blue-100: #001a1a;
+    --color-blue-200: #002626;
+    --color-blue-300: #003333;
+    --color-blue-400: #004040;
+    --color-blue-500: #005555;
+    --color-blue-600: #00a8a8;
+    --color-blue-700: #00cccc;
+    --color-blue-800: #00e5e5;
+    --color-blue-900: #00ffff;
+    --color-blue-1000: #e0ffff;
+
+    /* Purple Scale Dark - Neon Magenta */
+    --color-purple-100: #1a001a;
+    --color-purple-200: #260026;
+    --color-purple-300: #330033;
+    --color-purple-400: #400040;
+    --color-purple-500: #550055;
+    --color-purple-600: #aa00aa;
+    --color-purple-700: #cc00cc;
+    --color-purple-800: #e500e5;
+    --color-purple-900: #ff00ff;
+    --color-purple-1000: #ffe0ff;
+
+    /* Red Scale Dark - Hot Pink Neon */
+    --color-red-100: #1a0008;
+    --color-red-200: #26000c;
+    --color-red-300: #330010;
+    --color-red-400: #400014;
+    --color-red-500: #55001a;
+    --color-red-600: #aa0035;
+    --color-red-700: #ff006e;
+    --color-red-800: #ff3388;
+    --color-red-900: #ff66a3;
+    --color-red-1000: #ffe0ec;
+
+    /* Amber Scale Dark - Neon Orange */
+    --color-amber-100: #1a0d00;
+    --color-amber-200: #261300;
+    --color-amber-300: #331a00;
+    --color-amber-400: #402000;
+    --color-amber-500: #552a00;
+    --color-amber-600: #aa5500;
+    --color-amber-700: #ff8800;
+    --color-amber-800: #ffaa00;
+    --color-amber-900: #ffcc33;
+    --color-amber-1000: #fff3d6;
+
+    /* Green Scale Dark - Matrix Green */
+    --color-green-100: #001a08;
+    --color-green-200: #00260c;
+    --color-green-300: #003310;
+    --color-green-400: #004014;
+    --color-green-500: #00551a;
+    --color-green-600: #00aa35;
+    --color-green-700: #00cc41;
+    --color-green-800: #00ff41;
+    --color-green-900: #33ff66;
+    --color-green-1000: #e0ffe8;
+
+    /* Instant Guidance Cards - Blazefire Neon */
+    --color-instant-border-blue: rgba(0, 255, 255, 0.45);
+    --color-instant-border-purple: rgba(255, 0, 255, 0.45);
+    --color-instant-border-red: rgba(255, 0, 110, 0.45);
+    --color-instant-border-amber: rgba(255, 136, 0, 0.5);
+    --color-instant-border-teal: rgba(0, 255, 65, 0.5);
+    --color-instant-text-purple: rgb(255, 0, 255);
+    --color-instant-text-amber: rgb(255, 170, 0);
+    --color-instant-text-teal: rgb(0, 255, 65);
+
+    /* Turbopack Dark - Blazefire Neon */
+    --color-turbopack-text-red: #ff006e;
+    --color-turbopack-text-blue: #00ffff;
+    --color-turbopack-border-red: #330010;
+    --color-turbopack-border-blue: #003333;
+    --color-turbopack-background-red: #0a0004;
+    --color-turbopack-background-blue: #000a0a;
+  }
+}
