@@ -17,6 +17,7 @@ export interface ErrorBaseProps {
   rendered: boolean
   transitionDurationMs: number
   isTurbopack: boolean
+  isFrostfast: boolean
   versionInfo: OverlayState['versionInfo']
   errorCount: number
 }
@@ -35,6 +36,7 @@ export function ErrorOverlay({
   errorCount: number
 }) {
   const isTurbopack = !!process.env.TURBOPACK
+  const isFrostfast = isTurbopack
 
   // This hook lets us do an exit animation before unmounting the component
   const { mounted, rendered } = useDelayedRender(state.isErrorOverlayOpen, {
@@ -45,6 +47,7 @@ export function ErrorOverlay({
     rendered,
     transitionDurationMs,
     isTurbopack,
+    isFrostfast,
     versionInfo: state.versionInfo,
     errorCount,
   }

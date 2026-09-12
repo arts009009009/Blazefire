@@ -30,8 +30,10 @@ export function ErrorOverlayNav({
   versionInfo,
   renderTabBar,
 }: ErrorOverlayNavProps) {
-  const bundlerName = (process.env.__NEXT_BUNDLER || 'Turbopack') as
-    | 'Turbopack'
+  const bundlerName = ((process.env.__NEXT_BUNDLER || 'Turbopack') === 'Turbopack'
+    ? 'Frostfast'
+    : process.env.__NEXT_BUNDLER || 'Frostfast') as
+    | 'Frostfast'
     | 'Webpack'
     | 'Rspack'
   return (

@@ -148,11 +148,11 @@
   --color-instant-text-amber: rgb(163, 82, 0);
   --color-instant-text-teal: rgb(0, 130, 115);
 
-  /* Frostfast Light - Blazefire */
-  --color-frostfast-text-red: #ff1e56;
-  --color-frostfast-text-blue: #0096ff;
-  --color-frostfast-border-red: #f0adbe;
-  --color-frostfast-border-blue: #adccea;
-  --color-frostfast-background-red: #fff7f9;
-  --color-frostfast-background-blue: #f6fbff;
+  /* Turbopack Light - Temporary */
+  --color-turbopack-text-red: #ff1e56;
+  --color-turbopack-text-blue: #0096ff;
+  --color-turbopack-border-red: #f0adbe;
+  --color-turbopack-border-blue: #adccea;
+  --color-turbopack-background-red: #fff7f9;
+  --color-turbopack-background-blue: #f6fbff;
 }

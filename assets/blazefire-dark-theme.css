@@ -115,13 +115,13 @@
   --color-instant-text-amber: rgb(255, 170, 0);
   --color-instant-text-teal: rgb(0, 255, 65);
 
-  /* Frostfast Dark - Blazefire Neon */
-  --color-frostfast-text-red: #ff006e;
-  --color-frostfast-text-blue: #00ffff;
-  --color-frostfast-border-red: #330010;
-  --color-frostfast-border-blue: #003333;
-  --color-frostfast-background-red: #0a0004;
-  --color-frostfast-background-blue: #000a0a;
+  /* Turbopack Dark - Blazefire Neon */
+  --color-turbopack-text-red: #ff006e;
+  --color-turbopack-text-blue: #00ffff;
+  --color-turbopack-border-red: #330010;
+  --color-turbopack-border-blue: #003333;
+  --color-turbopack-background-red: #0a0004;
+  --color-turbopack-background-blue: #000a0a;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -242,12 +242,12 @@
     --color-instant-text-amber: rgb(255, 170, 0);
     --color-instant-text-teal: rgb(0, 255, 65);
 
-    /* Frostfast Dark - Blazefire Neon */
-    --color-frostfast-text-red: #ff006e;
-    --color-frostfast-text-blue: #00ffff;
-    --color-frostfast-border-red: #330010;
-    --color-frostfast-border-blue: #003333;
-    --color-frostfast-background-red: #0a0004;
-    --color-frostfast-background-blue: #000a0a;
+    /* Turbopack Dark - Blazefire Neon */
+    --color-turbopack-text-red: #ff006e;
+    --color-turbopack-text-blue: #00ffff;
+    --color-turbopack-border-red: #330010;
+    --color-turbopack-border-blue: #003333;
+    --color-turbopack-background-red: #0a0004;
+    --color-turbopack-background-blue: #000a0a;
   }
 }

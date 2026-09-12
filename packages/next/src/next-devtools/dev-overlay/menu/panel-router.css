@@ -18,7 +18,11 @@
   transition: var(--panel-transition);
 }
 
-.turbopack-upgrade-link {
+.frostfast-upgrade-link {
   text-decoration: underline;
   font-weight: 500;
+  background: linear-gradient(90deg, #ff006e, #00ffff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

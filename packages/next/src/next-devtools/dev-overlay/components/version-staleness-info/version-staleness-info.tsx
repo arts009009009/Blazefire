@@ -9,12 +9,12 @@ export function VersionStalenessInfo({
 }: {
   versionInfo: VersionInfo
   // Passed from parent for easier handling in Storybook.
-  bundlerName: 'Webpack' | 'Turbopack' | 'Rspack'
+  bundlerName: 'Webpack' | 'Turbopack' | 'Rspack' | 'Frostfast'
 }) {
   const { staleness } = versionInfo
   let { text, indicatorClass, title } = getStaleness(versionInfo)
 
-  const isTurbopack = bundlerName === 'Turbopack'
+  const isFrostfast = bundlerName === 'Frostfast' || bundlerName === 'Turbopack'
   const shouldBeLink = staleness.startsWith('stale')
   if (shouldBeLink) {
     return (
@@ -30,8 +30,8 @@ export function VersionStalenessInfo({
         <span data-nextjs-version-checker title={title}>
           {text}
         </span>
-        <span className={cx(isTurbopack && 'turbopack-text')}>
-          {bundlerName}
+        <span className={cx(isFrostfast && 'frostfast-text')}>
+          {bundlerName === 'Turbopack' ? 'Frostfast' : bundlerName}
         </span>
       </a>
     )
@@ -45,7 +45,7 @@ export function VersionStalenessInfo({
       <span data-nextjs-version-checker title={title}>
         {text}
       </span>
-      <span className={cx(isTurbopack && 'turbopack-text')}>{bundlerName}</span>
+      <span className={cx(isFrostfast && 'frostfast-text')}>{bundlerName === 'Turbopack' ? 'Frostfast' : bundlerName}</span>
     </span>
   )
 }
@@ -100,11 +100,11 @@ export const styles = `
     stroke: var(--color-gray-300);
   }
 
-  .nextjs-container-build-error-version-status > .turbopack-text {
+  .nextjs-container-build-error-version-status > .frostfast-text {
     background: linear-gradient(
       to right,
-      var(--color-turbopack-text-red) 0%,
-      var(--color-turbopack-text-blue) 100%
+      var(--color-frostfast-text-red) 0%,
+      var(--color-frostfast-text-blue) 100%
     );
     background-clip: text;
     -webkit-background-clip: text;

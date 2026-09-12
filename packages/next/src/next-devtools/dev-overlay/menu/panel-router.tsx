@@ -111,22 +111,22 @@ const MenuPanel = () => {
               },
         !!process.env.TURBOPACK
           ? {
-              title: 'Turbopack is enabled.',
-              label: 'Bundler',
-              value: 'Turbopack',
+              title: 'Frostfast compiler is enabled.',
+              label: 'Compiler',
+              value: 'Frostfast',
             }
           : {
               title:
-                'Learn about Turbopack and how to enable it in your application.',
-              label: 'Bundler',
+                'Learn about Frostfast compiler and how to enable it in your application.',
+              label: 'Compiler',
               value: (
                 <a
                   href="https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack"
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="turbopack-upgrade-link"
+                  className="frostfast-upgrade-link"
                 >
-                  {process.env.__NEXT_BUNDLER || 'Turbopack'}
+                  {process.env.__NEXT_BUNDLER || 'Frostfast'}
                 </a>
               ),
             },

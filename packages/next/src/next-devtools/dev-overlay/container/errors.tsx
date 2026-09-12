@@ -1166,7 +1166,7 @@ export function Errors({
         <ErrorOverlayLayout
           errorCode={errorCode}
           errorType={errorType}
-          errorMessage="Next.js could not validate that a segment in your UI has instant navigation."
+          errorMessage="Blazefire could not validate that a segment in your UI has instant navigation."
           headerChildren={
             <InstantHeaderExplanation kind="unrendered-segment" />
           }

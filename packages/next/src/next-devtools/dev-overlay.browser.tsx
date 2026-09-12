@@ -92,9 +92,9 @@ type Dispatch = ReturnType<typeof useErrorOverlayReducer>[1]
 const eventQueue = new EventQueue<Dispatch>()
 
 function loadDevOverlayUX() {
-  const { DevOverlay, FontStyles } =
+  const { DevOverlay, FontStyles, BlazefireProvider } =
     require('./dev-overlay-ux') as typeof import('./dev-overlay-ux')
-  return { DevOverlay, FontStyles }
+  return { DevOverlay, FontStyles, BlazefireProvider }
 }
 
 // Global state store for accessing current overlay state from outside React context
@@ -291,6 +291,36 @@ function DevOverlayRoot({
       portalNode.classList.remove('dark')
       portalNode.classList.remove('light')
     }
+
+    // Inject Blazefire cyberpunk glow CSS into the main document
+    if (typeof document !== 'undefined' && !document.getElementById('blazefire-global-glow')) {
+      const style = document.createElement('style')
+      style.id = 'blazefire-global-glow'
+      style.textContent = `
+        :root {
+          --blazefire-cyan: #00ffff;
+          --blazefire-magenta: #ff00ff;
+          --blazefire-red: #ff006e;
+          --blazefire-green: #00ff41;
+          --blazefire-orange: #ff8800;
+        }
+        @keyframes blazefire-pulse {
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
+        }
+        @keyframes blazefire-glow {
+          0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 255, 0.3); }
+          50% { box-shadow: 0 0 15px rgba(0, 255, 255, 0.6), 0 0 30px rgba(255, 0, 255, 0.3); }
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #000000; }
+        ::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, #00ffff, #ff00ff);
+          border-radius: 3px;
+        }
+      `
+      document.head.appendChild(style)
+    }
   }, [shadowRoot, state.theme])
 
   useInsertionEffect(() => {
@@ -311,7 +341,7 @@ function DevOverlayRoot({
     return null
   }
 
-  const { DevOverlay, FontStyles } = loadDevOverlayUX()
+  const { DevOverlay, FontStyles, BlazefireProvider } = loadDevOverlayUX()
 
   return (
     <>
@@ -325,7 +355,12 @@ function DevOverlayRoot({
           state,
         }}
       >
-        <DevOverlay />
+        <BlazefireProvider
+          compiler={!!process.env.TURBOPACK ? 'frostfast' : 'webpack'}
+          theme={state.theme}
+        >
+          <DevOverlay />
+        </BlazefireProvider>
       </DevOverlayContext>
     </>
   )
