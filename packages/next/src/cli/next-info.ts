@@ -158,7 +158,7 @@ Binaries:
   pnpm: ${getBinaryVersion('pnpm')}
 Relevant Packages:
 ${relevantPackages}
-Next.js Config:
+Blazefire Config:
   output: ${nextConfig.output}`)
 
   if (versionInfo?.staleness.startsWith('stale')) {
@@ -300,7 +300,7 @@ async function printVerboseInfo() {
       },
     },
     {
-      title: 'Next.js installation',
+      title: 'Blazefire installation',
       scripts: {
         default: async () => {
           const installedRelease = getPackageVersion('next')
@@ -317,7 +317,7 @@ async function printVerboseInfo() {
     react: ${getPackageVersion('react')}
     react-dom: ${getPackageVersion('react-dom')}
     typescript: ${getPackageVersion('typescript')}
-  Next.js Config:
+  Blazefire Config:
     output: ${nextConfig.output}
 
 `

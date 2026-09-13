@@ -110,7 +110,7 @@ export async function uploadTraceToBlob(
   const uploadUrl = getUploadUrl()
 
   console.log(`Found ${uploadableFiles.length} file(s) in ${profilesDir}.`)
-  console.log(`Uploading to the Next.js team...`)
+  console.log(`Uploading to the Blazefire team...`)
 
   const { put } =
     require('next/dist/compiled/@vercel/blob') as typeof import('next/dist/compiled/@vercel/blob')

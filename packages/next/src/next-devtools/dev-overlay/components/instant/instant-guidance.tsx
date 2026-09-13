@@ -80,7 +80,7 @@ function CopyPromptButton({
   const hashIndex = link.indexOf('#')
   const rulePage = hashIndex === -1 ? link : link.slice(0, hashIndex)
   const fixHeader = [
-    `Apply the [${groupLabel}] "${title}" fix to the Next.js Insight raised in this project.`,
+    `Apply the [${groupLabel}] "${title}" fix to the Blazefire Insight raised in this project.`,
     '',
     'Steps:',
     '',

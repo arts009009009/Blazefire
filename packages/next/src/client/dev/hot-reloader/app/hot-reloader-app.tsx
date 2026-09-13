@@ -43,6 +43,41 @@ import { getOrCreateDebugChannelReadableWriterPair } from '../../debug-channel'
 import { createFromReadableStream as createFromReadableStreamBrowser } from 'react-server-dom-webpack/client'
 import { findSourceMapURL } from '../../../app-find-source-map-url'
 
+function useBlazefireGlobalStyles() {
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (document.getElementById('blazefire-global-glow')) return
+
+    const style = document.createElement('style')
+    style.id = 'blazefire-global-glow'
+    style.textContent = `
+      :root {
+        --blazefire-cyan: #00ffff;
+        --blazefire-magenta: #ff00ff;
+        --blazefire-red: #ff006e;
+        --blazefire-green: #00ff41;
+        --blazefire-orange: #ff8800;
+      }
+      @keyframes blazefire-pulse {
+        0%, 100% { opacity: 0.6; }
+        50% { opacity: 1; }
+      }
+      @keyframes blazefire-glow {
+        0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 255, 0.3); }
+        50% { box-shadow: 0 0 15px rgba(0, 255, 255, 0.6), 0 0 30px rgba(255, 0, 255, 0.3); }
+      }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: #000000; }
+      ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #00ffff, #ff00ff);
+        border-radius: 3px;
+      }
+      html { color-scheme: dark; }
+    `
+    document.head.appendChild(style)
+  }, [])
+}
+
 export interface StaticIndicatorState {
   pathname: string | null
   appIsrManifest: Record<string, boolean> | null
@@ -602,6 +637,7 @@ export default function HotReload({
 }) {
   useErrorHandler(dispatcher.onUnhandledError, dispatcher.onUnhandledRejection)
   useWebSocketPing(webSocket)
+  useBlazefireGlobalStyles()
 
   // We don't want access of the pathname for the dev tools to trigger a dynamic
   // access (as the dev overlay will never be present in production).

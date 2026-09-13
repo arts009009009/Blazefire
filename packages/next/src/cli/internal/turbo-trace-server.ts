@@ -141,12 +141,12 @@ export async function startTurboTraceServerCli(
   }
 
   console.log(
-    `Turbopack trace server started. View trace at https://trace.nextjs.org?port=${wsPort}`
+    `Frostfast trace server started. View trace at https://trace.nextjs.org?port=${wsPort}`
   )
 
   // Create the MCP server.
   const mcpServer = new McpServer({
-    name: 'Next.js Trace Server MCP',
+    name: 'Blazefire Trace Server MCP',
     version: '0.1.0',
   })
 

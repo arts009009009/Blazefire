@@ -25,12 +25,12 @@ const nextTelemetry = (options: NextTelemetryOptions, arg: string) => {
         cyan(`Your preference has been saved${path ? ` to ${path}` : ''}.`)
       )
     } else {
-      console.log(yellow(`Next.js' telemetry collection is already disabled.`))
+      console.log(yellow(`Blazefire's telemetry collection is already disabled.`))
     }
 
     isEnabled = false
   } else {
-    console.log(bold('Next.js Telemetry'))
+    console.log(bold('Blazefire Telemetry'))
   }
 
   console.log(
@@ -39,11 +39,11 @@ const nextTelemetry = (options: NextTelemetryOptions, arg: string) => {
 
   if (isEnabled) {
     console.log(
-      '\nNext.js telemetry is completely anonymous. Thank you for participating!'
+      '\nBlazefire telemetry is completely anonymous. Thank you for participating!'
     )
   } else {
     console.log(
-      `\nYou have opted-out of Next.js' anonymous telemetry program.\nNo data will be collected from your machine.`
+      `\nYou have opted-out of Blazefire's anonymous telemetry program.\nNo data will be collected from your machine.`
     )
   }
 

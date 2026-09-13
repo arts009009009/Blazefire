@@ -124,7 +124,7 @@ async function discoverDevServerUrl(directory?: string): Promise<URL> {
   }
 
   return exitWithError(
-    `Unable to discover a running Next.js dev server from ${lockfilePath}. Start next dev or pass --url.`
+    `Unable to discover a running Blazefire dev server from ${lockfilePath}. Start next dev or pass --url.`
   )
 }
 
