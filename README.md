@@ -3,6 +3,10 @@
   <p>Blazefire framework powered by Frostfast compiler</p>
 </div>
 
+## Early Showcase of custom error overlay triggered by hydration mismatch
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
+
+
 ## Features
 
 - Cyberpunk/OLED dark theme
