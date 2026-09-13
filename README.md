@@ -6,6 +6,15 @@
 ## Early Showcase of custom error overlay triggered by hydration mismatch
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
 
+# Blazefire Framework 🔥
+
+Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
+It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
+
+## Acknowledgements
+- [Next.js](https://nextjs.org/) — for pioneering the meta‑framework model and inspiring routing + SSR concepts.
+- Frostfast Compiler — powering Blazefire’s runtime speed.
+- Community devs who shaped the ecosystem we build on.
 
 ## Features
 
