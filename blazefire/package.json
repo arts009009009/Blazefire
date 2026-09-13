@@ -2,27 +2,28 @@
   "name": "blazefire",
   "version": "1.0.0",
   "description": "Blazefire framework powered by Frostfast compiler",
+  "type": "module",
   "main": "index.js",
-  "types": "dist/index.d.ts",
+  "types": "src/index.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./src/index.ts",
+      "default": "./index.js"
     },
     "./compiler": {
-      "import": "./dist/compiler/index.js",
-      "require": "./src/compiler/index.js",
-      "types": "./dist/compiler/index.d.ts"
+      "types": "./src/compiler/index.ts",
+      "default": "./src/compiler/index.js"
     },
     "./styles": "./assets/blazefire-global.css",
-    "./components/*": "./src/components/*",
+    "./components/*": {
+      "types": "./src/components/*.tsx",
+      "default": "./src/components/*.js"
+    },
     "./data/*": "./data/*"
   },
   "files": [
     "index.js",
     "src/",
-    "dist/",
     "assets/",
     "data/",
     "README.md"
@@ -35,7 +36,6 @@
     "blazefire",
     "framework",
     "react",
-    "nextjs",
     "error-overlay",
     "devtools",
     "cyberpunk",
