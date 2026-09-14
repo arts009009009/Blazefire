@@ -1,4 +1,4 @@
-:host {
+:root {
   --blazefire-cyan: #00ffff;
   --blazefire-magenta: #ff00ff;
   --blazefire-red: #ff006e;
@@ -9,6 +9,22 @@
   --blazefire-text: #e0e0e0;
   --glow-cyan: 0 0 10px rgba(0,255,255,0.3), 0 0 20px rgba(0,255,255,0.1);
   --glow-magenta: 0 0 10px rgba(255,0,255,0.3), 0 0 20px rgba(255,0,255,0.1);
+  color-scheme: dark;
+}
+
+@keyframes blazefire-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes blazefire-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(0, 255, 255, 0.3); }
+  50% { box-shadow: 0 0 15px rgba(0, 255, 255, 0.6), 0 0 30px rgba(255, 0, 255, 0.3); }
+}
+
+body {
+  background: var(--blazefire-background);
+  color: var(--blazefire-text);
 }
 
 .blazefire-branding-header {
@@ -64,16 +80,16 @@
   box-shadow: 0 0 30px rgba(0,255,255,0.15);
 }
 
-.blazefire-scrollbar::-webkit-scrollbar {
+::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-.blazefire-scrollbar::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: #000000;
 }
 
-.blazefire-scrollbar::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, #00ffff, #ff00ff);
   border-radius: 3px;
 }
