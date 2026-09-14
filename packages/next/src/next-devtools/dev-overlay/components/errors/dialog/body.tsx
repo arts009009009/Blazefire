@@ -9,12 +9,12 @@ export function ErrorOverlayDialogBody({
   children,
 }: ErrorOverlayDialogBodyProps) {
   return (
-    <DialogBody className="nextjs-container-errors-body">{children}</DialogBody>
+    <DialogBody className="blazefire-container-errors-body">{children}</DialogBody>
   )
 }
 
 export const DIALOG_BODY_STYLES = `
-  [data-nextjs-dialog-body] {
+  [data-blazefire-dialog-body] {
     padding-left: 20px;
     padding-right: 20px;
     padding-bottom: 20px;

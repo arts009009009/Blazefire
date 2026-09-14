@@ -26,7 +26,7 @@ export function ErrorCause({ cause, dialogResizerRef }: ErrorCauseProps) {
   }, [frames])
 
   return (
-    <div data-nextjs-error-cause>
+    <div data-blazefire-error-cause>
       <div className="error-cause-header">
         <span className="error-cause-label">
           Caused by: {cause.error.name || 'Error'}
@@ -67,7 +67,7 @@ export function ErrorCause({ cause, dialogResizerRef }: ErrorCauseProps) {
 }
 
 export const styles = `
-  [data-nextjs-error-cause] {
+  [data-blazefire-error-cause] {
     border-top: 1px solid var(--color-gray-400);
     margin-top: 16px;
     padding-top: 16px;

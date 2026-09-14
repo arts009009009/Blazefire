@@ -3,11 +3,11 @@ export function EnvironmentNameLabel({
 }: {
   environmentName: string
 }) {
-  return <span data-nextjs-environment-name-label>{environmentName}</span>
+  return <span data-blazefire-environment-name-label>{environmentName}</span>
 }
 
 export const ENVIRONMENT_NAME_LABEL_STYLES = `
-  [data-nextjs-environment-name-label] {
+  [data-blazefire-environment-name-label] {
     padding: 2px 6px;
     margin: 0;
     border-radius: var(--rounded-md-2);

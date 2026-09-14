@@ -37,7 +37,7 @@ export function ErrorOverlayNav({
     | 'Webpack'
     | 'Rspack'
   return (
-    <div data-nextjs-error-overlay-nav>
+    <div data-blazefire-error-overlay-nav>
       <NavItem side="left">
         {/* TODO: better passing data instead of nullish coalescing */}
         <ErrorOverlayPagination
@@ -64,7 +64,7 @@ export function ErrorOverlayNav({
 }
 
 export const styles = `
-  [data-nextjs-error-overlay-nav] {
+  [data-blazefire-error-overlay-nav] {
     --stroke-color: var(--color-gray-400);
     --background-color: var(--color-background-100);
     display: flex;
@@ -98,7 +98,7 @@ export const styles = `
   }
 
   @media (max-width: 767px) {
-    [data-nextjs-error-overlay-nav] {
+    [data-blazefire-error-overlay-nav] {
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;

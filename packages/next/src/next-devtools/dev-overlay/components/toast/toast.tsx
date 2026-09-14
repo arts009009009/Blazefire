@@ -18,7 +18,7 @@ export const Toast = React.forwardRef<HTMLDivElement, ToastProps>(
           }
           return onClick?.()
         }}
-        className={cx('nextjs-toast', className)}
+        className={cx('blazefire-toast', className)}
       >
         {children}
       </div>

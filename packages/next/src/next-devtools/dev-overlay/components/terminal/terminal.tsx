@@ -91,7 +91,7 @@ export const Terminal: React.FC<TerminalProps> = function Terminal({
   const fileExtension = stackFrame?.file?.split('.').pop()
 
   return (
-    <div data-nextjs-codeframe>
+    <div data-blazefire-codeframe>
       <div className="code-frame-header">
         <div className="code-frame-link">
           <span className="code-frame-icon">
@@ -146,28 +146,28 @@ export const Terminal: React.FC<TerminalProps> = function Terminal({
 }
 
 export const TERMINAL_STYLES = `
-  [data-nextjs-terminal]::selection,
-  [data-nextjs-terminal] *::selection {
+  [data-blazefire-terminal]::selection,
+  [data-blazefire-terminal] *::selection {
     background-color: var(--color-ansi-selection);
   }
 
-  [data-nextjs-terminal] * {
+  [data-blazefire-terminal] * {
     color: inherit;
     background-color: transparent;
     font-family: var(--font-stack-monospace);
   }
 
-  [data-nextjs-terminal] > div > p {
+  [data-blazefire-terminal] > div > p {
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
     margin: 0;
   }
-  [data-nextjs-terminal] > div > p:hover {
+  [data-blazefire-terminal] > div > p:hover {
     text-decoration: underline dotted;
   }
-  [data-nextjs-terminal] div > pre {
+  [data-blazefire-terminal] div > pre {
     overflow: hidden;
     display: inline-block;
   }

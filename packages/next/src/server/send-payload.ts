@@ -52,7 +52,8 @@ export async function sendRenderResult({
   }
 
   if (poweredByHeader && result.contentType === HTML_CONTENT_TYPE_HEADER) {
-    res.setHeader('X-Powered-By', 'Next.js')
+    res.setHeader('X-Powered-By', 'Blazefire Framework')
+    res.setHeader('X-Compiler', 'Frostfast v1.0.0')
   }
 
   // If cache control is already set on the response we don't

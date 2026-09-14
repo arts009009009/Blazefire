@@ -28,7 +28,8 @@
   "scripts": {
     "build": "tsc",
     "test": "jest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "blazefire:dev": "echo 'Blazefire dev mode — use next dev from your project'"
   },
   "keywords": [
     "blazefire",

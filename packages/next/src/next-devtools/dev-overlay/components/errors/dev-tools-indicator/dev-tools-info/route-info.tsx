@@ -91,7 +91,7 @@ function DynamicRouteContent({
           </a>{' '}
           option of{' '}
           <code className="dev-tools-info-code">{`{ cache: 'no-store' }`}</code>{' '}
-          is discovered, Next.js will switch to dynamically rendering the whole
+          is discovered, Blazefire will switch to dynamically rendering the whole
           route.
         </p>
       )}

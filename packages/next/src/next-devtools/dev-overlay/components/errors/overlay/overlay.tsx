@@ -6,7 +6,7 @@ export function ErrorOverlayOverlay({ children, ...props }: OverlayProps) {
 }
 
 export const OVERLAY_STYLES = css`
-  [data-nextjs-dialog-overlay] {
+  [data-blazefire-dialog-overlay] {
     padding: initial;
     top: 10vh;
   }

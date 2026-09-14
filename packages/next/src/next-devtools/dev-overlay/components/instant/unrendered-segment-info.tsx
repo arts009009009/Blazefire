@@ -61,15 +61,15 @@ export function UnrenderedSegmentInfo({
         firstMissingFile ? `Open ${firstMissingFile} in editor` : undefined
       }
     >
-      <div data-nextjs-unrendered-segment-tree>
-        <div data-nextjs-codeframe-line="">
-          <span data-nextjs-unrendered-segment-tree-prefix>│</span>
+      <div data-blazefire-unrendered-segment-tree>
+        <div data-blazefire-codeframe-line="">
+          <span data-blazefire-unrendered-segment-tree-prefix>│</span>
         </div>
         {nodes.map((node, i) => (
           <TreeRow key={i} node={node} />
         ))}
-        <div data-nextjs-codeframe-line="">
-          <span data-nextjs-unrendered-segment-tree-prefix>│</span>
+        <div data-blazefire-codeframe-line="">
+          <span data-blazefire-unrendered-segment-tree-prefix>│</span>
         </div>
       </div>
     </CodeFrameShell>
@@ -78,10 +78,10 @@ export function UnrenderedSegmentInfo({
 
 function TreeRow({ node }: { node: TreeNode }) {
   const lineProps: Record<string, string | boolean> = {
-    'data-nextjs-codeframe-line': '',
+    'data-blazefire-codeframe-line': '',
   }
   if (node.isMissing) {
-    lineProps['data-nextjs-codeframe-line--errored'] = true
+    lineProps['data-blazefire-codeframe-line--errored'] = true
   }
 
   let prefix = '│ '
@@ -92,10 +92,10 @@ function TreeRow({ node }: { node: TreeNode }) {
 
   return (
     <div {...lineProps}>
-      <span data-nextjs-unrendered-segment-tree-prefix>{prefix}</span>
+      <span data-blazefire-unrendered-segment-tree-prefix>{prefix}</span>
       <span>{node.label}</span>
       {node.isMissing && (
-        <span data-nextjs-unrendered-segment-tree-pointer>
+        <span data-blazefire-unrendered-segment-tree-pointer>
           {' '}
           ← dropped from rendering
         </span>
@@ -168,17 +168,17 @@ function buildTree(route: string, files: string[]): TreeNode[] {
 }
 
 export const UNRENDERED_SEGMENT_INFO_STYLES = css`
-  [data-nextjs-unrendered-segment-tree-prefix] {
+  [data-blazefire-unrendered-segment-tree-prefix] {
     color: var(--color-gray-alpha-700) !important;
   }
 
-  [data-nextjs-unrendered-segment-tree]
-    [data-nextjs-codeframe-line--errored='true']
-    [data-nextjs-unrendered-segment-tree-prefix] {
+  [data-blazefire-unrendered-segment-tree]
+    [data-blazefire-codeframe-line--errored='true']
+    [data-blazefire-unrendered-segment-tree-prefix] {
     color: var(--color-gray-alpha-1000) !important;
   }
 
-  [data-nextjs-unrendered-segment-tree-pointer] {
+  [data-blazefire-unrendered-segment-tree-pointer] {
     color: var(--color-red-900) !important;
     margin-left: 8px;
     white-space: pre;

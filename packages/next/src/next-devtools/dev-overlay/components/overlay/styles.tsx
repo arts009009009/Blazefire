@@ -1,7 +1,7 @@
 import { css } from '../../utils/css'
 
 const styles = css`
-  [data-nextjs-dialog-overlay] {
+  [data-blazefire-dialog-overlay] {
     position: fixed;
     top: 0;
     right: 0;
@@ -20,12 +20,12 @@ const styles = css`
   }
 
   @media (max-height: 812px) {
-    [data-nextjs-dialog-overlay] {
+    [data-blazefire-dialog-overlay] {
       padding: 15px 15px 0;
     }
   }
 
-  [data-nextjs-dialog-backdrop] {
+  [data-blazefire-dialog-backdrop] {
     position: fixed;
     top: 0;
     right: 0;
@@ -37,7 +37,7 @@ const styles = css`
     z-index: -1;
   }
 
-  [data-nextjs-dialog-backdrop-fixed] {
+  [data-blazefire-dialog-backdrop-fixed] {
     cursor: not-allowed;
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);

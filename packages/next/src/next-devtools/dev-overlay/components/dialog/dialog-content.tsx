@@ -11,7 +11,7 @@ const DialogContent: React.FC<DialogContentProps> = function DialogContent({
   ...props
 }) {
   return (
-    <div data-nextjs-dialog-content className={className} {...props}>
+    <div data-blazefire-dialog-content className={className} {...props}>
       {children}
     </div>
   )

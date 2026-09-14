@@ -307,7 +307,7 @@ export function NodejsInspectorButton({
   }
   return (
     <CopyButton
-      data-nextjs-data-runtime-error-copy-devtools-url
+      data-blazefire-data-runtime-error-copy-devtools-url
       className="nodejs-inspector-button"
       actionLabel={'Copy DevTools URL for Chrome'}
       successLabel="Copied"

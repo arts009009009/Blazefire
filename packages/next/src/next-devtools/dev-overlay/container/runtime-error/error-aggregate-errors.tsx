@@ -58,7 +58,7 @@ function ErrorAggregateEntry({
   }, [frames])
 
   return (
-    <div data-nextjs-error-aggregate-error>
+    <div data-blazefire-error-aggregate-error>
       <div className="error-aggregate-error-header">
         <span className="error-aggregate-error-label">
           {index + 1} of {total}: {entry.error.name || 'Error'}
@@ -99,7 +99,7 @@ function ErrorAggregateEntry({
 }
 
 export const styles = `
-  [data-nextjs-error-aggregate-error] {
+  [data-blazefire-error-aggregate-error] {
     border-top: 1px solid var(--color-gray-400);
     margin-top: 16px;
     padding-top: 16px;

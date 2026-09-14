@@ -315,7 +315,7 @@ export function DynamicPanel({
               >
                 <DragHandle>{header}</DragHandle>
                 <div
-                  data-nextjs-scrollable-content
+                  data-blazefire-scrollable-content
                   className="draggable-content"
                 >
                   {children}

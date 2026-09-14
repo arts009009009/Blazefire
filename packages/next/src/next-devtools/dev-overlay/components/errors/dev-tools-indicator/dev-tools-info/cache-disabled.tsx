@@ -13,7 +13,7 @@ export function CacheDisabledBody(props: ComponentProps<'div'>) {
       <p className="dev-tools-info-paragraph">
         As a result, the loading experience might not be the same as in
         production. React's DevTools will also not accurately show information
-        about what would normally suspend in the page, and Next.js cannot
+        about what would normally suspend in the page, and Blazefire cannot
         validate whether a navigation to this page would be instant or blocking.
       </p>
     </article>

@@ -9,7 +9,7 @@ export function CopyErrorButton({
 }) {
   return (
     <CopyButton
-      data-nextjs-data-runtime-error-copy-stack
+      data-blazefire-data-runtime-error-copy-stack
       className="copy-error-button"
       actionLabel="Copy Error Info"
       successLabel="Error Info Copied"

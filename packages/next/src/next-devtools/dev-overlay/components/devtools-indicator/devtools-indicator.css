@@ -1,4 +1,4 @@
-[data-nextjs-toast] {
+[data-blazefire-toast] {
   &[data-hidden='true'] {
     display: none;
   }

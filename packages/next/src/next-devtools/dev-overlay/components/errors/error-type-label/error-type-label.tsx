@@ -14,8 +14,8 @@ type ErrorTypeLabelProps = {
 export function ErrorTypeLabel({ errorType }: ErrorTypeLabelProps) {
   return (
     <span
-      id="nextjs__container_errors_label"
-      className={`nextjs__container_errors_label ${errorType === 'Ambiguous Metadata' ? 'nextjs__container_errors_label_blocking_page' : ''} ${errorType === 'Instant' ? 'nextjs__container_errors_label_instant' : ''}`}
+      id="blazefire__container_errors_label"
+      className={`blazefire__container_errors_label ${errorType === 'Ambiguous Metadata' ? 'blazefire__container_errors_label_blocking_page' : ''} ${errorType === 'Instant' ? 'blazefire__container_errors_label_instant' : ''}`}
     >
       {errorType}
     </span>
@@ -23,7 +23,7 @@ export function ErrorTypeLabel({ errorType }: ErrorTypeLabelProps) {
 }
 
 export const styles = `
-  .nextjs__container_errors_label {
+  .blazefire__container_errors_label {
     padding: 2px 6px;
     margin: 0;
     border-radius: var(--rounded-md-2);
@@ -37,14 +37,14 @@ export const styles = `
     text-shadow: 0 0 8px rgba(255, 0, 110, 0.5);
   }
 
-  .nextjs__container_errors_label_blocking_page {
+  .blazefire__container_errors_label_blocking_page {
     background: rgba(0, 255, 255, 0.15);
     color: #00ffff;
     border-color: rgba(0, 255, 255, 0.3);
     text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
   }
 
-  .nextjs__container_errors_label_instant {
+  .blazefire__container_errors_label_instant {
     background: rgba(255, 136, 0, 0.15);
     color: #ffaa00;
     border-color: rgba(255, 136, 0, 0.3);

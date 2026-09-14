@@ -54,10 +54,10 @@ export function CodeFrame({ stackFrame, codeFrame }: CodeFrameProps) {
 
         const lineNumberProps: Record<string, string | boolean> = {}
         if (lineNumber) {
-          lineNumberProps['data-nextjs-codeframe-line'] = lineNumber
+          lineNumberProps['data-blazefire-codeframe-line'] = lineNumber
         }
         if (isErroredLine) {
-          lineNumberProps['data-nextjs-codeframe-line--errored'] = true
+          lineNumberProps['data-blazefire-codeframe-line--errored'] = true
         }
 
         return (
@@ -88,7 +88,7 @@ export function CodeFrame({ stackFrame, codeFrame }: CodeFrameProps) {
 }
 
 export const CODE_FRAME_STYLES = `
-  [data-nextjs-codeframe] {
+  [data-blazefire-codeframe] {
     --code-frame-padding: 12px;
     --code-frame-line-height: var(--size-20);
     background-color: var(--color-background-200);
@@ -172,18 +172,18 @@ export const CODE_FRAME_STYLES = `
     }
   }
 
-  [data-nextjs-codeframe]::selection,
-  [data-nextjs-codeframe] *::selection {
+  [data-blazefire-codeframe]::selection,
+  [data-blazefire-codeframe] *::selection {
     background-color: var(--color-ansi-selection);
   }
 
-  [data-nextjs-codeframe] *:not(a) {
+  [data-blazefire-codeframe] *:not(a) {
     color: inherit;
     background-color: transparent;
     font-family: var(--font-stack-monospace);
   }
 
-  [data-nextjs-codeframe-line][data-nextjs-codeframe-line--errored="true"] {
+  [data-blazefire-codeframe-line][data-blazefire-codeframe-line--errored="true"] {
     position: relative;
     isolation: isolate;
 
@@ -203,17 +203,17 @@ export const CODE_FRAME_STYLES = `
     }
   }
 
-  [data-nextjs-codeframe-line] > span:first-child {
+  [data-blazefire-codeframe-line] > span:first-child {
     color: var(--color-gray-alpha-500) !important;
   }
 
-  [data-nextjs-codeframe-line][data-nextjs-codeframe-line--errored="true"]
+  [data-blazefire-codeframe-line][data-blazefire-codeframe-line--errored="true"]
     > span:first-child {
     color: var(--color-gray-alpha-1000) !important;
   }
 
 
-  [data-nextjs-codeframe] > * {
+  [data-blazefire-codeframe] > * {
     margin: 0;
   }
 
@@ -234,7 +234,7 @@ export const CODE_FRAME_STYLES = `
     max-width: 100%;
   }
 
-  [data-nextjs-codeframe] svg {
+  [data-blazefire-codeframe] svg {
     color: var(--color-gray-900);
   }
 `

@@ -13,8 +13,8 @@ export function ErrorOverlayDialog({
   return (
     <div className="error-overlay-dialog-container">
       <Dialog
-        aria-labelledby="nextjs__container_errors_label"
-        aria-describedby="nextjs__container_errors_desc"
+        aria-labelledby="blazefire__container_errors_label"
+        aria-describedby="blazefire__container_errors_desc"
         className="error-overlay-dialog-scroll"
         onClose={onClose}
         {...props}

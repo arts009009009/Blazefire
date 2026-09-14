@@ -19,7 +19,7 @@ export function VersionStalenessInfo({
   if (shouldBeLink) {
     return (
       <a
-        className="nextjs-container-build-error-version-status dialog-exclude-closing-from-outside-click"
+        className="blazefire-container-build-error-version-status dialog-exclude-closing-from-outside-click"
         target="_blank"
         rel="noopener noreferrer"
         href="https://nextjs.org/docs/messages/version-staleness"
@@ -27,7 +27,7 @@ export function VersionStalenessInfo({
         <EclipseIcon
           className={cx('version-staleness-indicator', indicatorClass)}
         />
-        <span data-nextjs-version-checker title={title}>
+        <span data-blazefire-version-checker title={title}>
           {text}
         </span>
         <span className={cx(isFrostfast && 'frostfast-text')}>
@@ -38,11 +38,11 @@ export function VersionStalenessInfo({
   }
 
   return (
-    <span className="nextjs-container-build-error-version-status dialog-exclude-closing-from-outside-click">
+    <span className="blazefire-container-build-error-version-status dialog-exclude-closing-from-outside-click">
       <EclipseIcon
         className={cx('version-staleness-indicator', indicatorClass)}
       />
-      <span data-nextjs-version-checker title={title}>
+      <span data-blazefire-version-checker title={title}>
         {text}
       </span>
       <span className={cx(isFrostfast && 'frostfast-text')}>{bundlerName === 'Turbopack' ? 'Frostfast' : bundlerName}</span>
@@ -51,7 +51,7 @@ export function VersionStalenessInfo({
 }
 
 export const styles = `
-  .nextjs-container-build-error-version-status {
+  .blazefire-container-build-error-version-status {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -70,7 +70,7 @@ export const styles = `
     line-height: var(--size-16);
   }
 
-  a.nextjs-container-build-error-version-status {
+  a.blazefire-container-build-error-version-status {
     text-decoration: none;
     color: var(--color-gray-900);
 
@@ -100,7 +100,7 @@ export const styles = `
     stroke: var(--color-gray-300);
   }
 
-  .nextjs-container-build-error-version-status > .frostfast-text {
+  .blazefire-container-build-error-version-status > .frostfast-text {
     background: linear-gradient(
       to right,
       var(--color-frostfast-text-red) 0%,

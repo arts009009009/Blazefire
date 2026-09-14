@@ -106,7 +106,7 @@ const MenuPanel = () => {
                   state.staticIndicator === 'static' ? 'Static' : 'Dynamic',
                 onClick: () => setPanel('route-type'),
                 attributes: {
-                  'data-nextjs-route-type': state.staticIndicator,
+                  'data-blazefire-route-type': state.staticIndicator,
                 },
               },
         !!process.env.TURBOPACK

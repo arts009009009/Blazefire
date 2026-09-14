@@ -140,12 +140,12 @@ export function CopyButton(
       title={showLabel ? undefined : label}
       aria-label={label}
       aria-disabled={isDisabled}
-      data-nextjs-copy-button
+      data-blazefire-copy-button
       data-pending={isPending}
       className={cx(
         props.className,
-        'nextjs-data-copy-button',
-        `nextjs-data-copy-button--${copyState.state}`
+        'blazefire-data-copy-button',
+        `blazefire-data-copy-button--${copyState.state}`
       )}
       onClick={() => {
         if (!isDisabled) {
@@ -154,7 +154,7 @@ export function CopyButton(
       }}
     >
       {renderedIcon}
-      {showLabel ? <span data-nextjs-copy-button-label>{label}</span> : null}
+      {showLabel ? <span data-blazefire-copy-button-label>{label}</span> : null}
       {copyState.state === 'error' ? ` ${copyState.error}` : null}
     </button>
   )
@@ -196,7 +196,7 @@ function CopySuccessIcon() {
 }
 
 export const COPY_BUTTON_STYLES = `
-  .nextjs-data-copy-button {
+  .blazefire-data-copy-button {
     color: inherit;
 
     svg {
@@ -204,21 +204,21 @@ export const COPY_BUTTON_STYLES = `
       height: var(--size-16);
     }
   }
-  .nextjs-data-copy-button[aria-disabled="true"] {
+  .blazefire-data-copy-button[aria-disabled="true"] {
     background-color: var(--color-gray-100);
     cursor: not-allowed;
   }
-  .nextjs-data-copy-button[data-pending="true"] {
+  .blazefire-data-copy-button[data-pending="true"] {
     cursor: wait;
   }
-  .nextjs-data-copy-button--initial:hover:not([aria-disabled="true"]) {
+  .blazefire-data-copy-button--initial:hover:not([aria-disabled="true"]) {
     cursor: pointer;
   }
-  .nextjs-data-copy-button--error:not([aria-disabled="true"]),
-  .nextjs-data-copy-button--error:hover:not([aria-disabled="true"]) {
+  .blazefire-data-copy-button--error:not([aria-disabled="true"]),
+  .blazefire-data-copy-button--error:hover:not([aria-disabled="true"]) {
     color: var(--color-ansi-red);
   }
-  .nextjs-data-copy-button--success:not([aria-disabled="true"]) {
+  .blazefire-data-copy-button--success:not([aria-disabled="true"]) {
     color: var(--color-gray-900);
   }
 `

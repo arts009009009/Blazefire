@@ -15,7 +15,7 @@ export function CodeFrameShell({
   children,
 }: CodeFrameShellProps) {
   return (
-    <div data-nextjs-codeframe>
+    <div data-blazefire-codeframe>
       <div className="code-frame-header">
         {/* TODO: This is <div> in `Terminal` component.
         Changing now will require multiple test snapshots updates.

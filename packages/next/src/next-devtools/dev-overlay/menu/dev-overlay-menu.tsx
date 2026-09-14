@@ -216,7 +216,7 @@ export const DevtoolMenu = ({
     <div
       ref={menuRef}
       onKeyDown={onMenuKeydown}
-      id="nextjs-dev-tools-menu"
+      id="blazefire-dev-tools-menu"
       role="menu"
       dir="ltr"
       aria-orientation="vertical"

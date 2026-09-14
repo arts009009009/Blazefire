@@ -30,7 +30,7 @@ export function DevToolsIndicator() {
     // TODO: why is this called a toast
     <Toast
       id="devtools-indicator"
-      data-nextjs-toast
+      data-blazefire-toast
       style={
         {
           '--animate-out-duration-ms': `${MENU_DURATION_MS}ms`,

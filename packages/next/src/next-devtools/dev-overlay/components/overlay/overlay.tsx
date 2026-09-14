@@ -19,7 +19,7 @@ const Overlay: React.FC<OverlayProps> = function Overlay({
   }, [])
 
   return (
-    <div data-nextjs-dialog-overlay className={className} {...props}>
+    <div data-blazefire-dialog-overlay className={className} {...props}>
       {children}
     </div>
   )

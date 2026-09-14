@@ -32,9 +32,9 @@ export const CallStackFrame: React.FC<{
 
   return (
     <div
-      data-nextjs-call-stack-frame
-      data-nextjs-call-stack-frame-no-source={!hasOriginalCodeFrame}
-      data-nextjs-call-stack-frame-ignored={frame.ignored}
+      data-blazefire-call-stack-frame
+      data-blazefire-call-stack-frame-no-source={!hasOriginalCodeFrame}
+      data-blazefire-call-stack-frame-ignored={frame.ignored}
     >
       <div className="call-stack-frame-method-name">
         <HotlinkedText text={f.methodName} />
@@ -68,17 +68,17 @@ export const CallStackFrame: React.FC<{
 }
 
 export const CALL_STACK_FRAME_STYLES = `
-  [data-nextjs-call-stack-frame-no-source] {
+  [data-blazefire-call-stack-frame-no-source] {
     padding: 6px 8px;
 
     border-radius: var(--rounded-lg);
   }
 
-  [data-nextjs-call-stack-frame-ignored="true"] {
+  [data-blazefire-call-stack-frame-ignored="true"] {
     opacity: 0.6;
   }
 
-  [data-nextjs-call-stack-frame] {
+  [data-blazefire-call-stack-frame] {
     user-select: text;
     display: block;
     box-sizing: border-box;

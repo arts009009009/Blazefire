@@ -72,15 +72,15 @@ export function PseudoHtmlDiff({
         componentStacks.push(
           <span
             key={'comp-diff' + index}
-            data-nextjs-container-errors-pseudo-html-line
-            data-nextjs-container-errors-pseudo-html--diff={
+            data-blazefire-container-errors-pseudo-html-line
+            data-blazefire-container-errors-pseudo-html--diff={
               sign === '+' ? 'add' : 'remove'
             }
           >
             <span>
               {/* Slice 2 spaces for the icon */}
               {prefix}
-              <span data-nextjs-container-errors-pseudo-html-line-sign>
+              <span data-blazefire-container-errors-pseudo-html-line-sign>
                 {sign}
               </span>
               {suffix}
@@ -92,16 +92,16 @@ export function PseudoHtmlDiff({
         // In general, if it's not collapsed, show the whole diff
         componentStacks.push(
           <span
-            data-nextjs-container-errors-pseudo-html-line
+            data-blazefire-container-errors-pseudo-html-line
             key={'comp-diff' + index}
             {...(isHighlightedLine
               ? {
-                  'data-nextjs-container-errors-pseudo-html--diff': 'error',
+                  'data-blazefire-container-errors-pseudo-html--diff': 'error',
                 }
               : undefined)}
           >
             {prefix}
-            <span data-nextjs-container-errors-pseudo-html-line-sign>
+            <span data-blazefire-container-errors-pseudo-html-line-sign>
               {sign}
             </span>
             {suffix}
@@ -115,28 +115,28 @@ export function PseudoHtmlDiff({
 
   return (
     <div
-      data-nextjs-container-errors-pseudo-html
-      data-nextjs-container-errors-pseudo-html-collapse={isDiffCollapsed}
+      data-blazefire-container-errors-pseudo-html
+      data-blazefire-container-errors-pseudo-html-collapse={isDiffCollapsed}
     >
-      <div data-nextjs-hydration-diff-header>
+      <div data-blazefire-hydration-diff-header>
         <button
           aria-expanded={!isDiffCollapsed}
           aria-label="complete Component Stack"
-          data-nextjs-container-errors-pseudo-html-collapse-button
+          data-blazefire-container-errors-pseudo-html-collapse-button
           onClick={() => toggleCollapseHtml(!isDiffCollapsed)}
         >
           <CollapseIcon collapsed={isDiffCollapsed} />
         </button>
-        <div data-nextjs-hydration-diff-badge>
-          <span data-nextjs-hydration-diff-badge-item="client">
+        <div data-blazefire-hydration-diff-badge>
+          <span data-blazefire-hydration-diff-badge-item="client">
             <span>+</span> Client
           </span>
-          <span data-nextjs-hydration-diff-badge-item="server">
+          <span data-blazefire-hydration-diff-badge-item="server">
             <span>-</span> Server
           </span>
         </div>
       </div>
-      <pre className="nextjs__container_errors__component-stack">
+      <pre className="blazefire__container_errors__component-stack">
         <code>{htmlComponents}</code>
       </pre>
     </div>

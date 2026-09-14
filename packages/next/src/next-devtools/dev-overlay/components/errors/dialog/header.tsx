@@ -8,44 +8,44 @@ export function ErrorOverlayDialogHeader({
   children,
 }: ErrorOverlayDialogHeaderProps) {
   return (
-    <DialogHeader className="nextjs-container-errors-header">
+    <DialogHeader className="blazefire-container-errors-header">
       {children}
     </DialogHeader>
   )
 }
 
 export const DIALOG_HEADER_STYLES = `
-  .nextjs-container-errors-header {
+  .blazefire-container-errors-header {
     position: relative;
   }
-  [data-nextjs-dialog-content] > .nextjs-container-errors-header {
+  [data-blazefire-dialog-content] > .blazefire-container-errors-header {
     margin-bottom: 0;
   }
-  .nextjs-container-errors-header > h1 {
+  .blazefire-container-errors-header > h1 {
     font-size: var(--size-20);
     line-height: var(--size-24);
     font-weight: bold;
     margin: calc(16px * 1.5) 0;
     color: var(--color-title-color);
   }
-  .nextjs-container-errors-header small {
+  .blazefire-container-errors-header small {
     font-size: var(--size-14);
     color: var(--color-accents-1);
     margin-left: 16px;
   }
-  .nextjs-container-errors-header small > span {
+  .blazefire-container-errors-header small > span {
     font-family: var(--font-stack-monospace);
   }
-  .nextjs-container-errors-header > div > small {
+  .blazefire-container-errors-header > div > small {
     margin: 0;
     margin-top: 4px;
   }
-  .nextjs-container-errors-header > p > a {
+  .blazefire-container-errors-header > p > a {
     font-weight: 600;
     color: #00ffff;
   }
-  .nextjs-container-errors-header
-    > .nextjs-container-build-error-version-status {
+  .blazefire-container-errors-header
+    > .blazefire-container-build-error-version-status {
     position: absolute;
     top: 16px;
     right: 16px;

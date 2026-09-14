@@ -456,9 +456,9 @@ export function NextLogo({
               disabled={state.disableDevIndicator}
               aria-haspopup="menu"
               aria-expanded={isMenuOpen}
-              aria-controls="nextjs-dev-tools-menu"
+              aria-controls="blazefire-dev-tools-menu"
               aria-label={`${isMenuOpen ? 'Close' : 'Open'} Blazefire Dev Tools`}
-              data-nextjs-dev-tools-button
+              data-blazefire-dev-tools-button
               style={{
                 display: showStatusIndicator && !hasError ? 'none' : 'flex',
               }}
@@ -609,7 +609,7 @@ function CacheStatusBadge({
     >
       <button
         data-issues-open
-        data-nextjs-dev-tools-button
+        data-blazefire-dev-tools-button
         aria-label="Open Blazefire Dev Tools"
         onClick={onTriggerClick}
       >

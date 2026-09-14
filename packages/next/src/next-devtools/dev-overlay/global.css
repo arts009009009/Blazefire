@@ -26,8 +26,8 @@
 }
 
 /* global reset for draggable content scrollbar styles */
-[data-nextjs-scrollable-content],
-[data-nextjs-scrollable-content] * {
+[data-blazefire-scrollable-content],
+[data-blazefire-scrollable-content] * {
   &::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -50,8 +50,8 @@
   }
 }
 
-/* Place overflow: hidden on this so we can break out from [data-nextjs-dialog] */
-[data-nextjs-scrollable-content] {
+/* Place overflow: hidden on this so we can break out from [data-blazefire-dialog] */
+[data-blazefire-scrollable-content] {
   overflow: hidden;
   border-radius: inherit;
 }

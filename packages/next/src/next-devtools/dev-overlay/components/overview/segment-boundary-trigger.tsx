@@ -155,7 +155,7 @@ export function SegmentBoundaryTrigger({
     <Menu.Root delay={0} modal={false} open={isOpen} onOpenChange={setIsOpen}>
       <Menu.Trigger
         className="segment-boundary-trigger"
-        data-nextjs-dev-overlay-segment-boundary-trigger-button
+        data-blazefire-dev-overlay-segment-boundary-trigger-button
         render={MergedRefTrigger}
         disabled={!hasBoundary}
       />

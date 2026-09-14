@@ -31,23 +31,23 @@ export function ErrorMessage({ errorMessage, errorType }: ErrorMessageProps) {
 
   return (
     <>
-      <div className="nextjs__container_errors_wrapper">
+      <div className="blazefire__container_errors_wrapper">
         <div
           ref={messageRef}
-          id="nextjs__container_errors_desc"
-          className={`nextjs__container_errors_desc ${shouldTruncate && !isExpanded ? 'truncated' : ''} ${errorType === 'Instant' || errorType === 'Blocking Route' ? 'nextjs__container_errors_desc_instant' : ''}`}
+          id="blazefire__container_errors_desc"
+          className={`blazefire__container_errors_desc ${shouldTruncate && !isExpanded ? 'truncated' : ''} ${errorType === 'Instant' || errorType === 'Blocking Route' ? 'blazefire__container_errors_desc_instant' : ''}`}
         >
           {errorMessage}
         </div>
       </div>
       {shouldTruncate && !isExpanded && (
         <>
-          <div className="nextjs__container_errors_gradient_overlay" />
+          <div className="blazefire__container_errors_gradient_overlay" />
           <button
             onClick={() => setIsExpanded(true)}
-            className="nextjs__container_errors_expand_button"
+            className="blazefire__container_errors_expand_button"
             aria-expanded={isExpanded}
-            aria-controls="nextjs__container_errors_desc"
+            aria-controls="blazefire__container_errors_desc"
           >
             Show More
           </button>
@@ -58,10 +58,10 @@ export function ErrorMessage({ errorMessage, errorType }: ErrorMessageProps) {
 }
 
 export const styles = `
-  .nextjs__container_errors_wrapper {
+  .blazefire__container_errors_wrapper {
   }
 
-  .nextjs__container_errors_desc {
+  .blazefire__container_errors_desc {
     margin: 0;
     color: #ff006e;
     font-weight: 500;
@@ -72,16 +72,16 @@ export const styles = `
     white-space: pre-wrap;
   }
 
-  .nextjs__container_errors_desc.nextjs__container_errors_desc_instant {
+  .blazefire__container_errors_desc.blazefire__container_errors_desc_instant {
     color: var(--color-gray-1000);
   }
 
-  .nextjs__container_errors_desc.truncated {
+  .blazefire__container_errors_desc.truncated {
     max-height: 200px;
     overflow: hidden;
   }
 
-  .nextjs__container_errors_desc code {
+  .blazefire__container_errors_desc code {
     font-family: var(--font-stack-monospace);
     font-weight: 500;
     line-height: var(--size-20);
@@ -92,7 +92,7 @@ export const styles = `
     border-radius: var(--rounded-md-2);
   }
 
-  .nextjs__container_errors_gradient_overlay {
+  .blazefire__container_errors_gradient_overlay {
     position: absolute;
     bottom: 0;
     left: 0;
@@ -105,7 +105,7 @@ export const styles = `
     );
   }
 
-  .nextjs__container_errors_expand_button {
+  .blazefire__container_errors_expand_button {
     position: absolute;
     bottom: 10px;
     left: 50%;
@@ -127,7 +127,7 @@ export const styles = `
     transition: all 0.2s ease;
   }
 
-  .nextjs__container_errors_expand_button:hover {
+  .blazefire__container_errors_expand_button:hover {
     background: rgba(0, 255, 255, 0.1);
     box-shadow:
       0px 2px 2px var(--color-gray-alpha-100),

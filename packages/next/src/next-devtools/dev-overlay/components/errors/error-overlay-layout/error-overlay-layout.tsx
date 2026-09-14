@@ -116,7 +116,7 @@ export function ErrorOverlayLayout({
     <ErrorOverlayOverlay {...animationProps}>
       <OverlayBackdrop fixed={isBuildError} />
       <div
-        data-nextjs-dialog-root
+        data-blazefire-dialog-root
         onTransitionEnd={onTransitionEnd}
         ref={dialogRef}
         {...animationProps}
@@ -136,7 +136,7 @@ export function ErrorOverlayLayout({
           <Resizer
             ref={dialogResizerRef}
             measure={!animating}
-            data-nextjs-dialog-sizer
+            data-blazefire-dialog-sizer
           >
             <DialogContent>
               <ErrorOverlayDialogHeader>
@@ -166,12 +166,11 @@ export function ErrorOverlayLayout({
                   <span className="blazefire-branding-text">Blazefire</span>
                 </div>
                 <div
-                  className="nextjs__container_errors__error_title"
-                  // allow assertion in tests before error rating is implemented
-                  data-nextjs-error-code={errorCode}
+                  className="blazefire__container_errors__error_title"
+                  data-blazefire-error-code={errorCode}
                 >
-                  <div className="nextjs__container_errors__error_title__row">
-                    <span data-nextjs-error-label-group>
+                  <div className="blazefire__container_errors__error_title__row">
+                    <span data-blazefire-error-label-group>
                       <ErrorTypeLabel errorType={errorType} />
                       {error.environmentName && (
                         <EnvironmentNameLabel
@@ -213,7 +212,7 @@ export const styles = `
   ${errorMessageStyles}
   ${toolbarStyles}
 
-  [data-nextjs-error-label-group] {
+  [data-blazefire-error-label-group] {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -239,5 +238,16 @@ export const styles = `
     background-clip: text;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+  }
+
+  .blazefire__container_errors__error_title {
+    padding: 0 16px;
+  }
+
+  .blazefire__container_errors__error_title__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
   }
 `

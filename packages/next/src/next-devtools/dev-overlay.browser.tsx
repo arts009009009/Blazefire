@@ -398,7 +398,7 @@ export function renderAppDevOverlay(
 
   if (!isAppMounted) {
     const shouldRenderOverlay = !process.env.__NEXT_DISABLE_DEV_OVERLAY_UX
-    const container = document.createElement('nextjs-portal')
+    const container = document.createElement('blazefire-portal')
 
     if (shouldRenderOverlay) {
       // React 19 will not throw away `<script>` elements in a container it owns.
@@ -411,7 +411,7 @@ export function renderAppDevOverlay(
       // occur style conflicts like "display: flex", with other children
       // elements therefore give the shadow host an absolute position.
       script.style.position = 'absolute'
-      script.setAttribute('data-nextjs-dev-overlay', 'true')
+      script.setAttribute('data-blazefire-dev-overlay', 'true')
 
       script.appendChild(container)
       document.body.appendChild(script)
@@ -462,7 +462,7 @@ export function renderPagesDevOverlay(
 
   if (!isPagesMounted) {
     const shouldRenderOverlay = !process.env.__NEXT_DISABLE_DEV_OVERLAY_UX
-    const container = document.createElement('nextjs-portal')
+    const container = document.createElement('blazefire-portal')
     // Although the style applied to the shadow host is isolated,
     // the element that attached the shadow host (i.e. "script")
     // is still affected by the parent's style (e.g. "body"). This may

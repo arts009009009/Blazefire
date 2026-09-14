@@ -143,7 +143,7 @@ export function ErrorOverlayPagination({
       disabled={!canNavigatePrevious}
       aria-disabled={!canNavigatePrevious}
       onClick={handlePrevious}
-      data-nextjs-dialog-error-previous
+      data-blazefire-dialog-error-previous
       className="error-overlay-pagination-button"
     >
       <LeftArrow
@@ -161,13 +161,13 @@ export function ErrorOverlayPagination({
     <div className="error-overlay-pagination-count">
       <span
         {...(isActive
-          ? { 'data-nextjs-dialog-error-index': currentActiveIdx }
+          ? { 'data-blazefire-dialog-error-index': currentActiveIdx }
           : {})}
       >
         {total === 0 ? 0 : currentActiveIdx + 1}/
       </span>
       <span
-        {...(isActive ? { 'data-nextjs-dialog-header-total-count': '' } : {})}
+        {...(isActive ? { 'data-blazefire-dialog-header-total-count': '' } : {})}
       >
         {total}
       </span>
@@ -181,7 +181,7 @@ export function ErrorOverlayPagination({
       disabled={!canNavigateNext}
       aria-disabled={!canNavigateNext}
       onClick={handleNext}
-      data-nextjs-dialog-error-next
+      data-blazefire-dialog-error-next
       className="error-overlay-pagination-button"
     >
       <RightArrow

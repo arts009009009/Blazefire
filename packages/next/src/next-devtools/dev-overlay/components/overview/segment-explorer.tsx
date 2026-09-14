@@ -151,7 +151,7 @@ export function PageSegmentTree({ page }: { page: string }) {
 
   return (
     <div
-      data-nextjs-devtools-panel-segments-explorer
+      data-blazefire-devtools-panel-segments-explorer
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -161,7 +161,7 @@ export function PageSegmentTree({ page }: { page: string }) {
       <PageRouteBar page={page} />
       <div
         className="segment-explorer-content"
-        data-nextjs-devtool-segment-explorer
+        data-blazefire-devtool-segment-explorer
         style={{
           flex: '1 1 auto',
           overflow: 'auto',
@@ -332,7 +332,7 @@ function PageSegmentTreeLayerPresentation({
       {hasFilesChildren && (
         <div
           className="segment-explorer-item"
-          data-nextjs-devtool-segment-explorer-segment={segment + '-' + level}
+          data-blazefire-devtool-segment-explorer-segment={segment + '-' + level}
         >
           <div
             className="segment-explorer-item-row"
@@ -383,7 +383,7 @@ function PageSegmentTreeLayerPresentation({
                       const fileName = normalizeBoundaryFilename(lastSegment)
 
                       const tooltipMessage = isBuiltin
-                        ? `The default Next.js ${childNode.value.type} is being shown. You can customize this page by adding your own ${fileName} file to the app/ directory.`
+                        ? `The default Blazefire ${childNode.value.type} is being shown. You can customize this page by adding your own ${fileName} file to the app/ directory.`
                         : null
 
                       const isOverridden = childNode.value.boundaryType !== null

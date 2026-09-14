@@ -12,13 +12,13 @@ type DialogProps = {
 const CSS_SELECTORS_TO_EXCLUDE_ON_CLICK_OUTSIDE = [
   '[data-next-mark]',
   '[data-issues-open]',
-  '#nextjs-dev-tools-menu',
-  '[data-nextjs-error-overlay-nav]',
-  '[data-nextjs-error-overlay-tab-bar]',
+  '#blazefire-dev-tools-menu',
+  '[data-blazefire-error-overlay-nav]',
+  '[data-blazefire-error-overlay-tab-bar]',
   '[data-info-popover]',
-  '[data-nextjs-devtools-panel-overlay]',
-  '[data-nextjs-devtools-panel-footer]',
-  '[data-nextjs-error-overlay-footer]',
+  '[data-blazefire-devtools-panel-overlay]',
+  '[data-blazefire-devtools-panel-footer]',
+  '[data-blazefire-error-overlay-footer]',
 ]
 
 const Dialog: React.FC<DialogProps> = function Dialog({
@@ -86,8 +86,8 @@ const Dialog: React.FC<DialogProps> = function Dialog({
     <div
       ref={dialogRef}
       tabIndex={-1}
-      data-nextjs-dialog
-      data-nextjs-scrollable-content
+      data-blazefire-dialog
+      data-blazefire-scrollable-content
       role={role}
       aria-labelledby={ariaLabelledBy}
       aria-describedby={ariaDescribedBy}

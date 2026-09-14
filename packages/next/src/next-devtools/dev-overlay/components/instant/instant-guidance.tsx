@@ -111,7 +111,7 @@ function CopyPromptButton({
       successLabel="Copied"
       icon={<CopyPromptIcon />}
       showLabel
-      data-nextjs-fix-card-copy-button
+      data-blazefire-fix-card-copy-button
     />
   ) : (
     <CopyButton
@@ -120,7 +120,7 @@ function CopyPromptButton({
       successLabel="Copied"
       icon={<CopyPromptIcon />}
       showLabel
-      data-nextjs-fix-card-copy-button
+      data-blazefire-fix-card-copy-button
     />
   )
 }
@@ -133,34 +133,34 @@ function CardGrid({
   generateErrorInfo?: () => Promise<string>
 }) {
   return (
-    <div data-nextjs-card-grid>
+    <div data-blazefire-card-grid>
       {cards.map((card) => {
         const groupMeta = FIX_CARD_GROUPS[card.group]
         const inner = (
           <>
             {card.link && !card.copyable ? (
-              <span data-nextjs-fix-card-link-icon aria-hidden="true">
+              <span data-blazefire-fix-card-link-icon aria-hidden="true">
                 <ExternalIcon width={16} height={16} />
               </span>
             ) : null}
-            <div data-nextjs-fix-card-header>
-              <div data-nextjs-fix-card-icon>{getCardIcon(groupMeta.icon)}</div>
-              <div data-nextjs-fix-card-header-text>
-                <div data-nextjs-fix-card-title-row>
-                  <span data-nextjs-fix-card-title>{groupMeta.label}</span>
+            <div data-blazefire-fix-card-header>
+              <div data-blazefire-fix-card-icon>{getCardIcon(groupMeta.icon)}</div>
+              <div data-blazefire-fix-card-header-text>
+                <div data-blazefire-fix-card-title-row>
+                  <span data-blazefire-fix-card-title>{groupMeta.label}</span>
                   {card.copyable && card.link ? (
                     <span
-                      data-nextjs-fix-card-title-link-icon
+                      data-blazefire-fix-card-title-link-icon
                       aria-hidden="true"
                     >
                       <ExternalIcon width={12} height={12} />
                     </span>
                   ) : null}
                 </div>
-                <span data-nextjs-fix-card-description>{card.title}</span>
+                <span data-blazefire-fix-card-description>{card.title}</span>
               </div>
             </div>
-            <pre data-nextjs-fix-snippet>
+            <pre data-blazefire-fix-snippet>
               {card.snippets.map((snippet, i) => (
                 <span key={i} data-snippet-line>
                   {snippet.parts ? (
@@ -185,7 +185,7 @@ function CardGrid({
         )
 
         const sharedProps = {
-          'data-nextjs-fix-card': '',
+          'data-blazefire-fix-card': '',
           'data-card-color': groupMeta.color,
         }
 
@@ -207,7 +207,7 @@ function CardGrid({
         // isn't nested inside the card's <a>, which would be invalid HTML
         // and break keyboard / focus behavior.
         return card.copyable && card.link ? (
-          <div data-nextjs-fix-card-wrapper key={card.id}>
+          <div data-blazefire-fix-card-wrapper key={card.id}>
             {cardElement}
             <CopyPromptButton
               title={card.title}
@@ -217,7 +217,7 @@ function CardGrid({
             />
           </div>
         ) : (
-          <div data-nextjs-fix-card-wrapper key={card.id}>
+          <div data-blazefire-fix-card-wrapper key={card.id}>
             {cardElement}
           </div>
         )
@@ -277,9 +277,9 @@ export function InstantGuidance({
   const defaultExplanation = explanation || EXPLANATIONS[kind]
 
   return (
-    <div data-nextjs-instant-guidance>
+    <div data-blazefire-instant-guidance>
       {showExplanation && (defaultExplanation || docsUrl) ? (
-        <p data-nextjs-instant-explanation>
+        <p data-blazefire-instant-explanation>
           {defaultExplanation ? <>{defaultExplanation} </> : null}
           {docsUrl ? (
             <a href={docsUrl} target="_blank" rel="noopener noreferrer">
@@ -290,8 +290,8 @@ export function InstantGuidance({
       ) : null}
 
       <div
-        data-nextjs-instant-fix-heading
-        className="nextjs__container_errors_desc nextjs__container_errors_desc_instant"
+        data-blazefire-instant-fix-heading
+        className="blazefire__container_errors_desc blazefire__container_errors_desc_instant"
       >
         Ways to fix this:
       </div>
@@ -343,7 +343,7 @@ export function InstantHeaderExplanation({
   }
 
   return (
-    <p data-nextjs-instant-explanation>
+    <p data-blazefire-instant-explanation>
       {resolvedExplanation}{' '}
       {resolvedDocsUrl ? (
         <a href={resolvedDocsUrl} target="_blank" rel="noopener noreferrer">
@@ -355,39 +355,39 @@ export function InstantHeaderExplanation({
 }
 
 export const INSTANT_GUIDANCE_STYLES = css`
-  [data-nextjs-instant-guidance] {
+  [data-blazefire-instant-guidance] {
     margin: 0;
     padding: 0;
   }
 
-  [data-nextjs-instant-explanation] {
+  [data-blazefire-instant-explanation] {
     font-size: var(--size-14);
     line-height: var(--size-20);
     color: var(--color-gray-900);
     margin: 0;
   }
 
-  [data-nextjs-instant-explanation] a {
+  [data-blazefire-instant-explanation] a {
     color: var(--color-blue-900);
     text-decoration: none;
   }
 
-  [data-nextjs-instant-explanation] a:hover {
+  [data-blazefire-instant-explanation] a:hover {
     text-decoration: underline;
   }
 
-  [data-nextjs-instant-fix-heading] {
+  [data-blazefire-instant-fix-heading] {
     padding: 20px 0;
   }
 
-  [data-nextjs-card-grid] {
+  [data-blazefire-card-grid] {
     --copy-prompt-offset: 10px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: calc(12px + var(--copy-prompt-offset)) 12px;
   }
 
-  [data-nextjs-fix-card] {
+  [data-blazefire-fix-card] {
     border: 1px solid var(--color-gray-200);
     border-bottom: none;
     border-radius: var(--rounded-xl);
@@ -399,33 +399,33 @@ export const INSTANT_GUIDANCE_STYLES = css`
     text-decoration: none;
   }
 
-  a[data-nextjs-fix-card],
-  a[data-nextjs-fix-card]:hover,
-  a[data-nextjs-fix-card]:visited {
+  a[data-blazefire-fix-card],
+  a[data-blazefire-fix-card]:hover,
+  a[data-blazefire-fix-card]:visited {
     color: inherit;
     text-decoration: none;
   }
 
-  [data-nextjs-fix-card]:hover {
+  [data-blazefire-fix-card]:hover {
     border-color: var(--color-gray-500);
     background: var(--color-background-200);
   }
 
-  [data-nextjs-fix-card]:hover [data-nextjs-fix-card-link-icon] {
+  [data-blazefire-fix-card]:hover [data-blazefire-fix-card-link-icon] {
     color: var(--color-gray-1000);
   }
 
-  [data-nextjs-fix-card]:hover [data-nextjs-fix-snippet] {
+  [data-blazefire-fix-card]:hover [data-blazefire-fix-snippet] {
     border-color: var(--color-gray-500);
     background: var(--color-gray-100);
   }
 
-  a[data-nextjs-fix-card]:focus-visible {
+  a[data-blazefire-fix-card]:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
   }
 
-  [data-nextjs-fix-card-header] {
+  [data-blazefire-fix-card-header] {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -433,7 +433,7 @@ export const INSTANT_GUIDANCE_STYLES = css`
     padding: 14px;
   }
 
-  [data-nextjs-fix-card-icon] {
+  [data-blazefire-fix-card-icon] {
     width: var(--size-28);
     height: var(--size-28);
     border-radius: var(--rounded-full);
@@ -444,12 +444,12 @@ export const INSTANT_GUIDANCE_STYLES = css`
     opacity: 0.85;
   }
 
-  [data-nextjs-fix-card-icon] svg {
+  [data-blazefire-fix-card-icon] svg {
     width: var(--size-14);
     height: var(--size-14);
   }
 
-  [data-nextjs-fix-card-header-text] {
+  [data-blazefire-fix-card-header-text] {
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -457,14 +457,14 @@ export const INSTANT_GUIDANCE_STYLES = css`
     min-width: 0;
   }
 
-  [data-nextjs-fix-card-title-row] {
+  [data-blazefire-fix-card-title-row] {
     display: flex;
     align-items: center;
     gap: 4px;
     color: var(--color-gray-1000);
   }
 
-  [data-nextjs-fix-card-link-icon] {
+  [data-blazefire-fix-card-link-icon] {
     align-items: center;
     color: var(--color-gray-800);
     display: flex;
@@ -475,7 +475,7 @@ export const INSTANT_GUIDANCE_STYLES = css`
     z-index: 1;
   }
 
-  [data-nextjs-fix-card-title] {
+  [data-blazefire-fix-card-title] {
     display: block;
     margin: 0;
     font-size: var(--size-13);
@@ -484,7 +484,7 @@ export const INSTANT_GUIDANCE_STYLES = css`
     text-align: left;
   }
 
-  [data-nextjs-fix-card-description] {
+  [data-blazefire-fix-card-description] {
     display: block;
     margin: 0;
     font-size: var(--size-13);
@@ -493,7 +493,7 @@ export const INSTANT_GUIDANCE_STYLES = css`
     text-align: left;
   }
 
-  [data-nextjs-fix-snippet] {
+  [data-blazefire-fix-snippet] {
     flex: 1;
     font-family: var(--font-stack-monospace);
     font-size: var(--size-12);
@@ -519,79 +519,79 @@ export const INSTANT_GUIDANCE_STYLES = css`
     color: var(--color-gray-800);
   }
 
-  [data-nextjs-fix-snippet] [data-snippet-highlight] {
+  [data-blazefire-fix-snippet] [data-snippet-highlight] {
     color: var(--color-gray-1000);
     font-weight: 500;
   }
 
-  [data-card-color='blue'] [data-nextjs-fix-snippet] [data-snippet-highlight] {
+  [data-card-color='blue'] [data-blazefire-fix-snippet] [data-snippet-highlight] {
     color: var(--color-blue-800);
   }
 
-  [data-card-color='blue'] [data-nextjs-fix-card-icon] {
+  [data-card-color='blue'] [data-blazefire-fix-card-icon] {
     background: var(--color-blue-100);
     color: var(--color-blue-800);
   }
 
   [data-card-color='purple']
-    [data-nextjs-fix-snippet]
+    [data-blazefire-fix-snippet]
     [data-snippet-highlight] {
     color: var(--color-instant-text-purple);
   }
 
-  [data-card-color='purple'] [data-nextjs-fix-card-icon] {
+  [data-card-color='purple'] [data-blazefire-fix-card-icon] {
     background: var(--color-purple-100);
     color: var(--color-purple-800);
   }
 
-  [data-card-color='red'] [data-nextjs-fix-snippet] [data-snippet-highlight] {
+  [data-card-color='red'] [data-blazefire-fix-snippet] [data-snippet-highlight] {
     color: var(--color-red-800);
   }
 
-  [data-card-color='red'] [data-nextjs-fix-card-icon] {
+  [data-card-color='red'] [data-blazefire-fix-card-icon] {
     background: var(--color-red-100);
     color: var(--color-red-800);
   }
 
-  [data-card-color='gray'] [data-nextjs-fix-snippet] [data-snippet-highlight] {
+  [data-card-color='gray'] [data-blazefire-fix-snippet] [data-snippet-highlight] {
     color: var(--color-gray-1000);
   }
 
-  [data-card-color='gray'] [data-nextjs-fix-card-icon] {
+  [data-card-color='gray'] [data-blazefire-fix-card-icon] {
     background: var(--color-gray-100);
     color: var(--color-gray-800);
   }
 
-  [data-card-color='amber'] [data-nextjs-fix-snippet] [data-snippet-highlight] {
+  [data-card-color='amber'] [data-blazefire-fix-snippet] [data-snippet-highlight] {
     color: var(--color-instant-text-amber);
   }
 
-  [data-card-color='amber'] [data-nextjs-fix-card-icon] {
+  [data-card-color='amber'] [data-blazefire-fix-card-icon] {
     background: var(--color-amber-100);
     color: var(--color-amber-900);
   }
 
-  [data-nextjs-fix-card-title-link-icon] {
+  [data-blazefire-fix-card-title-link-icon] {
     align-items: center;
     color: inherit;
     display: inline-flex;
     flex-shrink: 0;
   }
 
-  [data-nextjs-fix-card]:hover [data-nextjs-fix-card-title-link-icon] {
+  [data-blazefire-fix-card]:hover [data-blazefire-fix-card-title-link-icon] {
     color: inherit;
   }
 
-  [data-nextjs-fix-card-wrapper] {
+  [data-blazefire-fix-card-wrapper] {
     display: flex;
     position: relative;
   }
 
-  [data-nextjs-fix-card-wrapper] > [data-nextjs-fix-card] {
+  [data-blazefire-fix-card-wrapper] > [data-blazefire-fix-card] {
     flex: 1;
   }
 
-  [data-nextjs-fix-card-copy-button] {
+  [data-blazefire-fix-card-copy-button] {
     align-items: center;
     background: var(--color-background-100);
     border: 1px solid var(--color-gray-alpha-300);
@@ -616,23 +616,23 @@ export const INSTANT_GUIDANCE_STYLES = css`
     z-index: 2;
   }
 
-  [data-nextjs-fix-card-copy-button] svg {
+  [data-blazefire-fix-card-copy-button] svg {
     width: var(--size-12);
     height: var(--size-12);
     flex-shrink: 0;
   }
 
-  [data-nextjs-fix-card-copy-button] span {
+  [data-blazefire-fix-card-copy-button] span {
     line-height: 1;
   }
 
-  [data-nextjs-fix-card-copy-button]:hover {
+  [data-blazefire-fix-card-copy-button]:hover {
     background: var(--color-background-200);
     border-color: var(--color-gray-alpha-500);
     color: var(--color-gray-1000);
   }
 
-  [data-nextjs-fix-card-copy-button]:focus-visible {
+  [data-blazefire-fix-card-copy-button]:focus-visible {
     outline: var(--focus-ring);
     outline-offset: 2px;
   }

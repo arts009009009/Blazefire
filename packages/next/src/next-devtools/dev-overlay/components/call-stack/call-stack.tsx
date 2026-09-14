@@ -16,15 +16,15 @@ export function CallStack({
   onToggleIgnoreList: () => void
 }) {
   return (
-    <div data-nextjs-call-stack-container>
-      <div data-nextjs-call-stack-header>
-        <p data-nextjs-call-stack-title>
-          Call Stack <span data-nextjs-call-stack-count>{frames.length}</span>
+    <div data-blazefire-call-stack-container>
+      <div data-blazefire-call-stack-header>
+        <p data-blazefire-call-stack-title>
+          Call Stack <span data-blazefire-call-stack-count>{frames.length}</span>
         </p>
         {ignoredFramesTally > 0 && (
           <button
             // The isIgnoreListOpen value is used by tests to confirm whether it is open or not.
-            data-nextjs-call-stack-ignored-list-toggle-button={isIgnoreListOpen}
+            data-blazefire-call-stack-ignored-list-toggle-button={isIgnoreListOpen}
             onClick={onToggleIgnoreList}
           >
             {`${isIgnoreListOpen ? 'Hide' : 'Show'} ${ignoredFramesTally} ignore-listed frame(s)`}
@@ -42,7 +42,7 @@ export function CallStack({
 }
 
 export const CALL_STACK_STYLES = css`
-  [data-nextjs-call-stack-container] {
+  [data-blazefire-call-stack-container] {
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -51,7 +51,7 @@ export const CALL_STACK_STYLES = css`
     padding: 20px 0 0;
   }
 
-  [data-nextjs-call-stack-header] {
+  [data-blazefire-call-stack-header] {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -60,7 +60,7 @@ export const CALL_STACK_STYLES = css`
     width: 100%;
   }
 
-  [data-nextjs-call-stack-title] {
+  [data-blazefire-call-stack-title] {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -73,7 +73,7 @@ export const CALL_STACK_STYLES = css`
     font-weight: 500;
   }
 
-  [data-nextjs-call-stack-count] {
+  [data-blazefire-call-stack-count] {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -93,7 +93,7 @@ export const CALL_STACK_STYLES = css`
     background: var(--color-gray-200);
   }
 
-  [data-nextjs-call-stack-ignored-list-toggle-button] {
+  [data-blazefire-call-stack-ignored-list-toggle-button] {
     all: unset;
     display: flex;
     align-items: center;

@@ -392,6 +392,7 @@ export async function startServer(
       )
 
       Log.event(`Ready in ${formattedStartDuration}`)
+      Log.event(`Blazefire Runtime v1.0.0 | Frostfast Compiler v1.0.0`)
 
       try {
         let cleanupStarted = false

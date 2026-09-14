@@ -57,6 +57,22 @@ function useBlazefireGlobalStyles() {
         --blazefire-red: #ff006e;
         --blazefire-green: #00ff41;
         --blazefire-orange: #ff8800;
+        --blazefire-background: #000000;
+        --blazefire-surface: #050505;
+        --blazefire-text: #e0e0e0;
+        --glow-cyan: 0 0 10px rgba(0,255,255,0.3), 0 0 20px rgba(0,255,255,0.1);
+        --glow-magenta: 0 0 10px rgba(255,0,255,0.3), 0 0 20px rgba(255,0,255,0.1);
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff);
+        z-index: 2147483647;
+        pointer-events: none;
       }
       @keyframes blazefire-pulse {
         0%, 100% { opacity: 0.6; }

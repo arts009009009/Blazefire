@@ -11,7 +11,7 @@ const DialogBody: React.FC<DialogBodyProps> = function DialogBody({
   ...props
 }) {
   return (
-    <div data-nextjs-dialog-body className={className} {...props}>
+    <div data-blazefire-dialog-body className={className} {...props}>
       {children}
     </div>
   )

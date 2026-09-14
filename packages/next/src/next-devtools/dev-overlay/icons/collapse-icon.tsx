@@ -1,7 +1,7 @@
 export function CollapseIcon({ collapsed }: { collapsed?: boolean } = {}) {
   return (
     <svg
-      data-nextjs-call-stack-chevron-icon
+      data-blazefire-call-stack-chevron-icon
       data-collapsed={collapsed}
       width="16"
       height="16"
