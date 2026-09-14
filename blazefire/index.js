@@ -31,6 +31,21 @@ function getBlazefireCSS() {
       --blazefire-green: #00ff41;
       --blazefire-orange: #ff8800;
       --blazefire-background: #000000;
+      --blazefire-surface: #050505;
+      --blazefire-text: #e0e0e0;
+      --glow-cyan: 0 0 10px rgba(0,255,255,0.3), 0 0 20px rgba(0,255,255,0.1);
+      --glow-magenta: 0 0 10px rgba(255,0,255,0.3), 0 0 20px rgba(255,0,255,0.1);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff);
+      z-index: 2147483647;
+      pointer-events: none;
     }
     @keyframes blazefire-pulse {
       0%, 100% { opacity: 0.6; }
@@ -100,10 +115,21 @@ export function createCompiler(options) {
 var BlazefireContext = createContext({
   version: BLAZEFIRE_VERSION,
   compiler: 'frostfast',
+  runtime: 'blazefire',
 });
 
 export function useBlazefire() {
   return useContext(BlazefireContext);
+}
+
+function BlazefireDevToolsAuto() {
+  var isDev = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development';
+  if (!isDev) return null;
+  return React.createElement('div', {
+    'data-blazefire-devtools': true,
+    style: { position: 'fixed', bottom: 20, right: 20, zIndex: 2147483647 },
+    'aria-label': 'Blazefire Dev Tools',
+  });
 }
 
 export function BlazefireProvider(props) {
@@ -113,8 +139,9 @@ export function BlazefireProvider(props) {
 
   return React.createElement(
     BlazefireContext.Provider,
-    { value: { version: BLAZEFIRE_VERSION, compiler: 'frostfast' } },
-    props.children
+    { value: { version: BLAZEFIRE_VERSION, compiler: 'frostfast', runtime: 'blazefire' } },
+    props.children,
+    React.createElement(BlazefireDevToolsAuto, null)
   );
 }
 

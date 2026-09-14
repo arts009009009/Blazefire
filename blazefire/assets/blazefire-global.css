@@ -27,6 +27,18 @@ body {
   color: var(--blazefire-text);
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff);
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
 .blazefire-branding-header {
   display: flex;
   align-items: center;
