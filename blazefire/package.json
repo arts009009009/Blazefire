@@ -10,6 +10,11 @@
       "types": "./src/index.ts",
       "default": "./index.js"
     },
+    "./plugin": {
+      "types": "./plugin.d.ts",
+      "default": "./plugin.cjs"
+    },
+    "./branding": "./branding.cjs",
     "./compiler": {
       "types": "./src/compiler/index.ts",
       "default": "./src/compiler/index.js"
@@ -23,6 +28,10 @@
   },
   "files": [
     "index.js",
+    "plugin.cjs",
+    "plugin.d.ts",
+    "branding.cjs",
+    "runtime/",
     "src/",
     "assets/",
     "data/",
