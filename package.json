@@ -38,10 +38,11 @@
     "blazefire/README.md"
   ],
   "scripts": {
+    "prepare": "node -e \"require('fs').accessSync('blazefire/plugin.cjs')\"",
     "build": "tsc",
     "test": "jest",
     "prepublishOnly": "npm run build",
-    "blazefire:dev": "echo 'Blazefire dev mode — use next dev from your project'"
+    "blazefire:dev": "echo 'Blazefire dev mode \u2014 use next dev from your project'"
   },
   "keywords": [
     "blazefire",
