@@ -34,10 +34,14 @@ const BLAZEFIRE_BRANDING = {
   // Matches must NOT be /g/: .test() on a global regex is stateful and would
   // skip every other element.
   labels: [
-    // "Next.js 16.3.8" version pill -> "Blazefire 1.0.0"
+    // "Next.js 16.3.8" / "Next.js 16.4.0-canary.4 (stale)" -> "Blazefire 1.0.0…"
+    //
+    // The version is matched separately from the surrounding text so that
+    // canary's "(stale)" / "(latest)" suffixes survive the rewrite instead of
+    // being wiped out. `[\w.\-+]` covers full semver plus prerelease tags.
     {
       selector: '[data-nextjs-version-checker]',
-      match: /^Next\.js\s+[\d.]+$/,
+      match: /^Next\.js\s+[\w.\-+]+/,
       replace: 'Blazefire 1.0.0',
       title: 'Blazefire 1.0.0',
     },
