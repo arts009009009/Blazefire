@@ -88,3 +88,6 @@ evals/.tarballs/
 evals/experiments/
 evals/results/
 evals/agent-results.json
+
+# never commit proxy/auth config (a placeholder here broke every GitHub install)
+.npmrc

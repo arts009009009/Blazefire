@@ -3,33 +3,46 @@
   "version": "1.0.0",
   "description": "Blazefire framework powered by Frostfast compiler",
   "main": "blazefire/index.js",
-  "types": "blazefire/dist/index.d.ts",
+  "types": "blazefire/src/index.ts",
   "exports": {
     ".": {
-      "import": "./blazefire/dist/index.js",
-      "require": "./blazefire/index.js",
-      "types": "./blazefire/dist/index.d.ts"
+      "types": "./blazefire/src/index.ts",
+      "default": "./blazefire/index.js"
     },
+    "./plugin": {
+      "types": "./blazefire/plugin.d.ts",
+      "default": "./blazefire/plugin.cjs"
+    },
+    "./branding": "./blazefire/branding.cjs",
     "./compiler": {
-      "import": "./blazefire/dist/compiler/index.js",
-      "require": "./blazefire/src/compiler/index.js",
-      "types": "./blazefire/dist/compiler/index.d.ts"
+      "types": "./blazefire/src/compiler/index.ts",
+      "default": "./blazefire/src/compiler/index.js"
     },
     "./styles": "./blazefire/assets/blazefire-global.css",
-    "./components/*": "./blazefire/src/components/*"
+    "./components/*": {
+      "types": "./blazefire/src/components/*.tsx",
+      "default": "./blazefire/src/components/*.js"
+    },
+    "./data/*": "./blazefire/data/*"
   },
   "files": [
     "blazefire/index.js",
+    "blazefire/plugin.cjs",
+    "blazefire/plugin.d.ts",
+    "blazefire/branding.cjs",
+    "blazefire/runtime/",
     "blazefire/src/",
-    "blazefire/dist/",
     "blazefire/assets/",
+    "blazefire/data/",
+    "blazefire/package.json",
     "blazefire/README.md"
   ],
   "scripts": {
+    "prepare": "node -e \"require('fs').accessSync('blazefire/plugin.cjs')\"",
     "build": "tsc",
     "test": "jest",
     "prepublishOnly": "npm run build",
-    "blazefire:dev": "echo 'Blazefire dev mode — use next dev from your project'"
+    "blazefire:dev": "echo 'Blazefire dev mode \u2014 use next dev from your project'"
   },
   "keywords": [
     "blazefire",
