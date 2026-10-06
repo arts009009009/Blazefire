@@ -31,6 +31,7 @@
     "plugin.cjs",
     "plugin.d.ts",
     "branding.cjs",
+    "postinstall.cjs",
     "runtime/",
     "src/",
     "assets/",
@@ -39,6 +40,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "postinstall": "node postinstall.cjs",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

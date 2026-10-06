@@ -34,11 +34,13 @@
     "blazefire/src/",
     "blazefire/assets/",
     "blazefire/data/",
+    "blazefire/postinstall.cjs",
     "blazefire/package.json",
     "blazefire/README.md"
   ],
   "scripts": {
     "prepare": "node -e \"require('fs').accessSync('blazefire/plugin.cjs')\"",
+    "postinstall": "node blazefire/postinstall.cjs",
     "build": "tsc",
     "test": "jest",
     "prepublishOnly": "npm run build",
