@@ -53,7 +53,6 @@
   "author": "Blazefire Team",
   "license": "MIT",
   "dependencies": {
-    "blazefire": "github:arts009009009/blazefire",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
