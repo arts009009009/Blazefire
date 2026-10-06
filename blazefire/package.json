@@ -26,12 +26,16 @@
     },
     "./data/*": "./data/*"
   },
+  "bin": {
+    "blazefire": "./cli.cjs"
+  },
   "files": [
     "index.js",
     "plugin.cjs",
     "plugin.d.ts",
     "branding.cjs",
     "postinstall.cjs",
+    "cli.cjs",
     "runtime/",
     "src/",
     "assets/",

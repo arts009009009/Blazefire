@@ -25,6 +25,9 @@
     },
     "./data/*": "./blazefire/data/*"
   },
+  "bin": {
+    "blazefire": "./blazefire/cli.cjs"
+  },
   "files": [
     "blazefire/index.js",
     "blazefire/plugin.cjs",
@@ -35,6 +38,7 @@
     "blazefire/assets/",
     "blazefire/data/",
     "blazefire/postinstall.cjs",
+    "blazefire/cli.cjs",
     "blazefire/package.json",
     "blazefire/README.md"
   ],

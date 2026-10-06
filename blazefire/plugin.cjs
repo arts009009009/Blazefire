@@ -54,6 +54,23 @@ const DEFAULTS = {
  * @returns {import('next').NextConfig}
  */
 function blazefire(first = {}, second) {
+  // Next's config export may itself be a function — sync or async:
+  //   module.exports = (phase, { defaultConfig }) => ({ ... })
+  // It has to be handled before the object path below, because a function has
+  // no own enumerable keys: `isNextConfig(fn)` is false and `{...fn}` is `{}`,
+  // which would silently REPLACE the user's whole config with ours.
+  // Next resolves it via normalizeConfig(), which calls it with
+  // (phase, { defaultConfig }) and awaits the result — so returning an async
+  // wrapper here is safe.
+  if (typeof first === 'function') {
+    const userConfig = first
+    const ours = buildConfig({ ...DEFAULTS, ...(second || {}) })
+    return async function blazefireWrappedConfig(phase, ctx) {
+      const base = await userConfig(phase, ctx)
+      return mergeConfigs(base && typeof base === 'object' ? base : {}, ours)
+    }
+  }
+
   const baseIsConfig = isNextConfig(first)
   const base = baseIsConfig ? first : {}
   const options = { ...DEFAULTS, ...(baseIsConfig ? (second || {}) : first) }
