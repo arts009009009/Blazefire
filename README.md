@@ -35,29 +35,40 @@ npm install github:arts009009009/Blazefire
 yarn add github:arts009009009/Blazefire
 ```
 
-npm and yarn activate automatically: your `next.config.*` is copied to
-`Blazefire Backup/` and the export is wrapped with `blazefire()`.
+That is all for npm and yarn. Your `next.config.*` is copied to
+`Blazefire Backup/` and its export is wrapped with `blazefire()` — and
+activation writes this into your `package.json`:
+
+```json
+"postinstall": "blazefire init || echo blazefire skipped"
+```
+
+A project's own scripts are never blocked, so once that line is committed
+**every** package manager self-activates on install, including the two
+below. Commit it alongside the config.
 
 ### pnpm
 
-pnpm installs it, but skips third-party build scripts by default, so the
-auto-activation never runs. Either approve it once:
+pnpm installs fine, but skips a *dependency's* build scripts by default, so
+the very first install activates nothing. Bootstrap it once:
 
 ```bash
-pnpm approve-builds    # select blazefire
-pnpm install
+pnpm exec blazefire init      # or: pnpm approve-builds, then pnpm install
 ```
 
-or skip the allowlist and activate it yourself:
-
-```bash
-pnpm exec blazefire init
-```
+After that the hook takes over and no allowlist is needed. Worth knowing:
+an `onlyBuiltDependencies` entry for a git dependency embeds the full commit
+SHA, so it quietly stops matching on your next commit — the hook doesn't.
 
 ### bun
 
-Same story — bun blocks untrusted postinstalls. Allow it in your
-`package.json`:
+Same one-time bootstrap — bun blocks untrusted postinstalls:
+
+```bash
+bunx blazefire init
+```
+
+or allow the package outright in your `package.json`:
 
 ```json
 "trustedDependencies": ["blazefire"]
@@ -73,10 +84,15 @@ pnpm to install, then run `npx blazefire init`.
 
 ```bash
 npx blazefire init      # activate
-npx blazefire restore   # put the original config back
+npx blazefire restore   # put the original config back AND remove the hook
 ```
 
-Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation on install.
+`init` never exits non-zero when it is running as your `postinstall` — a
+deleted `next.config.*` must not be able to brick your install — but it still
+exits 1 when you invoke it yourself and finds nothing to do.
+
+Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
+is written, and an existing hook honours the flag too.
 
 ## Usage
 
