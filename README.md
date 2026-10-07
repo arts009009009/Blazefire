@@ -27,9 +27,56 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 
 ## Installation
 
+Install straight from GitHub — the package is not published to npm.
+
 ```bash
-npm install blazefire
+npm install github:arts009009009/Blazefire
+# or
+yarn add github:arts009009009/Blazefire
 ```
+
+npm and yarn activate automatically: your `next.config.*` is copied to
+`Blazefire Backup/` and the export is wrapped with `blazefire()`.
+
+### pnpm
+
+pnpm installs it, but skips third-party build scripts by default, so the
+auto-activation never runs. Either approve it once:
+
+```bash
+pnpm approve-builds    # select blazefire
+pnpm install
+```
+
+or skip the allowlist and activate it yourself:
+
+```bash
+pnpm exec blazefire init
+```
+
+### bun
+
+Same story — bun blocks untrusted postinstalls. Allow it in your
+`package.json`:
+
+```json
+"trustedDependencies": ["blazefire"]
+```
+
+### Not supported: Deno
+
+Deno's installer only resolves npm-registry and JSR specifiers, so it drops
+`github:` (and `git+https`) dependencies without an error. Use npm, yarn or
+pnpm to install, then run `npx blazefire init`.
+
+### Fallback (any manager, incl. `--ignore-scripts`)
+
+```bash
+npx blazefire init      # activate
+npx blazefire restore   # put the original config back
+```
+
+Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation on install.
 
 ## Usage
 
