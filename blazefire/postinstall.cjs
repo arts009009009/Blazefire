@@ -23,6 +23,12 @@
  *      pre-Blazefire original
  *   5. idempotent: if "blazefire/plugin" is already referenced, does nothing
  *   6. opt out entirely with BLAZEFIRE_SKIP_AUTO=1
+ *   7. after a successful activation it adds a `postinstall` hook to the
+ *      HOST project's package.json, because a package's own postinstall is
+ *      exactly what pnpm/bun refuse to run for untrusted dependencies — but
+ *      a project's own scripts always run. One `npx blazefire init` (or a
+ *      plain npm/yarn install) therefore makes every later pnpm/bun install
+ *      self-activate too. `restore` puts the original script back.
  *
  * The edit itself is deliberately dumb: locate the top-level `export default`
  * (or `module.exports`) while skipping strings/comments/braces, then wrap the
@@ -47,6 +53,21 @@ const BACKUP_DIR = "Blazefire Backup";
 const MARKER = "blazefire/plugin";
 const ESM_IMPORT = 'import blazefire from "blazefire/plugin";';
 const CJS_REQUIRE = 'const blazefire = require("blazefire/plugin");';
+
+// The hook we write into the HOST project's scripts. Two deliberate choices:
+//
+//   - `|| echo blazefire skipped` — without it, removing `blazefire` from
+//     dependencies leaves this line behind and the next install dies with
+//     `sh: 1: blazefire: not found` (exit 127 on npm, 1 on pnpm). A postinstall
+//     must never be able to brick a project, so the failure is swallowed.
+//   - `&& <theirs>` when a postinstall already exists — `||` binds tighter in
+//     effect here (left-associative, equal precedence), so their command runs
+//     whether init succeeded or was skipped.
+const HOOK_COMMAND = "blazefire init || echo blazefire skipped";
+const HOOK_RE = /\bblazefire\b[\s\S]*\binit\b/;
+// Written next to the config backup so `restore` can undo it exactly, without
+// restoring a whole (now stale) copy of package.json.
+const HOOK_RECORD = "scripts.postinstall.json";
 
 function say(message) {
   try {
@@ -96,6 +117,11 @@ function dependencyBags(pkg) {
 
 function declaresNext(pkg) {
   return dependencyBags(pkg).some((bag) => Object.prototype.hasOwnProperty.call(bag, "next"));
+}
+
+/** Only a project that actually depends on us should get the hook. */
+function declaresBlazefire(pkg) {
+  return dependencyBags(pkg).some((bag) => Object.prototype.hasOwnProperty.call(bag, "blazefire"));
 }
 
 /* ------------------------------------------------------------------ *
@@ -318,18 +344,151 @@ function backup(originalFile, contents, projectRoot) {
 function noteGitignore(projectRoot) {
   const file = path.join(projectRoot, ".gitignore");
   try {
-    if (!fs.existsSync(file)) return;
-    const current = fs.readFileSync(file, "utf8");
+    let current = "";
+    try {
+      current = fs.readFileSync(file, "utf8");
+    } catch (_) {
+      current = ""; // none yet — creating it is the entire point of this
+    }
     if (current.includes(BACKUP_DIR)) return;
-    const sep = current.endsWith("\n") || current === "" ? "" : "\n";
-    fs.writeFileSync(
-      file,
-      current + sep + "\n# Blazefire keeps a copy of the config it edits\n" + BACKUP_DIR + "/\n",
-      "utf8"
-    );
+    const note = "# Blazefire keeps a copy of the config it edits\n" + BACKUP_DIR + "/\n";
+    const body =
+      current === ""
+        ? note
+        : (current.endsWith("\n") ? current : current + "\n") + "\n" + note;
+    fs.writeFileSync(file, body, "utf8");
   } catch (_) {
     /* cosmetic only */
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * the self-perpetuating hook
+ *
+ * A dependency's own postinstall is exactly what pnpm and bun withhold from
+ * an untrusted package, but the *project's* own scripts always run. So a
+ * successful activation records itself into the host package.json, which
+ * turns "npm/yarn activate, pnpm/bun do not" into "everything activates".
+ * ------------------------------------------------------------------ */
+
+/** Write package.json back with its own indentation and trailing newline. */
+function writeJsonPreserving(file, pkg) {
+  let raw = "";
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch (_) {
+    /* about to be overwritten anyway */
+  }
+  const indent = (raw.match(/^([ \t]+)"/m) || [])[1] || 2;
+  const trailing = raw === "" || raw.endsWith("\n") ? "\n" : "";
+  fs.writeFileSync(file, JSON.stringify(pkg, null, indent) + trailing, "utf8");
+}
+
+/**
+ * True only when this process is the host project's own `postinstall` — i.e.
+ * launched by the hook we wrote, not typed by a person.
+ *
+ * All four managers set `npm_lifecycle_event=postinstall` for a project
+ * script (verified), while a typed invocation never does: `npx`/`pnpm exec`
+ * set it to "npx", a direct node_modules/.bin call leaves it undefined. The
+ * second condition — that the script really is ours — stops an unrelated
+ * postinstall from inheriting our leniency.
+ */
+function isLifecycleHook() {
+  if (process.env.npm_lifecycle_event !== "postinstall") return false;
+  const located = locateCandidates();
+  for (const start of located.candidates) {
+    const root = findNearestPackageRoot(start);
+    if (!root || (located.ownRoot && root === located.ownRoot)) continue;
+    const pkg = readJson(path.join(root, "package.json"));
+    const script = pkg && pkg.scripts && pkg.scripts.postinstall;
+    if (typeof script === "string" && HOOK_RE.test(script)) return true;
+  }
+  return false;
+}
+
+/**
+ * Add the activation hook to the host package.json, idempotently.
+ *
+ * Never overwrites an existing postinstall — it is chained after ours — and
+ * records the pristine original beside the config backup so `restore` can
+ * put it back exactly rather than restoring a whole stale package.json.
+ *
+ * @returns {boolean} whether anything was written
+ */
+function ensureHook(projectRoot) {
+  // Writing a hook under an explicit opt-out would defeat the opt-out on the
+  // very next install, so skip it entirely.
+  if (process.env.BLAZEFIRE_SKIP_AUTO) return false;
+
+  const file = path.join(projectRoot, "package.json");
+  const pkg = readJson(file);
+  if (!pkg) return false;
+  if (!declaresBlazefire(pkg)) return false;
+
+  const scripts = pkg.scripts || {};
+  const existing = scripts.postinstall;
+  if (typeof existing === "string" && HOOK_RE.test(existing)) return false; // already ours
+
+  const record = path.join(projectRoot, BACKUP_DIR, HOOK_RECORD);
+  try {
+    if (!fs.existsSync(record)) {
+      fs.mkdirSync(path.join(projectRoot, BACKUP_DIR), { recursive: true });
+      fs.writeFileSync(
+        record,
+        JSON.stringify(
+          {
+            existed: typeof existing === "string",
+            value: typeof existing === "string" ? existing : null,
+          },
+          null,
+          2
+        ) + "\n",
+        "utf8"
+      );
+    }
+  } catch (_) {
+    // The record is what makes this reversible; without it, do not touch.
+    return false;
+  }
+
+  pkg.scripts = scripts;
+  scripts.postinstall = existing ? HOOK_COMMAND + " && " + existing : HOOK_COMMAND;
+  writeJsonPreserving(file, pkg);
+  say(
+    'added "postinstall": ' +
+      JSON.stringify(scripts.postinstall) +
+      " — future installs will self-activate"
+  );
+  return true;
+}
+
+/** Undo {@link ensureHook}. @returns {boolean} whether there was a record */
+function undoHook(projectRoot) {
+  const record = path.join(projectRoot, BACKUP_DIR, HOOK_RECORD);
+  const saved = readJson(record);
+  if (!saved) return false;
+
+  const file = path.join(projectRoot, "package.json");
+  const pkg = readJson(file);
+  const scripts = pkg && pkg.scripts;
+  const current = scripts && scripts.postinstall;
+
+  // Only ever remove a script that is recognisably ours; if the user
+  // replaced it, it is theirs now and the record is stale.
+  if (typeof current === "string" && HOOK_RE.test(current)) {
+    if (saved.existed) scripts.postinstall = saved.value;
+    else delete scripts.postinstall;
+    writeJsonPreserving(file, pkg);
+    say("restored \"scripts.postinstall\"" + (saved.existed ? "" : " (removed the Blazefire hook)"));
+  }
+
+  try {
+    fs.unlinkSync(record);
+  } catch (_) {
+    /* already gone */
+  }
+  return true;
 }
 
 function activate(projectRoot, configPath, original) {
@@ -387,7 +546,10 @@ function locateCandidates() {
  */
 function run(opts) {
   const cli = !!(opts && opts.cli);
-  if (process.env.BLAZEFIRE_SKIP_AUTO && !cli) return "not-found";
+  // Opt-out covers both paths: the plain postinstall, and the hook (which is
+  // a CLI invocation but still "auto", so honouring it here is what keeps
+  // BLAZEFIRE_SKIP_AUTO=1 true for the life of the project).
+  if (process.env.BLAZEFIRE_SKIP_AUTO && (!cli || isLifecycleHook())) return "not-found";
 
   const located = locateCandidates();
   const { ownRoot, candidates } = located;
@@ -410,6 +572,9 @@ function run(opts) {
 
     const original = fs.readFileSync(configPath, "utf8");
     if (original.includes(MARKER)) {
+      // Already wired, but the hook may not be: the config could have been
+      // activated by our own postinstall on an earlier npm/yarn install.
+      ensureHook(projectRoot);
       if (cli) say("already active — " + path.basename(configPath) + " is wired up.");
       return "already";
     }
@@ -419,6 +584,7 @@ function run(opts) {
     if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
 
     activate(projectRoot, configPath, original);
+    ensureHook(projectRoot);
     return "activated";
   }
 
@@ -467,6 +633,9 @@ function restore() {
       say("restored " + name + " from " + BACKUP_DIR + "/");
       restored += 1;
     }
+    // The hook is part of "what Blazefire changed" — leaving it behind would
+    // re-activate the config on the next install.
+    if (undoHook(projectRoot)) restored += 1;
     if (restored > 0) return 0;
   }
 
@@ -485,4 +654,17 @@ if (require.main === module) {
   }
 }
 
-module.exports = { run, restore, plan, rewrite, findConfig, SNIPPET, BACKUP_DIR, MARKER };
+module.exports = {
+  run,
+  restore,
+  plan,
+  rewrite,
+  findConfig,
+  isLifecycleHook,
+  ensureHook,
+  undoHook,
+  SNIPPET,
+  BACKUP_DIR,
+  MARKER,
+  HOOK_COMMAND,
+};
