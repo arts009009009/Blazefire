@@ -124,6 +124,17 @@ function declaresBlazefire(pkg) {
   return dependencyBags(pkg).some((bag) => Object.prototype.hasOwnProperty.call(bag, "blazefire"));
 }
 
+/**
+ * The manifest is not enough: npm (and yarn) write a newly added dependency
+ * into package.json *after* lifecycle scripts run, so on the very first
+ * `npm install github:…` we are demonstrably installed but not yet listed.
+ * The hook only needs us to be present on disk.
+ */
+function hasBlazefire(projectRoot, pkg) {
+  if (declaresBlazefire(pkg)) return true;
+  return fs.existsSync(path.join(projectRoot, "node_modules", "blazefire", "package.json"));
+}
+
 /* ------------------------------------------------------------------ *
  * source scanning
  *
@@ -424,7 +435,7 @@ function ensureHook(projectRoot) {
   const file = path.join(projectRoot, "package.json");
   const pkg = readJson(file);
   if (!pkg) return false;
-  if (!declaresBlazefire(pkg)) return false;
+  if (!hasBlazefire(projectRoot, pkg)) return false;
 
   const scripts = pkg.scripts || {};
   const existing = scripts.postinstall;
