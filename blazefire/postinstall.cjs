@@ -132,7 +132,94 @@ function declaresBlazefire(pkg) {
  */
 function hasBlazefire(projectRoot, pkg) {
   if (declaresBlazefire(pkg)) return true;
-  return fs.existsSync(path.join(projectRoot, "node_modules", "blazefire", "package.json"));
+  return blazefireInstalledAt(projectRoot);
+}
+
+/* ------------------------------------------------------------------ *
+ * workspace / monorepo discovery
+ *
+ * Installing blazefire at the root of a monorepo is the common case, and
+ * that root is usually not where the Next app lives — so an installer that
+ * only looks at its own package.json silently does nothing. Only *declared*
+ * workspaces are considered, so the search stays bounded and predictable.
+ * ------------------------------------------------------------------ */
+
+/** Workspace globs from package.json#workspaces and pnpm-workspace.yaml. */
+function workspacePatterns(projectRoot) {
+  const patterns = [];
+
+  const pkg = readJson(path.join(projectRoot, "package.json"));
+  const ws = pkg && pkg.workspaces;
+  if (Array.isArray(ws)) patterns.push(...ws);
+  else if (ws && Array.isArray(ws.packages)) patterns.push(...ws.packages);
+
+  try {
+    const yaml = fs.readFileSync(path.join(projectRoot, "pnpm-workspace.yaml"), "utf8");
+    let collecting = false;
+    for (const line of yaml.split("\n")) {
+      if (/^packages\s*:/.test(line)) {
+        collecting = true;
+        continue;
+      }
+      if (!collecting) continue;
+      const item = /^\s*-\s*(.+?)\s*$/.exec(line);
+      if (item) patterns.push(item[1].replace(/^["']|["']$/g, ""));
+      else if (/^\S/.test(line)) collecting = false; // next top-level key
+    }
+  } catch (_) {
+    /* not a pnpm workspace */
+  }
+
+  return patterns;
+}
+
+/** Expand the `dir` and `dir/*` shapes real workspace files use. */
+function expandWorkspace(projectRoot, patterns) {
+  const dirs = [];
+  for (const pattern of patterns) {
+    if (pattern.includes("**")) continue; // too open-ended to walk
+    const star = pattern.indexOf("*");
+    if (star === -1) {
+      const dir = path.join(projectRoot, pattern);
+      if (fs.existsSync(path.join(dir, "package.json"))) dirs.push(dir);
+      continue;
+    }
+    const parent = path.join(projectRoot, pattern.slice(0, star).replace(/\/$/, ""));
+    let entries = [];
+    try {
+      entries = fs.readdirSync(parent, { withFileTypes: true });
+    } catch (_) {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) dirs.push(path.join(parent, entry.name));
+    }
+  }
+  return dirs;
+}
+
+/** Declared workspaces that actually hold a Next config, in stable order. */
+function findWorkspaceProjects(projectRoot) {
+  const patterns = workspacePatterns(projectRoot);
+  if (!patterns.length) return [];
+  const dirs = expandWorkspace(projectRoot, patterns);
+  dirs.sort();
+  return dirs.filter((dir) => findConfig(dir));
+}
+
+/**
+ * Can this project run `blazefire` at all? Walks up, because a workspace
+ * package legitimately resolves a dependency hoisted to the monorepo root.
+ */
+function blazefireInstalledAt(projectRoot) {
+  let dir = path.resolve(projectRoot);
+  for (let i = 0; i < 16; i++) {
+    if (fs.existsSync(path.join(dir, "node_modules", "blazefire", "package.json"))) return true;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return false;
 }
 
 /* ------------------------------------------------------------------ *
@@ -574,29 +661,39 @@ function run(opts) {
     if (!projectRoot || (ownRoot && projectRoot === ownRoot) || seen.has(projectRoot)) continue;
     seen.add(projectRoot);
 
-    const pkg = readJson(path.join(projectRoot, "package.json"));
-    const configPath = findConfig(projectRoot);
-    if (configPath && !sawConfig) sawConfig = { projectRoot, configPath };
+    // The project holding the Next config is often a workspace *child*: an
+    // installer run at a monorepo root almost never has the app beside it.
+    const roots = [projectRoot].concat(
+      findWorkspaceProjects(projectRoot).filter((dir) => !seen.has(dir))
+    );
 
-    if (declaresNext(pkg)) declaredNext = true;
-    if (!configPath) continue;
+    for (const root of roots) {
+      seen.add(root);
 
-    const original = fs.readFileSync(configPath, "utf8");
-    if (original.includes(MARKER)) {
-      // Already wired, but the hook may not be: the config could have been
-      // activated by our own postinstall on an earlier npm/yarn install.
-      ensureHook(projectRoot);
-      if (cli) say("already active — " + path.basename(configPath) + " is wired up.");
-      return "already";
+      const pkg = readJson(path.join(root, "package.json"));
+      const configPath = findConfig(root);
+      if (configPath && !sawConfig) sawConfig = { projectRoot: root, configPath };
+
+      if (declaresNext(pkg)) declaredNext = true;
+      if (!configPath) continue;
+
+      const original = fs.readFileSync(configPath, "utf8");
+      if (original.includes(MARKER)) {
+        // Already wired, but the hook may not be: the config could have been
+        // activated by our own postinstall on an earlier npm/yarn install.
+        ensureHook(root);
+        if (cli) say("already active — " + path.basename(configPath) + " is wired up.");
+        return "already";
+      }
+
+      // Only ever write where `next` is genuinely installed.
+      const hasInstalledNext = fs.existsSync(path.join(root, "node_modules", "next"));
+      if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
+
+      activate(root, configPath, original);
+      ensureHook(root);
+      return "activated";
     }
-
-    // Only ever write where `next` is genuinely installed.
-    const hasInstalledNext = fs.existsSync(path.join(projectRoot, "node_modules", "next"));
-    if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
-
-    activate(projectRoot, configPath, original);
-    ensureHook(projectRoot);
-    return "activated";
   }
 
   // Nothing safe to write. Stay quiet unless this really is a Next.js project.
@@ -633,21 +730,31 @@ function restore() {
     if (!projectRoot || projectRoot === ownRoot || seen.has(projectRoot)) continue;
     seen.add(projectRoot);
 
-    const backupRoot = path.join(projectRoot, BACKUP_DIR);
-    if (!fs.existsSync(backupRoot)) continue;
+    // Same workspace descent as run(): a backup written into a workspace
+    // child has to be reachable from the monorepo root too.
+    const roots = [projectRoot].concat(
+      findWorkspaceProjects(projectRoot).filter((dir) => !seen.has(dir))
+    );
 
-    let restored = 0;
-    for (const name of CONFIG_NAMES) {
-      const saved = path.join(backupRoot, name);
-      if (!fs.existsSync(saved)) continue;
-      fs.copyFileSync(saved, path.join(projectRoot, name));
-      say("restored " + name + " from " + BACKUP_DIR + "/");
-      restored += 1;
+    for (const root of roots) {
+      seen.add(root);
+
+      const backupRoot = path.join(root, BACKUP_DIR);
+      if (!fs.existsSync(backupRoot)) continue;
+
+      let restored = 0;
+      for (const name of CONFIG_NAMES) {
+        const saved = path.join(backupRoot, name);
+        if (!fs.existsSync(saved)) continue;
+        fs.copyFileSync(saved, path.join(root, name));
+        say("restored " + name + " from " + BACKUP_DIR + "/");
+        restored += 1;
+      }
+      // The hook is part of "what Blazefire changed" — leaving it behind would
+      // re-activate the config on the next install.
+      if (undoHook(root)) restored += 1;
+      if (restored > 0) return 0;
     }
-    // The hook is part of "what Blazefire changed" — leaving it behind would
-    // re-activate the config on the next install.
-    if (undoHook(projectRoot)) restored += 1;
-    if (restored > 0) return 0;
   }
 
   say("no backups in " + BACKUP_DIR + "/ — nothing to restore.");

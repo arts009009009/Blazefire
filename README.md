@@ -74,6 +74,28 @@ or allow the package outright in your `package.json`:
 "trustedDependencies": ["blazefire"]
 ```
 
+### Monorepos and workspaces
+
+Installing at the repository root is fine even when the root has no Next.js
+config. The installer then looks inside the workspaces you have *declared* —
+`package.json#workspaces` (npm, yarn, pnpm) or the `packages:` list in
+`pnpm-workspace.yaml` — and activates the one that actually holds a
+`next.config.*`:
+
+```text
+elite-shop/              blazefire installed here
+├── package.json
+├── pnpm-workspace.yaml    packages: ["frontend"]
+└── frontend/             the app
+    ├── next.config.ts      wrapped + copied to frontend/Blazefire Backup/
+    └── package.json        receives the self-activation hook
+```
+
+The backup and the hook both land beside the app rather than at the root, and
+`npx blazefire restore` reaches them from either place. Only declared
+workspaces are searched — nothing is found by scanning directories — so the
+outcome is deterministic.
+
 ### Not supported: Deno
 
 Deno's installer only resolves npm-registry and JSR specifiers, so it drops
