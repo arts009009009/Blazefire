@@ -31,12 +31,21 @@ Install straight from GitHub — the package is not published to npm.
 
 ```bash
 npm install github:arts009009009/Blazefire
-# or
+
+# Yarn 1
 yarn add github:arts009009009/Blazefire
+
+# Yarn Berry (2+) — name@range is REQUIRED there. The Yarn 1 line above fails
+# with: "didn't match the required format (package-name@range)"
+yarn add blazefire@github:arts009009009/Blazefire
+
+pnpm add github:arts009009009/Blazefire
+bun add  github:arts009009009/Blazefire
 ```
 
-That is all for npm and yarn. Your `next.config.*` is copied to
-`Blazefire Backup/` and its export is wrapped with `blazefire()` — and
+That is all for npm and Yarn 1. Yarn Berry and pnpm each need one extra
+step — see below. Your `next.config.*` is copied
+to `Blazefire Backup/` and its export is wrapped with `blazefire()` — and
 activation writes this into your `package.json`:
 
 ```json
@@ -44,8 +53,44 @@ activation writes this into your `package.json`:
 ```
 
 A project's own scripts are never blocked, so once that line is committed
-**every** package manager self-activates on install, including the two
+**every** package manager self-activates on install, including the ones
 below. Commit it alongside the config.
+
+### Yarn Berry (2+)
+
+Berry ships with `enableScripts: false` and an empty git allowlist, so it
+runs no dependency install scripts and blocks **every** `github:`
+dependency until you opt in. One `.yarnrc.yml` at the project root covers
+both gates:
+
+```yaml
+nodeLinker: node-modules
+enableScripts: true
+approvedGitRepositories:
+  - "https://github.com/**"
+```
+
+Patterns match the resolved HTTPS URL, and `**` is required —
+`https://github.com/*` stops one path segment short, and a bare `*` never
+matches a URL containing slashes.
+
+Prefer not to enable every dependency's scripts? Drop `enableScripts` and
+allow just this package from `package.json`:
+
+```json
+{ "dependenciesMeta": { "blazefire": { "built": true } } }
+```
+
+Or skip the git allowlist entirely by installing the tarball:
+
+```bash
+yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/tags/v1.0.0.tar.gz
+```
+
+This is **one-time** setup: once the hook exists in `package.json`,
+project scripts always run regardless of `enableScripts`, so later
+installs — including a fresh clone — self-activate under stock Berry
+defaults.
 
 ### pnpm
 
