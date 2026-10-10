@@ -514,6 +514,23 @@ function isLifecycleHook() {
  *
  * @returns {boolean} whether anything was written
  */
+/**
+ * Install the self-activation hook in the project that owns the config, and in
+ * the install root when those differ.
+ *
+ * In a monorepo the lifecycle actually runs at the root: that is where
+ * `npm install` / `yarn` execute scripts and where the blazefire dependency is
+ * declared. A hook left only in a workspace child is dead in a very common
+ * layout — a root that declares `pnpm-workspace.yaml` but no
+ * `package.json#workspaces` is invisible to yarn and npm, so they never run the
+ * child's script and "self-activating" would silently not be true.
+ */
+function hookBoth(configRoot, installRoot) {
+  const wrote = ensureHook(configRoot);
+  if (installRoot && installRoot !== configRoot) ensureHook(installRoot);
+  return wrote;
+}
+
 function ensureHook(projectRoot) {
   // Writing a hook under an explicit opt-out would defeat the opt-out on the
   // very next install, so skip it entirely.
@@ -681,7 +698,7 @@ function run(opts) {
       if (original.includes(MARKER)) {
         // Already wired, but the hook may not be: the config could have been
         // activated by our own postinstall on an earlier npm/yarn install.
-        ensureHook(root);
+        hookBoth(root, projectRoot);
         if (cli) say("already active — " + path.basename(configPath) + " is wired up.");
         return "already";
       }
@@ -691,7 +708,7 @@ function run(opts) {
       if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
 
       activate(root, configPath, original);
-      ensureHook(root);
+      hookBoth(root, projectRoot);
       return "activated";
     }
   }
@@ -736,25 +753,30 @@ function restore() {
       findWorkspaceProjects(projectRoot).filter((dir) => !seen.has(dir))
     );
 
+    let restored = 0;
     for (const root of roots) {
       seen.add(root);
 
       const backupRoot = path.join(root, BACKUP_DIR);
-      if (!fs.existsSync(backupRoot)) continue;
-
-      let restored = 0;
-      for (const name of CONFIG_NAMES) {
-        const saved = path.join(backupRoot, name);
-        if (!fs.existsSync(saved)) continue;
-        fs.copyFileSync(saved, path.join(root, name));
-        say("restored " + name + " from " + BACKUP_DIR + "/");
-        restored += 1;
+      if (fs.existsSync(backupRoot)) {
+        for (const name of CONFIG_NAMES) {
+          const saved = path.join(backupRoot, name);
+          if (!fs.existsSync(saved)) continue;
+          fs.copyFileSync(saved, path.join(root, name));
+          say("restored " + name + " from " + BACKUP_DIR + "/");
+          restored += 1;
+        }
+      } else if (root !== projectRoot) {
+        continue; // a workspace child with no backup holds nothing of ours
       }
+
       // The hook is part of "what Blazefire changed" — leaving it behind would
-      // re-activate the config on the next install.
+      // re-activate the config on the next install. The install root gets one
+      // even though its backup lives in the child, so undo it regardless of
+      // whether this particular root holds a backup directory.
       if (undoHook(root)) restored += 1;
-      if (restored > 0) return 0;
     }
+    if (restored > 0) return 0;
   }
 
   say("no backups in " + BACKUP_DIR + "/ — nothing to restore.");
