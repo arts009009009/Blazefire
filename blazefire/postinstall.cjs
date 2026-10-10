@@ -689,7 +689,8 @@ function run(opts) {
 
       const pkg = readJson(path.join(root, "package.json"));
       const configPath = findConfig(root);
-      if (configPath && !sawConfig) sawConfig = { projectRoot: root, configPath };
+      if (configPath && !sawConfig)
+        sawConfig = { projectRoot: root, installRoot: projectRoot, configPath };
 
       if (declaresNext(pkg)) declaredNext = true;
       if (!configPath) continue;
@@ -713,10 +714,15 @@ function run(opts) {
     }
   }
 
-  // Nothing safe to write. Stay quiet unless this really is a Next.js project.
+  // The config is there but `next` is not installed yet — almost always an
+  // install that simply hasn't run. Activation has to wait, but the *hook*
+  // does not: this run arrived first, so wiring it here is what lets the next
+  // install (the one that brings `next`) finish the job by itself instead of
+  // asking the user to run anything by hand.
   if (sawConfig) {
+    hookBoth(sawConfig.projectRoot, sawConfig.installRoot);
     say("found " + path.basename(sawConfig.configPath) + " but node_modules/next is missing — skipped.");
-    say("run your install, then add: " + SNIPPET.replace(/\n/g, " "));
+    say("the next install will activate it automatically, or run: npx blazefire init");
     return "manual";
   }
   if (declaredNext) {
