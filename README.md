@@ -32,18 +32,17 @@ Install straight from GitHub — the package is not published to npm.
 ```bash
 npm install github:arts009009009/Blazefire
 
-# Yarn 1
-yarn add github:arts009009009/Blazefire
+# Yarn 1 (Classic) - use full HTTPS URL
+yarn add https://github.com/arts009009009/Blazefire
 
-# Yarn Berry (2+) — name@range is REQUIRED there. The Yarn 1 line above fails
-# with: "didn't match the required format (package-name@range)"
+# Yarn Berry (2+)
 yarn add blazefire@github:arts009009009/Blazefire
 
 pnpm add github:arts009009009/Blazefire
 bun add  github:arts009009009/Blazefire
 ```
 
-That is all for npm and Yarn 1. Yarn Berry and pnpm each need one extra
+That is all for npm, Yarn 1, and pnpm. Yarn Berry and pnpm each need one extra
 step — see below. Your `next.config.*` is copied
 to `Blazefire Backup/` and its export is wrapped with `blazefire()` — and
 activation writes this into your `package.json`:
