@@ -2,6 +2,7 @@
   "name": "blazefire",
   "version": "1.0.0",
   "description": "Blazefire framework powered by Frostfast compiler",
+  "type": "module",
   "main": "blazefire/index.js",
   "types": "blazefire/src/index.ts",
   "exports": {
@@ -39,7 +40,6 @@
     "blazefire/data/",
     "blazefire/postinstall.cjs",
     "blazefire/cli.cjs",
-    "blazefire/package.json",
     "blazefire/README.md"
   ],
   "scripts": {
@@ -78,10 +78,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arts009009009/blazefire.git"
+    "url": "https://github.com/arts009009009/Blazefire.git"
   },
   "bugs": {
-    "url": "https://github.com/arts009009009/blazefire/issues"
+    "url": "https://github.com/arts009009009/Blazefire/issues"
   },
   "homepage": "https://blazefire.dev"
 }
