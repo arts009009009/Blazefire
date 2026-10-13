@@ -66,7 +66,7 @@ const BLAZEFIRE_BRANDING = {
     },
   ],
 
-  // The Blazefire mark, drawn over Next's "N" glyph.
+  // The Blazefire logo, drawn over Next's "N" glyph.
   //
   // Done in pure CSS (see blazefireOverlayStyles): Next's SVG children are
   // merely hidden and the flame painted as that same <svg>'s background. The
@@ -232,7 +232,7 @@ function blazefireOverlayStyles(branding = BLAZEFIRE_BRANDING) {
 
   // Next's "N" mark: hide what Next drew inside the <svg> (the box itself is
   // untouched, so React keeps a valid element to reconcile against) and paint
-  // the flame as the <svg>'s own background instead.
+  // the Blazefire logo as the <svg>'s own background instead.
   const flame = flameDataUri(branding)
   const logos = branding.logo.selectors
     .map((sel) => {
@@ -259,7 +259,7 @@ ${selectors} {${tokens}}
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
-/* Next's "N" glyph -> Blazefire flame */
+/* Next's "N" glyph -> Blazefire logo */
 ${logos}
 `.trim()
 }

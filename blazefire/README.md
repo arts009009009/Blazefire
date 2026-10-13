@@ -2,6 +2,8 @@
 
 Blazefire framework powered by Frostfast compiler.
 
+![Blazefire logo](./assets/blazefire-logo.png)
+
 ## Install
 
 ```bash

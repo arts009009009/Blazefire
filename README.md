@@ -8,6 +8,8 @@
 
 # Blazefire Framework 🔥
 
+![Blazefire logo](./blazefire/assets/blazefire-logo.png)
+
 Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
 It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
 
