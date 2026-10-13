@@ -18,7 +18,6 @@ export function BlazefireLogo({ size = 40, className = '', style }: BlazefireLog
       draggable={false}
       className={className}
       style={{ objectFit: 'contain', ...style }}
-    >
     />
   );
 }
