@@ -17,7 +17,7 @@
  *   1. never throws; any failure is logged and swallowed (exit 0)
  *   2. only ever writes a next.config.* found in the project we were
  *      installed INTO, never our own package and never a random ancestor
- *   3. requires <project>/node_modules/next to exist before writing
+ *   3. requires Next.js to be resolvable from the project before writing
  *   4. copies the original into "<project>/Blazefire Backup/" first, and
  *      never overwrites an existing backup — the first copy is the pristine
  *      pre-Blazefire original
@@ -38,6 +38,7 @@
 "use strict";
 
 const fs = require("fs");
+const { createRequire } = require("module");
 const path = require("path");
 
 const CONFIG_NAMES = [
@@ -117,6 +118,23 @@ function dependencyBags(pkg) {
 
 function declaresNext(pkg) {
   return dependencyBags(pkg).some((bag) => Object.prototype.hasOwnProperty.call(bag, "next"));
+}
+
+function hasInstalledNext(projectRoot) {
+  if (fs.existsSync(path.join(projectRoot, "node_modules", "next"))) return true;
+
+  try {
+    createRequire(path.join(projectRoot, "package.json")).resolve("next");
+    return true;
+  } catch (error) {
+    if (
+      error &&
+      (error.code === "MODULE_NOT_FOUND" || error.code === "UNDECLARED_DEPENDENCY")
+    ) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** Only a project that actually depends on us should get the hook. */
@@ -704,9 +722,10 @@ function run(opts) {
         return "already";
       }
 
-      // Only ever write where `next` is genuinely installed.
-      const hasInstalledNext = fs.existsSync(path.join(root, "node_modules", "next"));
-      if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
+      // Only ever write where `next` is genuinely installed. Resolve through
+      // the project's own dependency context so Yarn Plug'n'Play works too.
+      const hasNext = hasInstalledNext(root);
+      if (!hasNext && !(cli && declaresNext(pkg))) continue;
 
       activate(root, configPath, original);
       hookBoth(root, projectRoot);
@@ -721,7 +740,7 @@ function run(opts) {
   // asking the user to run anything by hand.
   if (sawConfig) {
     hookBoth(sawConfig.projectRoot, sawConfig.installRoot);
-    say("found " + path.basename(sawConfig.configPath) + " but node_modules/next is missing — skipped.");
+    say("found " + path.basename(sawConfig.configPath) + " but Next.js is not installed — skipped.");
     say("the next install will activate it automatically, or run: npx blazefire init");
     return "manual";
   }

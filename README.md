@@ -8,6 +8,8 @@
 
 # Blazefire Framework 🔥
 
+![Blazefire logo](./blazefire/assets/blazefire-logo.png)
+
 Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
 It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
 
@@ -27,97 +29,36 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 
 ## Installation
 
-Install straight from GitHub — the package is not published to npm.
+Install straight from GitHub — the package is not published to npm. For Yarn
+Berry, use the archive URL so Yarn does not require a Git repository approval.
 
 ```bash
+# npm
 npm install github:arts009009009/Blazefire
 
-# Yarn 1
-yarn add github:arts009009009/Blazefire
+# Yarn (Classic or Berry)
+yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
 
-# Yarn Berry (2+) — name@range is REQUIRED there. The Yarn 1 line above fails
-# with: "didn't match the required format (package-name@range)"
-yarn add blazefire@github:arts009009009/Blazefire
-
+# pnpm
 pnpm add github:arts009009009/Blazefire
-bun add  github:arts009009009/Blazefire
+
+# Bun
+bun add github:arts009009009/Blazefire
 ```
 
-That is all for npm and Yarn 1. Yarn Berry and pnpm each need one extra
-step — see below. Your `next.config.*` is copied
-to `Blazefire Backup/` and its export is wrapped with `blazefire()` — and
-activation writes this into your `package.json`:
-
-```json
-"postinstall": "blazefire init || echo blazefire skipped"
-```
-
-A project's own scripts are never blocked, so once that line is committed
-**every** package manager self-activates on install, including the ones
-below. Commit it alongside the config.
-
-### Yarn Berry (2+)
-
-Berry ships with `enableScripts: false` and an empty git allowlist, so it
-runs no dependency install scripts and blocks **every** `github:`
-dependency until you opt in. One `.yarnrc.yml` at the project root covers
-both gates:
-
-```yaml
-nodeLinker: node-modules
-enableScripts: true
-approvedGitRepositories:
-  - "https://github.com/**"
-```
-
-Patterns match the resolved HTTPS URL, and `**` is required —
-`https://github.com/*` stops one path segment short, and a bare `*` never
-matches a URL containing slashes.
-
-Prefer not to enable every dependency's scripts? Drop `enableScripts` and
-allow just this package from `package.json`:
-
-```json
-{ "dependenciesMeta": { "blazefire": { "built": true } } }
-```
-
-Or skip the git allowlist entirely by installing the tarball:
+After installing with any package manager, run the activation command once
+from your app's directory:
 
 ```bash
-yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/tags/v1.0.0.tar.gz
+npx blazefire init
 ```
 
-This is **one-time** setup: once the hook exists in `package.json`,
-project scripts always run regardless of `enableScripts`, so later
-installs — including a fresh clone — self-activate under stock Berry
-defaults.
-
-### pnpm
-
-pnpm installs fine, but skips a *dependency's* build scripts by default, so
-the very first install activates nothing. Bootstrap it once:
-
-```bash
-pnpm exec blazefire init      # or: pnpm approve-builds, then pnpm install
-```
-
-After that the hook takes over and no allowlist is needed. Worth knowing:
-an `onlyBuiltDependencies` entry for a git dependency embeds the full commit
-SHA, so it quietly stops matching on your next commit — the hook doesn't.
-
-### bun
-
-Same one-time bootstrap — bun blocks untrusted postinstalls:
-
-```bash
-bunx blazefire init
-```
-
-or allow the package outright in your `package.json`:
-
-```json
-"trustedDependencies": ["blazefire"]
-```
+This explicit step works even when a package manager skips dependency
+install scripts or requires approval before running them. It backs up your
+original `next.config.*` to `Blazefire Backup/`, wraps the config with
+`blazefire()`, and adds a project `postinstall` hook so later installs can
+auto-activate. If you use Yarn Plug'n'Play, run `yarn blazefire init` instead
+so Yarn loads its PnP environment.
 
 ### Monorepos and workspaces
 
@@ -144,19 +85,17 @@ outcome is deterministic.
 ### Not supported: Deno
 
 Deno's installer only resolves npm-registry and JSR specifiers, so it drops
-`github:` (and `git+https`) dependencies without an error. Use npm, yarn or
-pnpm to install, then run `npx blazefire init`.
+`github:` (and `git+https`) dependencies without an error. Use npm, Yarn, pnpm,
+or Bun to install, then run `npx blazefire init`.
 
-### Fallback (any manager, incl. `--ignore-scripts`)
+### Restore
+
+To undo activation, restore the original config and remove Blazefire's
+postinstall hook:
 
 ```bash
-npx blazefire init      # activate
-npx blazefire restore   # put the original config back AND remove the hook
+npx blazefire restore
 ```
-
-`init` never exits non-zero when it is running as your `postinstall` — a
-deleted `next.config.*` must not be able to brick your install — but it still
-exits 1 when you invoke it yourself and finds nothing to do.
 
 Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
 is written, and an existing hook honours the flag too.

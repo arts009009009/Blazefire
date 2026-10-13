@@ -8,6 +8,9 @@
 
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
+
 const BLAZEFIRE_BRANDING = {
   name: 'Blazefire',
   compiler: 'Frostfast',
@@ -63,7 +66,7 @@ const BLAZEFIRE_BRANDING = {
     },
   ],
 
-  // The Blazefire flame mark, drawn over Next's "N" glyph.
+  // The Blazefire logo, drawn over Next's "N" glyph.
   //
   // Done in pure CSS (see blazefireOverlayStyles): Next's SVG children are
   // merely hidden and the flame painted as that same <svg>'s background. The
@@ -150,15 +153,25 @@ html { color-scheme: dark; }
 }
 
 /**
- * The flame mark as a self-contained `data:` URI.
+ * The Blazefire logo as a self-contained `data:` URI.
  *
- * Built here so the gradient stays in sync with `logo.gradient` and the mark
- * can be referenced from a stylesheet without shipping an asset.
+ * The package asset is inlined so the overlay can use it from its shadow root.
  *
  * @param {typeof BLAZEFIRE_BRANDING} [branding]
  * @returns {string}
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
+  if (branding.logo === BLAZEFIRE_BRANDING.logo) {
+    const logoPath = path.join(__dirname, 'assets', 'blazefire-logo.png')
+    try {
+      return `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+    } catch (err) {
+      // The PNG may not be present (e.g. installed from a GitHub tarball that
+      // does not include the asset). Fall through to the self-contained SVG
+      // instead of throwing during config load.
+    }
+  }
+
   const g = branding.logo.gradient
   const stops = g
     .map((colour, i) => `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`)
@@ -225,7 +238,7 @@ function blazefireOverlayStyles(branding = BLAZEFIRE_BRANDING) {
 
   // Next's "N" mark: hide what Next drew inside the <svg> (the box itself is
   // untouched, so React keeps a valid element to reconcile against) and paint
-  // the flame as the <svg>'s own background instead.
+  // the Blazefire logo as the <svg>'s own background instead.
   const flame = flameDataUri(branding)
   const logos = branding.logo.selectors
     .map((sel) => {
@@ -252,7 +265,7 @@ ${selectors} {${tokens}}
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
-/* Next's "N" glyph -> Blazefire flame */
+/* Next's "N" glyph -> Blazefire logo */
 ${logos}
 `.trim()
 }
