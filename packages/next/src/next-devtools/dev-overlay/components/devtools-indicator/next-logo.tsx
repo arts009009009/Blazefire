@@ -396,10 +396,6 @@ export function NextLogo({
             }
           }
 
-          .paused {
-            stroke-dashoffset: 0;
-          }
-
           @keyframes fadeIn {
             0% {
               opacity: 0;
