@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useUpdateAnimation } from './hooks/use-update-animation'
 import { useMeasureWidth } from './hooks/use-measure-width'
 import { Cross } from '../../icons/cross'
@@ -631,44 +631,45 @@ function CacheStatusBadge({
 }
 
 function BlazefireMark() {
+  const gradientId = `blazefire-flame-${useId().replace(/:/g, '')}`
+
   return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
+    <svg
+      width="40"
+      height="40"
+      viewBox="0 0 40 40"
+      fill="none"
+      aria-hidden="true"
+    >
       <defs>
-        <linearGradient id="blazefire_flame_gradient" x1="20" y1="5" x2="20" y2="35" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#00ffff" />
-          <stop offset="0.5" stopColor="#ff00ff" />
-          <stop offset="1" stopColor="#ff006e" />
+        <linearGradient
+          id={gradientId}
+          x1="20"
+          y1="5"
+          x2="20"
+          y2="35"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="#ff8800" />
+          <stop offset="0.4" stopColor="#ff4400" />
+          <stop offset="0.7" stopColor="#ff006e" />
+          <stop offset="1" stopColor="#cc00cc" />
         </linearGradient>
-        <filter id="blazefire_glow">
-          <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
       </defs>
-      <g filter="url(#blazefire_glow)">
-        {/* Outer flame */}
-        <path
-          className="paused"
-          d="M20 4 C20 4 28 14 28 22 C28 26.4 24.4 30 20 30 C15.6 30 12 26.4 12 22 C12 14 20 4 20 4Z"
-          fill="none"
-          stroke="url(#blazefire_flame_gradient)"
-          strokeWidth="1.86"
-          strokeDasharray="60"
-          strokeDashoffset="60"
-        />
-        {/* Inner flame */}
-        <path
-          className="paused"
-          d="M20 12 C20 12 24 18 24 22 C24 24.2 22.2 26 20 26 C17.8 26 16 24.2 16 22 C16 18 20 12 20 12Z"
-          fill="none"
-          stroke="url(#blazefire_flame_gradient)"
-          strokeWidth="1.5"
-          strokeDasharray="30"
-          strokeDashoffset="30"
-        />
-      </g>
+      <path
+        d="M20 3C20 3 30 14 30 23C30 28 25.5 32 20 32C14.5 32 10 28 10 23C10 14 20 3 20 3Z"
+        fill={`url(#${gradientId})`}
+      />
+      <path
+        d="M20 11C20 11 25 18 25 23C25 25.8 22.8 28 20 28C17.2 28 15 25.8 15 23C15 18 20 11 20 11Z"
+        fill={`url(#${gradientId})`}
+        opacity="0.6"
+      />
+      <path
+        d="M20 16C20 16 22.5 20 22.5 23C22.5 24.4 21.4 25.5 20 25.5C18.6 25.5 17.5 24.4 17.5 23C17.5 20 20 16 20 16Z"
+        fill="#ffcc00"
+        opacity="0.8"
+      />
     </svg>
   )
 }
