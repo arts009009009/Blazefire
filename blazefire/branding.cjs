@@ -8,6 +8,9 @@
 
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
+
 const BLAZEFIRE_BRANDING = {
   name: 'Blazefire',
   compiler: 'Frostfast',
@@ -63,7 +66,7 @@ const BLAZEFIRE_BRANDING = {
     },
   ],
 
-  // The Blazefire flame mark, drawn over Next's "N" glyph.
+  // The Blazefire mark, drawn over Next's "N" glyph.
   //
   // Done in pure CSS (see blazefireOverlayStyles): Next's SVG children are
   // merely hidden and the flame painted as that same <svg>'s background. The
@@ -150,15 +153,19 @@ html { color-scheme: dark; }
 }
 
 /**
- * The flame mark as a self-contained `data:` URI.
+ * The Blazefire logo as a self-contained `data:` URI.
  *
- * Built here so the gradient stays in sync with `logo.gradient` and the mark
- * can be referenced from a stylesheet without shipping an asset.
+ * The package asset is inlined so the overlay can use it from its shadow root.
  *
  * @param {typeof BLAZEFIRE_BRANDING} [branding]
  * @returns {string}
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
+  if (branding.logo === BLAZEFIRE_BRANDING.logo) {
+    const logoPath = path.join(__dirname, 'assets', 'blazefire-logo.png')
+    return `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+  }
+
   const g = branding.logo.gradient
   const stops = g
     .map((colour, i) => `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`)
