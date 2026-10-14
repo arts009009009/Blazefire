@@ -163,24 +163,31 @@ is written, and an existing hook honours the flag too.
 ## Usage
 
 ```jsx
-import { BlazefireLogo, BlazefireErrorOverlay } from 'blazefire';
-import { insertBlazefireStyles } from 'blazefire/styles';
-import { createCompiler } from 'blazefire/compiler';
+import {
+  insertBlazefireStyles,
+  createCompiler,
+  BlazefireProvider,
+} from 'blazefire';
+import { BlazefireLogo } from 'blazefire/components/BlazefireLogo';
+import { BlazefireErrorOverlay } from 'blazefire/components/BlazefireErrorOverlay';
 
-// Insert styles
+// Insert styles (safe to call from a Server Component — it no-ops on the server)
 insertBlazefireStyles();
 
 // Create compiler instance
 const compiler = createCompiler();
 
-// Use components
+// Use components (client components — import them from blazefire/components/*)
 function App() {
   return (
-    <BlazefireErrorOverlay
-      errorType="Runtime Error"
-      errorMessage="Something went wrong"
-      onClose={() => {}}
-    />
+    <BlazefireProvider>
+      <BlazefireLogo size={48} />
+      <BlazefireErrorOverlay
+        errorType="Runtime Error"
+        errorMessage="Something went wrong"
+        onClose={() => {}}
+      />
+    </BlazefireProvider>
   );
 }
 ```
@@ -195,29 +202,44 @@ The Frostfast compiler provides:
 - Hot module replacement
 
 ```js
-import { createCompiler, FROSTFAST_VERSION } from 'blazefire/compiler';
+import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler';
 
 const compiler = createCompiler({
   // Custom options
 });
 
-console.log(`Frostfast v${FROSTFAST_VERSION}`);
+console.log(`Compiler v${COMPILER_VERSION}`);
 ```
+
+Note: the compiler entry (`blazefire/compiler`) is separate from the root
+`createCompiler()` export — the root version is a lightweight options
+container, while the compiler entry exposes the full transform pipeline.
 
 ## Components
 
-- `BlazefireLogo` - Flame logo with neon glow
-- `BlazefireErrorHeader` - Error overlay header
-- `BlazefireErrorOverlay` - Full error overlay
-- `BlazefireDevToolsIndicator` - Floating dev tools button
+Import components from their `blazefire/components/*` subpath (they are
+client components):
+
+- `BlazefireLogo` - Flame logo with neon glow — `blazefire/components/BlazefireLogo`
+- `BlazefireErrorOverlay` - Full error overlay — `blazefire/components/BlazefireErrorOverlay`
+- `BlazefireDevTools` - Floating dev tools indicator/panel — `blazefire/components/BlazefireDevTools`
+
+The root entry (`blazefire`) exports the runtime utilities and
+`BlazefireProvider` / `useBlazefire`, not the components.
 
 ## Styles
 
-Import the CSS files for the full cyberpunk theme:
+Import the CSS file for the full cyberpunk theme:
 
 ```css
-@import 'blazefire/assets/blazefire-dark-theme.css';
-@import 'blazefire/assets/blazefire-global.css';
+@import 'blazefire/styles';
+```
+
+Or inject the equivalent styles at runtime (e.g. when you can't ship a CSS
+import):
+
+```js
+import { insertBlazefireStyles } from 'blazefire'
 ```
 
 ## License

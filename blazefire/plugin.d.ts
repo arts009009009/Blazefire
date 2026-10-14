@@ -1,4 +1,9 @@
 import type { NextConfig } from "next";
+import type {
+  BlazefireBrandLabel,
+  BlazefireBrandLogo,
+  BlazefireBrandColors,
+} from "./branding.js";
 
 /**
  * Options that tune Blazefire branding.
@@ -44,7 +49,9 @@ export const branding: {
   compilerVersion: string;
   headers: { poweredBy: string; compiler: string };
   banner: string;
-  colors: Record<string, string>;
+  labels: BlazefireBrandLabel[];
+  logo: BlazefireBrandLogo;
+  colors: BlazefireBrandColors;
   topBarGradient: string;
 };
 
