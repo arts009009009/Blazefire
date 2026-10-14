@@ -41,6 +41,7 @@ export function BlazefireErrorOverlay({
     >
       <div
         style={{
+          position: 'relative',
           background: '#000',
           border: '1px solid rgba(0,255,255,0.2)',
           borderRadius: 8,
