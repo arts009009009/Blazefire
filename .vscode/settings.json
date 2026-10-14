@@ -25,6 +25,13 @@
   "files.exclude": {
     "*[!test]**/node_modules": true
   },
+  // The vendored Next.js source is an incomplete experimental snapshot, not a
+  // checked project. Keep it out of TypeScript's project diagnostics.
+  "files.associations": {
+    "packages/next/**/*.ts": "plaintext",
+    "packages/next/**/*.tsx": "plaintext",
+    "packages/next/tsconfig.json": "plaintext"
+  },
   // Ensure enough terminal history is preserved when running tests.
   "terminal.integrated.scrollback": 10000,
   // Configure todo-tree to exclude node_modules, dist, and compiled.

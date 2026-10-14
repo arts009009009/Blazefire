@@ -3,17 +3,12 @@
  * Powered by Frostfast compiler
  */
 
-export { BlazefireLogo } from './components/blazefire-logo';
-export { BlazefireErrorHeader, BlazefireErrorOverlay } from './components/error-overlay-layout';
-export { BlazefireDevToolsIndicator } from './components/blazefire-logo';
-export { insertBlazefireStyles, blazefireStyles } from './styles';
-
-// Compiler exports
+export { BlazefireLogo } from './components/blazefire-logo.js';
 export {
-  createCompiler,
-  FROSTFAST_VERSION,
-  defaultCompilerOptions
-} from './compiler';
-export type { CompilerResult } from './compiler';
+  BlazefireErrorHeader,
+  BlazefireErrorOverlay,
+} from './components/error-overlay-layout.js';
+export { BlazefireDevToolsIndicator } from './components/blazefire-logo.js';
+export { insertBlazefireStyles, blazefireStyles } from './styles.js';
 
 export const version = '1.0.0';

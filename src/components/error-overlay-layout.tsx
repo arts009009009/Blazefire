@@ -1,5 +1,5 @@
 import React from 'react';
-import { BlazefireLogo } from './blazefire-logo';
+import { BlazefireLogo } from './blazefire-logo.js';
 
 export interface BlazefireErrorHeaderProps {
   errorType: string;

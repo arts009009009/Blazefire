@@ -1,4 +1,9 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
+import type {
+  BlazefireBrandLabel,
+  BlazefireBrandLogo,
+  BlazefireBrandColors,
+} from './branding.js'
 
 /**
  * Options that tune Blazefire branding.
@@ -7,17 +12,17 @@ import type { NextConfig } from "next";
  */
 export interface BlazefireOptions {
   /** Inject the cyberpunk/OLED document theme. Default `true`. */
-  theme?: boolean;
+  theme?: boolean
   /** Emit `X-Powered-By` / `X-Compiler`. Default `true`. */
-  headers?: boolean;
+  headers?: boolean
   /** Rebrand the dev error overlay. Default `true`. */
-  overlay?: boolean;
+  overlay?: boolean
   /** Value for the `X-Powered-By` header. Default `'Blazefire Framework'`. */
-  poweredBy?: string;
+  poweredBy?: string
   /** Value for the `X-Compiler` header. Default `'Frostfast v1.0.0'`. */
-  compiler?: string;
+  compiler?: string
   /** Version surfaced to the runtime. Default `'v1.0.0'`. */
-  version?: string;
+  version?: string
 }
 
 /**
@@ -29,27 +34,29 @@ export interface BlazefireOptions {
 declare function blazefire(
   first?: BlazefireOptions | NextConfig,
   second?: BlazefireOptions
-): NextConfig;
+): NextConfig
 
-export function isNextConfig(value: unknown): value is NextConfig;
+export function isNextConfig(value: unknown): value is NextConfig
 
 /** Merge Blazefire's branding config into a config the project already wrote. */
-export function mergeConfigs(base: NextConfig, ours: NextConfig): NextConfig;
+export function mergeConfigs(base: NextConfig, ours: NextConfig): NextConfig
 
 /** The branding values every part of the package reads from. */
 export const branding: {
-  name: string;
-  compiler: string;
-  version: string;
-  compilerVersion: string;
-  headers: { poweredBy: string; compiler: string };
-  banner: string;
-  colors: Record<string, string>;
-  topBarGradient: string;
-};
+  name: string
+  compiler: string
+  version: string
+  compilerVersion: string
+  headers: { poweredBy: string; compiler: string }
+  banner: string
+  labels: BlazefireBrandLabel[]
+  logo: BlazefireBrandLogo
+  colors: BlazefireBrandColors
+  topBarGradient: string
+}
 
 /** Option defaults, useful for reading the effective configuration. */
-export const DEFAULTS: Required<BlazefireOptions>;
+export const DEFAULTS: Required<BlazefireOptions>
 
-export { blazefire };
-export default blazefire;
+export { blazefire }
+export default blazefire
