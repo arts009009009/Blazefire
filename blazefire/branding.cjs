@@ -8,6 +8,17 @@
 
 'use strict'
 
+// The emblem, baked in as a data URI (see build-logo-data.cjs). Required in
+// a try/catch because this module also runs inside the client bundle, where
+// a missing generated file must degrade to the SVG flame, not break the
+// build's runtime.
+let LOGO_ASSET_DATA_URI = ''
+try {
+  LOGO_ASSET_DATA_URI = require('./logo-data.cjs')
+} catch (e) {
+  // no baked asset — flameDataUri() fallback is used instead
+}
+
 const BLAZEFIRE_BRANDING = {
   name: 'Blazefire',
   compiler: 'Frostfast',
@@ -63,10 +74,10 @@ const BLAZEFIRE_BRANDING = {
     },
   ],
 
-  // The Blazefire flame mark, drawn over Next's "N" glyph.
+  // The Blazefire emblem, drawn over Next's "N" glyph.
   //
   // Done in pure CSS (see blazefireOverlayStyles): Next's SVG children are
-  // merely hidden and the flame painted as that same <svg>'s background. The
+  // merely hidden and the logo painted as that same <svg>'s background. The
   // element itself is never removed or re-parented, so React's
   // reconciliation — which would throw if we deleted nodes it owns — is
   // never disturbed.
@@ -74,11 +85,17 @@ const BLAZEFIRE_BRANDING = {
     // Only these two carry Next's mark. The pagination/copy/close icons and
     // the Node.js inspector glyph are not Next's identity and stay as-is.
     selectors: ['#next-logo > svg', '.code-frame-icon > svg'],
+    // The custom emblem (assets/blazefire-logo.png), baked into
+    // logo-data.cjs by build-logo-data.cjs so the client bundle needs no
+    // fs access. When that module is absent, logoDataUri() falls back to
+    // the self-contained SVG flame below.
+    asset: 'assets/blazefire-logo.png',
+    // SVG-flame fallback path/gradient (only used when the asset is absent).
     path: 'M12 1.5c1.9 3.9.7 6.2-1.1 8-2 2-3.4 3.9-3.4 6.7a4.5 4.5 0 0 0 9 0c0-2.2-1.1-3.9-2.5-5.4.3 2.3-.6 3.4-1.8 3.9.9-2.7-.4-5.2-2.5-7C9 6 11.6 4.2 12 1.5z',
     gradient: ['#ff8800', '#ff006e', '#00ffff', '#ff00ff'],
     // Background sizing, per host element (the two glyphs sit in very
     // differently sized boxes).
-    sizes: { '#next-logo > svg': '62%', '.code-frame-icon > svg': '92%' },
+    sizes: { '#next-logo > svg': '80%', '.code-frame-icon > svg': '92%' },
   },
 
   // Palette — OLED-first cyberpunk
@@ -177,6 +194,25 @@ function flameDataUri(branding = BLAZEFIRE_BRANDING) {
 }
 
 /**
+ * The image actually painted over Next's mark: the custom Blazefire emblem
+ * (a `data:image/png` baked into logo-data.cjs) when present, otherwise the
+ * SVG flame above.
+ *
+ * A data URI — not a file path — because the stylesheet is injected into
+ * Next's shadow root at runtime, where a relative asset URL would resolve
+ * against the page, not this package.
+ *
+ * @param {typeof BLAZEFIRE_BRANDING} [branding]
+ * @returns {string}
+ */
+function logoDataUri(branding = BLAZEFIRE_BRANDING) {
+  if (typeof LOGO_ASSET_DATA_URI === 'string' && /^data:image\//.test(LOGO_ASSET_DATA_URI)) {
+    return LOGO_ASSET_DATA_URI
+  }
+  return flameDataUri(branding)
+}
+
+/**
  * Generates the overlay (dev tools) theme.
  *
  * Next.js renders the dev overlay inside a shadow root, so document-level CSS
@@ -225,14 +261,14 @@ function blazefireOverlayStyles(branding = BLAZEFIRE_BRANDING) {
 
   // Next's "N" mark: hide what Next drew inside the <svg> (the box itself is
   // untouched, so React keeps a valid element to reconcile against) and paint
-  // the flame as the <svg>'s own background instead.
-  const flame = flameDataUri(branding)
+  // the Blazefire emblem as the <svg>'s own background instead.
+  const logo = logoDataUri(branding)
   const logos = branding.logo.selectors
     .map((sel) => {
       const size = (branding.logo.sizes && branding.logo.sizes[sel]) || 'contain'
       return `${sel} > * { visibility: hidden; }
 ${sel} {
-  background-image: url("${flame}");
+  background-image: url("${logo}");
   background-size: ${size};
   background-repeat: no-repeat;
   background-position: center;
@@ -252,7 +288,7 @@ ${selectors} {${tokens}}
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
-/* Next's "N" glyph -> Blazefire flame */
+/* Next's "N" glyph -> Blazefire emblem */
 ${logos}
 `.trim()
 }
@@ -262,4 +298,5 @@ module.exports = {
   blazefireStyles,
   blazefireOverlayStyles,
   flameDataUri,
+  logoDataUri,
 }
