@@ -1,6 +1,6 @@
 {
   "name": "blazefire",
-  "version": "1.0.0",
+  "version": "1.0.9",
   "description": "Blazefire framework powered by Frostfast compiler",
   "type": "module",
   "main": "blazefire/index.js",
