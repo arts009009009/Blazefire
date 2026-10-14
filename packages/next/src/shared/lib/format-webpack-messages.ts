@@ -93,7 +93,7 @@ function formatMessage(
   // https://github.com/webpack/webpack/blob/master/lib/ModuleError.js
   const loaderPaths: string[] = []
   lines = lines.filter((line: string) => {
-    const match = /Module [A-z ]+\(from (.+)\):?\s*$/.exec(line)
+    const match = /Module [A-Za-z ]+\(from (.+)\):?\s*$/.exec(line)
     if (match) {
       loaderPaths.push(match[1])
       return false
