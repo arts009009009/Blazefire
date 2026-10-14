@@ -2,6 +2,7 @@ import type { Socket } from 'net'
 import { mkdir, writeFile } from 'fs/promises'
 import { realpathSync } from 'fs'
 import * as inspector from 'inspector'
+import { randomInt } from 'crypto'
 import { join, extname, relative, isAbsolute, sep } from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 
@@ -157,7 +158,7 @@ const isTestMode = !!(
   process.env.DEBUG
 )
 
-const sessionId = Math.floor(Number.MAX_SAFE_INTEGER * Math.random())
+const sessionId = randomInt(Number.MAX_SAFE_INTEGER)
 
 /** Output directory (relative to `distDir`) of server-HMR-managed chunks. */
 const SERVER_HMR_CHUNKS_DIR = join('server', 'chunks')
