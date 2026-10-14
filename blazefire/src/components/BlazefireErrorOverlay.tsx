@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BlazefireLogo } from './BlazefireLogo';
+import { BlazefireLogo } from './BlazefireLogo.js';
 
 export interface BlazefireErrorOverlayProps {
   errorType: string;

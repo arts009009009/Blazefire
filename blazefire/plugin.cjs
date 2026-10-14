@@ -72,8 +72,15 @@ function blazefire(first = {}, second) {
   }
 
   const baseIsConfig = isNextConfig(first)
-  const base = baseIsConfig ? first : {}
-  const options = { ...DEFAULTS, ...(baseIsConfig ? (second || {}) : first) }
+  // Our own options can arrive as the whole argument, or mixed into a config
+  // (`blazefire({ trailingSlash: true, theme: false })`). Pull them out so
+  // neither intent is lost; `second` is always the options bag and wins.
+  const options = {
+    ...DEFAULTS,
+    ...(baseIsConfig ? pickOptions(first) : first),
+    ...(second || {}),
+  }
+  const base = baseIsConfig ? omitOptions(first) : {}
 
   return mergeConfigs(base, buildConfig(options))
 }
@@ -110,12 +117,29 @@ function buildConfig(opts) {
     },
 
     // ---- 3. Client-side theme injection (webpack builds) ----
+    //
+    // Next hands this hook `entry` as an async function (webpack-config.ts
+    // builds it that way) and only resolves it *after* the hook returns, so
+    // treating it as an object iterates nothing and injects silently. Wrap it
+    // instead, and PREPEND our runtime to every entry that comes back:
+    // prepending keeps Next's client bootstrap — assigning over an entry would
+    // delete the app — and running first is what lets the theme register
+    // before application code.
     webpack(config, ctx) {
-      if (opts.theme && !ctx.isServer) {
-        const runtime = path.join(__dirname, 'runtime', 'inject.cjs')
-        for (const name of Object.keys(config.entry)) {
-          config.entry[name] = runtime
+      if (!opts.theme || !config || typeof config !== 'object') return config
+      if (ctx && ctx.isServer) return config
+
+      const runtime = path.join(__dirname, 'runtime', 'inject.cjs')
+
+      if (typeof config.entry === 'function') {
+        const originalEntry = config.entry
+        config.entry = function (...args) {
+          return Promise.resolve(originalEntry.apply(this, args)).then((entry) =>
+            prependRuntimeToEntries(entry, runtime)
+          )
         }
+      } else if (config.entry) {
+        config.entry = prependRuntimeToEntries(config.entry, runtime)
       }
       return config
     },
@@ -133,11 +157,66 @@ function buildConfig(opts) {
 }
 
 /**
+ * Our own option names and the value type each one must have.
+ *
+ * Type-aware on purpose: `headers` is a boolean for us but a function (or
+ * array) for Next, and `compiler` is a version string for us but an object for
+ * Next — so the *value* is what tells the two apart, not the key.
+ */
+const OPTION_TYPES = {
+  theme: 'boolean',
+  headers: 'boolean',
+  overlay: 'boolean',
+  poweredBy: 'string',
+  compiler: 'string',
+  version: 'string',
+}
+
+/**
+ * @param {string} key
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isOurOption(key, value) {
+  const expected = OPTION_TYPES[key]
+  return expected !== undefined && typeof value === expected
+}
+
+/**
+ * @param {unknown} x
+ * @returns {Record<string, unknown>}
+ */
+function pickOptions(x) {
+  if (!x || typeof x !== 'object') return {}
+  const out = {}
+  for (const key of Object.keys(x)) {
+    if (isOurOption(key, /** @type {any} */ (x)[key])) out[key] = /** @type {any} */ (x)[key]
+  }
+  return out
+}
+
+/**
+ * @param {unknown} x
+ * @returns {Record<string, unknown>}
+ */
+function omitOptions(x) {
+  if (!x || typeof x !== 'object') return {}
+  const out = {}
+  for (const key of Object.keys(x)) {
+    if (!isOurOption(key, /** @type {any} */ (x)[key])) out[key] = /** @type {any} */ (x)[key]
+  }
+  return out
+}
+
+/**
  * Is this argument an existing Next config rather than our own options bag?
  *
- * Discriminated on the keys a config has that our options never do. `headers`
- * alone is ambiguous — it is a boolean for us and a function/array for Next —
- * so it only counts as a config marker in its Next form.
+ * Decided by exclusion rather than by a fixed allow-list of Next keys. An
+ * allow-list can never be complete — `trailingSlash`, `distDir`, `pageExtensions`,
+ * `i18n`, `compress`, `logging`, `swcMinify` and friends were all missing, so a
+ * perfectly ordinary config written with them was classified as options and its
+ * entire contents were thrown away. Anything carrying a key/value we do not own
+ * is a config; a bag made up purely of our options is not.
  *
  * @param {unknown} x
  * @returns {boolean}
@@ -145,29 +224,7 @@ function buildConfig(opts) {
 function isNextConfig(x) {
   if (!x || typeof x !== 'object') return false
 
-  const next = /** @type {Record<string, unknown>} */ (x)
-
-  if (typeof next.headers === 'function' || Array.isArray(next.headers)) return true
-  if (typeof next.rewrites === 'function') return true
-  if (typeof next.redirects === 'function') return true
-  if (typeof next.webpack === 'function') return true
-
-  // Present-only keys
-  return (
-    next.turbopack !== undefined ||
-    next.experimental !== undefined ||
-    next.images !== undefined ||
-    next.env !== undefined ||
-    next.output !== undefined ||
-    next.typescript !== undefined ||
-    next.eslint !== undefined ||
-    next.poweredByHeader !== undefined ||
-    next.basePath !== undefined ||
-    next.assetPrefix !== undefined ||
-    next.reactStrictMode !== undefined ||
-    // Next's own `compiler` is an object; ours is a version string
-    (next.compiler !== undefined && typeof next.compiler === 'object')
-  )
+  return Object.keys(x).some((key) => !isOurOption(key, /** @type {any} */ (x)[key]))
 }
 
 /**
@@ -219,7 +276,12 @@ function mergeConfigs(base, ours) {
     const oursWebpack = ours.webpack
     out.webpack = (config, ctx) => {
       const afterBase = base.webpack(config, ctx)
-      return oursWebpack(afterBase == null ? config : afterBase, ctx)
+      // A hook that returns nothing — or a Promise, which Next only warns
+      // about — is not a webpack config. Hand ours the config we were given
+      // rather than letting it read `.entry` off something unusable.
+      const usable =
+        afterBase && typeof afterBase === 'object' && typeof afterBase.then !== 'function'
+      return oursWebpack(usable ? afterBase : config, ctx)
     }
   }
 
@@ -245,6 +307,50 @@ function concatListProviders(a, b) {
     ])
     return [...(Array.isArray(x) ? x : []), ...(Array.isArray(y) ? y : [])]
   }
+}
+
+/**
+ * Prepend the Blazefire runtime to every entry in a resolved webpack
+ * `EntryObject`, leaving the entries' own contents intact.
+ *
+ * Handles the three shapes webpack accepts: a string, an array of strings,
+ * and an entry descriptor (`{ import: [...] }`). Unknown shapes are returned
+ * untouched rather than corrupted, and an entry already carrying the runtime
+ * is left alone so repeated config evaluation stays idempotent.
+ *
+ * @param {unknown} entry
+ * @param {string} runtime
+ * @returns {unknown}
+ */
+function prependRuntimeToEntries(entry, runtime) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry
+
+  const out = {}
+  for (const name of Object.keys(entry)) {
+    out[name] = prependRuntimeToValue(entry[name], runtime)
+  }
+  return out
+}
+
+/**
+ * @param {unknown} value
+ * @param {string} runtime
+ * @returns {unknown}
+ */
+function prependRuntimeToValue(value, runtime) {
+  if (typeof value === 'string') {
+    return value === runtime ? [value] : [runtime, value]
+  }
+  if (Array.isArray(value)) {
+    return value.includes(runtime) ? value : [runtime, ...value]
+  }
+  if (value && typeof value === 'object' && Array.isArray(/** @type {any} */ (value).import)) {
+    const descriptor = /** @type {{import: string[]}} */ (value)
+    return descriptor.import.includes(runtime)
+      ? value
+      : { ...descriptor, import: [runtime, ...descriptor.import] }
+  }
+  return value
 }
 
 /**
@@ -285,3 +391,4 @@ module.exports.branding = BLAZEFIRE_BRANDING
 module.exports.DEFAULTS = DEFAULTS
 module.exports.isNextConfig = isNextConfig
 module.exports.mergeConfigs = mergeConfigs
+module.exports.prependRuntimeToEntries = prependRuntimeToEntries

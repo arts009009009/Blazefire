@@ -4,10 +4,10 @@
   "description": "Blazefire framework powered by Frostfast compiler",
   "type": "module",
   "main": "blazefire/index.js",
-  "types": "blazefire/src/index.ts",
+  "types": "blazefire/src/index.tsx",
   "exports": {
     ".": {
-      "types": "./blazefire/src/index.ts",
+      "types": "./blazefire/src/index.tsx",
       "default": "./blazefire/index.js"
     },
     "./plugin": {
@@ -31,6 +31,8 @@
   },
   "files": [
     "blazefire/index.js",
+    "blazefire/utils.js",
+    "blazefire/provider.js",
     "blazefire/plugin.cjs",
     "blazefire/plugin.d.ts",
     "blazefire/branding.cjs",

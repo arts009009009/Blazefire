@@ -1,5 +1,10 @@
 /**
  * Blazefire TypeScript Entry Point
+ *
+ * Types for the runtime entry point (`blazefire/index.js`), which re-exports
+ * `utils.js` (server-safe helpers) and `provider.js` (`'use client'` React
+ * context). Both halves are declared here so the one `types` entry describes
+ * the whole `blazefire` module. Keep this file in sync with both.
  */
 
 import React, { createContext, useContext, useEffect } from 'react';
@@ -35,7 +40,13 @@ export function insertBlazefireStyles(): void {
 
   const style = document.createElement('style');
   style.id = 'blazefire-styles';
-  style.textContent = `
+  style.textContent = getBlazefireCSS();
+  document.head.appendChild(style);
+}
+
+/** Mirrors `getBlazefireCSS()` in the runtime entry (`blazefire/index.js`). */
+function getBlazefireCSS(): string {
+  return `
     :root {
       --blazefire-cyan: #00ffff;
       --blazefire-magenta: #ff00ff;
@@ -43,6 +54,21 @@ export function insertBlazefireStyles(): void {
       --blazefire-green: #00ff41;
       --blazefire-orange: #ff8800;
       --blazefire-background: #000000;
+      --blazefire-surface: #050505;
+      --blazefire-text: #e0e0e0;
+      --glow-cyan: 0 0 10px rgba(0,255,255,0.3), 0 0 20px rgba(0,255,255,0.1);
+      --glow-magenta: 0 0 10px rgba(255,0,255,0.3), 0 0 20px rgba(255,0,255,0.1);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff);
+      z-index: 2147483647;
+      pointer-events: none;
     }
     @keyframes blazefire-pulse {
       0%, 100% { opacity: 0.6; }
@@ -60,7 +86,6 @@ export function insertBlazefireStyles(): void {
     }
     html { color-scheme: dark; }
   `;
-  document.head.appendChild(style);
 }
 
 export function createBlazefireLogo(size: number = 40): string {
@@ -86,15 +111,23 @@ export function createBlazefireLogo(size: number = 40): string {
 }
 
 export function createCompiler(options: CompilerOptions = {}): CompilerInstance {
-  const defaultOptions: CompilerOptions = {
-    jsc: {
-      parser: { syntax: 'typescript', tsx: true },
-      transform: { react: { runtime: 'automatic' } },
-    },
-    module: { type: 'es6' },
+  const defaultJsc = {
+    parser: { syntax: 'typescript', tsx: true },
+    transform: { react: { runtime: 'automatic' } },
   };
+  const defaultModule = { type: 'es6' };
 
-  const merged = { ...defaultOptions, ...options };
+  // Merge one level deep: passing `{ jsc: { parser: … } }` must not silently
+  // drop `jsc.transform.react` (and with it the automatic JSX runtime).
+  const jsc = options.jsc || {};
+  const merged: CompilerOptions = {
+    ...options,
+    jsc: {
+      parser: jsc.parser ?? defaultJsc.parser,
+      transform: jsc.transform ?? defaultJsc.transform,
+    },
+    module: { type: options.module?.type ?? defaultModule.type },
+  };
 
   return {
     options: merged,
@@ -108,11 +141,13 @@ export function createCompiler(options: CompilerOptions = {}): CompilerInstance 
 interface BlazefireContextValue {
   version: string;
   compiler: string;
+  runtime: string;
 }
 
 const BlazefireContext = createContext<BlazefireContextValue>({
   version: BLAZEFIRE_VERSION,
   compiler: 'frostfast',
+  runtime: 'blazefire',
 });
 
 export function useBlazefire(): BlazefireContextValue {
@@ -129,7 +164,9 @@ export function BlazefireProvider({ children }: BlazefireProviderProps) {
   }, []);
 
   return (
-    <BlazefireContext.Provider value={{ version: BLAZEFIRE_VERSION, compiler: 'frostfast' }}>
+    <BlazefireContext.Provider
+      value={{ version: BLAZEFIRE_VERSION, compiler: 'frostfast', runtime: 'blazefire' }}
+    >
       {children}
     </BlazefireContext.Provider>
   );

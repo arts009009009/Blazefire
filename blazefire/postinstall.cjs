@@ -64,7 +64,12 @@ const CJS_REQUIRE = 'const blazefire = require("blazefire/plugin");';
 //     effect here (left-associative, equal precedence), so their command runs
 //     whether init succeeded or was skipped.
 const HOOK_COMMAND = "blazefire init || echo blazefire skipped";
-const HOOK_RE = /\bblazefire\b[\s\S]*\binit\b/;
+// Matches our hook (`blazefire init …`, optionally `npx`-ed or version-pinned)
+// but not scripts that merely mention blazefire. The old `blazefire\b[\s\S]*init`
+// matched anything with the two words in any order anywhere — `blazefire-docs
+// init:watch` or `node blazefire.mjs && something init` — which made us treat
+// an unrelated script as our own and skip installing the hook.
+const HOOK_RE = /(^|[\s;&|])blazefire(?:\s|@[\w.-]+\s)+init\b/;
 // Written next to the config backup so `restore` can undo it exactly, without
 // restoring a whole (now stale) copy of package.json.
 const HOOK_RECORD = "scripts.postinstall.json";
@@ -222,6 +227,23 @@ function blazefireInstalledAt(projectRoot) {
   return false;
 }
 
+/**
+ * Is `next` installed for this project? Walks up for the same reason
+ * {@link blazefireInstalledAt} does: a workspace child's dependencies are
+ * hoisted to the monorepo root, so `<child>/node_modules/next` usually does
+ * not exist even though the project runs Next fine.
+ */
+function nextInstalledAt(projectRoot) {
+  let dir = path.resolve(projectRoot);
+  for (let i = 0; i < 16; i++) {
+    if (fs.existsSync(path.join(dir, "node_modules", "next"))) return true;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return false;
+}
+
 /* ------------------------------------------------------------------ *
  * source scanning
  *
@@ -336,6 +358,33 @@ const SNIPPET =
  * the actual rewrite
  * ------------------------------------------------------------------ */
 
+/**
+ * Is there a *second* top-level default export at or after `from`?
+ *
+ * `module.exports` on its own is not enough of a signal: `module.exports.env = …`
+ * adds a property to the one config rather than declaring another export, and
+ * treating it as a duplicate refused perfectly ordinary CJS configs.
+ */
+function hasAnotherDefaultExport(src, from) {
+  let searchFrom = from;
+  for (;;) {
+    const hit = findTopLevel(src.slice(searchFrom), ["export default", "module.exports"]);
+    if (!hit) return false;
+
+    const at = searchFrom + hit.index;
+    if (hit.token === "export default") return true;
+
+    // A reassignment (`module.exports = x`) replaces the export; a property
+    // assignment (`module.exports.env = x`) does not.
+    let i = at + hit.token.length;
+    while (i < src.length && /[ \t\r\n]/.test(src[i])) i += 1;
+    if (src[i] === "=" && src[i + 1] !== "=") return true;
+
+    // Keep looking past this one — there may be a real reassignment later.
+    searchFrom = at + hit.token.length;
+  }
+}
+
 function plan(src) {
   const hit = findTopLevel(src, ["export default", "module.exports"]);
   if (!hit) return { ok: false, reason: "no top-level `export default` found" };
@@ -346,7 +395,7 @@ function plan(src) {
 
   // Two default exports (the exact mistake this tool exists to fix) must not
   // be "repaired" by wrapping only the first — refuse and explain instead.
-  if (findTopLevel(rest, ["export default", "module.exports"])) {
+  if (hasAnotherDefaultExport(src, headEnd)) {
     return { ok: false, reason: "file declares a default export more than once" };
   }
 
@@ -589,14 +638,17 @@ function undoHook(projectRoot) {
   const scripts = pkg && pkg.scripts;
   const current = scripts && scripts.postinstall;
 
-  // Only ever remove a script that is recognisably ours; if the user
-  // replaced it, it is theirs now and the record is stale.
-  if (typeof current === "string" && HOOK_RE.test(current)) {
-    if (saved.existed) scripts.postinstall = saved.value;
-    else delete scripts.postinstall;
-    writeJsonPreserving(file, pkg);
-    say("restored \"scripts.postinstall\"" + (saved.existed ? "" : " (removed the Blazefire hook)"));
-  }
+  // Only ever touch a script that is recognisably ours. If the user removed or
+  // replaced it there is nothing to undo, so report "did nothing" and KEEP the
+  // record: it still holds their pre-Blazefire value, and the only copy of it.
+  // Unlinking it here used to claim a restore that never happened, which made
+  // `restore` exit 0 having restored nothing.
+  if (typeof current !== "string" || !HOOK_RE.test(current)) return false;
+
+  if (saved.existed) scripts.postinstall = saved.value;
+  else delete scripts.postinstall;
+  writeJsonPreserving(file, pkg);
+  say("restored \"scripts.postinstall\"" + (saved.existed ? "" : " (removed the Blazefire hook)"));
 
   try {
     fs.unlinkSync(record);
@@ -704,8 +756,11 @@ function run(opts) {
         return "already";
       }
 
-      // Only ever write where `next` is genuinely installed.
-      const hasInstalledNext = fs.existsSync(path.join(root, "node_modules", "next"));
+      // Only ever write where `next` is genuinely installed — here or hoisted
+      // above. Checking this package alone meant a hoisted workspace (npm/yarn
+      // put `next` at the repo root) could never auto-activate, which is the
+      // exact layout `findWorkspaceProjects` exists to serve.
+      const hasInstalledNext = nextInstalledAt(root);
       if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue;
 
       activate(root, configPath, original);
