@@ -16,6 +16,19 @@ import {
 } from 'next/dist/compiled/webpack/webpack'
 import type { RawSourceMap } from 'next/dist/compiled/source-map'
 
+const UNSAFE_CHARS_REGEXP = /[<>/\u2028\u2029]/g
+const UNSAFE_CHARS_MAP: Record<string, string> = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+}
+
+function escapeUnsafeChars(str: string): string {
+  return str.replace(UNSAFE_CHARS_REGEXP, (char) => UNSAFE_CHARS_MAP[char])
+}
+
 const cache = new WeakMap<webpack.sources.Source, webpack.sources.Source>()
 
 const devtoolWarningMessage = `/*
@@ -248,10 +261,10 @@ export default class EvalSourceMapDevToolPlugin {
               new RawSource(
                 `eval(${
                   compilation.outputOptions.trustedTypes
-                    ? `${RuntimeGlobals.createScript}(${JSON.stringify(
-                        content + footer
+                    ? `${RuntimeGlobals.createScript}(${escapeUnsafeChars(
+                        JSON.stringify(content + footer)
                       )})`
-                    : JSON.stringify(content + footer)
+                    : escapeUnsafeChars(JSON.stringify(content + footer))
                 });`
               )
             )

@@ -186,7 +186,7 @@ function formatMessage(
     message = message.replace(/^\s*at\s<anonymous>(\n|$)/gm, '') // at <anonymous>
 
     message = message.replace(
-      /File was processed with these loaders:\n(.+[\\/](next[\\/]dist[\\/].+|@next[\\/]react-refresh-utils[\\/]loader)\.js\n)*You may need an additional loader to handle the result of these loaders.\n/g,
+      /File was processed with these loaders:\n([^\n]+[\\/](next[\\/]dist[\\/].+|@next[\\/]react-refresh-utils[\\/]loader)\.js\n)*You may need an additional loader to handle the result of these loaders.\n/g,
       ''
     )
 

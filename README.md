@@ -3,15 +3,23 @@
   <p>Blazefire framework powered by Frostfast compiler</p>
 </div>
 
+> **⚠️ Experimental**
+> This repo is not ready for any use — it is experimental. No contributing or
+> forking is allowed.
+
 ## Early Showcase of custom error overlay triggered by hydration mismatch
+
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
 
 # Blazefire Framework 🔥
+
+![Blazefire logo](./blazefire/assets/blazefire-logo.png)
 
 Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
 It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
 
 ## Acknowledgements
+
 - [Next.js](https://nextjs.org/) — for pioneering the meta‑framework model and inspiring routing + SSR concepts.
 - Frostfast Compiler — powering Blazefire’s runtime speed.
 - Community devs who shaped the ecosystem we build on.
@@ -27,19 +35,21 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 
 ## Installation
 
-Install straight from GitHub — the package is not published to npm.
+Install straight from GitHub — the package is not published to npm. For Yarn
+Berry, use the archive URL so Yarn does not require a Git repository approval.
 
 ```bash
+# npm
 npm install github:arts009009009/Blazefire
 
-# Yarn 1 (Classic) - use full HTTPS URL
-yarn add https://github.com/arts009009009/Blazefire
+# Yarn (Classic or Berry)
+yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
 
-# Yarn Berry (2+)
-yarn add blazefire@github:arts009009009/Blazefire
-
+# pnpm
 pnpm add github:arts009009009/Blazefire
-bun add  github:arts009009009/Blazefire
+
+# Bun
+bun add github:arts009009009/Blazefire
 ```
 
 That is all for npm, Yarn 1, and pnpm. Yarn Berry and pnpm each need one extra
@@ -66,7 +76,7 @@ both gates:
 nodeLinker: node-modules
 enableScripts: true
 approvedGitRepositories:
-  - "https://github.com/**"
+  - 'https://github.com/**'
 ```
 
 Patterns match the resolved HTTPS URL, and `**` is required —
@@ -86,6 +96,10 @@ Or skip the git allowlist entirely by installing the tarball:
 yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/tags/v1.0.0.tar.gz
 ```
 
+Using Yarn Plug'n'Play instead (no `node_modules`)? Run `yarn blazefire init`
+rather than `npx`, so Yarn loads its PnP environment and `next` resolves
+through it.
+
 This is **one-time** setup: once the hook exists in `package.json`,
 project scripts always run regardless of `enableScripts`, so later
 installs — including a fresh clone — self-activate under stock Berry
@@ -93,7 +107,7 @@ defaults.
 
 ### pnpm
 
-pnpm installs fine, but skips a *dependency's* build scripts by default, so
+pnpm installs fine, but skips a _dependency's_ build scripts by default, so
 the very first install activates nothing. Bootstrap it once:
 
 ```bash
@@ -121,7 +135,7 @@ or allow the package outright in your `package.json`:
 ### Monorepos and workspaces
 
 Installing at the repository root is fine even when the root has no Next.js
-config. The installer then looks inside the workspaces you have *declared* —
+config. The installer then looks inside the workspaces you have _declared_ —
 `package.json#workspaces` (npm, yarn, pnpm) or the `packages:` list in
 `pnpm-workspace.yaml` — and activates the one that actually holds a
 `next.config.*`:
@@ -143,19 +157,17 @@ outcome is deterministic.
 ### Not supported: Deno
 
 Deno's installer only resolves npm-registry and JSR specifiers, so it drops
-`github:` (and `git+https`) dependencies without an error. Use npm, yarn or
-pnpm to install, then run `npx blazefire init`.
+`github:` (and `git+https`) dependencies without an error. Use npm, Yarn, pnpm,
+or Bun to install, then run `npx blazefire init`.
 
-### Fallback (any manager, incl. `--ignore-scripts`)
+### Restore
+
+To undo activation, restore the original config and remove Blazefire's
+postinstall hook:
 
 ```bash
-npx blazefire init      # activate
-npx blazefire restore   # put the original config back AND remove the hook
+npx blazefire restore
 ```
-
-`init` never exits non-zero when it is running as your `postinstall` — a
-deleted `next.config.*` must not be able to brick your install — but it still
-exits 1 when you invoke it yourself and finds nothing to do.
 
 Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
 is written, and an existing hook honours the flag too.
@@ -163,25 +175,32 @@ is written, and an existing hook honours the flag too.
 ## Usage
 
 ```jsx
-import { BlazefireLogo, BlazefireErrorOverlay } from 'blazefire';
-import { insertBlazefireStyles } from 'blazefire/styles';
-import { createCompiler } from 'blazefire/compiler';
+import {
+  insertBlazefireStyles,
+  createCompiler,
+  BlazefireProvider,
+} from 'blazefire'
+import { BlazefireLogo } from 'blazefire/components/BlazefireLogo'
+import { BlazefireErrorOverlay } from 'blazefire/components/BlazefireErrorOverlay'
 
-// Insert styles
-insertBlazefireStyles();
+// Insert styles (safe to call from a Server Component — it no-ops on the server)
+insertBlazefireStyles()
 
 // Create compiler instance
-const compiler = createCompiler();
+const compiler = createCompiler()
 
-// Use components
+// Use components (client components — import them from blazefire/components/*)
 function App() {
   return (
-    <BlazefireErrorOverlay
-      errorType="Runtime Error"
-      errorMessage="Something went wrong"
-      onClose={() => {}}
-    />
-  );
+    <BlazefireProvider>
+      <BlazefireLogo size={48} />
+      <BlazefireErrorOverlay
+        errorType="Runtime Error"
+        errorMessage="Something went wrong"
+        onClose={() => {}}
+      />
+    </BlazefireProvider>
+  )
 }
 ```
 
@@ -195,29 +214,44 @@ The Frostfast compiler provides:
 - Hot module replacement
 
 ```js
-import { createCompiler, FROSTFAST_VERSION } from 'blazefire/compiler';
+import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler'
 
 const compiler = createCompiler({
   // Custom options
-});
+})
 
-console.log(`Frostfast v${FROSTFAST_VERSION}`);
+console.log(`Compiler v${COMPILER_VERSION}`)
 ```
+
+Note: the compiler entry (`blazefire/compiler`) is separate from the root
+`createCompiler()` export — the root version is a lightweight options
+container, while the compiler entry exposes the full transform pipeline.
 
 ## Components
 
-- `BlazefireLogo` - Flame logo with neon glow
-- `BlazefireErrorHeader` - Error overlay header
-- `BlazefireErrorOverlay` - Full error overlay
-- `BlazefireDevToolsIndicator` - Floating dev tools button
+Import components from their `blazefire/components/*` subpath (they are
+client components):
+
+- `BlazefireLogo` - Flame logo with neon glow — `blazefire/components/BlazefireLogo`
+- `BlazefireErrorOverlay` - Full error overlay — `blazefire/components/BlazefireErrorOverlay`
+- `BlazefireDevTools` - Floating dev tools indicator/panel — `blazefire/components/BlazefireDevTools`
+
+The root entry (`blazefire`) exports the runtime utilities and
+`BlazefireProvider` / `useBlazefire`, not the components.
 
 ## Styles
 
-Import the CSS files for the full cyberpunk theme:
+Import the CSS file for the full cyberpunk theme:
 
 ```css
-@import 'blazefire/assets/blazefire-dark-theme.css';
-@import 'blazefire/assets/blazefire-global.css';
+@import 'blazefire/styles';
+```
+
+Or inject the equivalent styles at runtime (e.g. when you can't ship a CSS
+import):
+
+```js
+import { insertBlazefireStyles } from 'blazefire'
 ```
 
 ## License
