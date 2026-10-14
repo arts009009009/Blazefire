@@ -39,6 +39,7 @@
     "blazefire/assets/",
     "blazefire/data/",
     "blazefire/postinstall.cjs",
+    "blazefire/update-check.cjs",
     "blazefire/cli.cjs",
     "blazefire/README.md"
   ],
