@@ -1,6 +1,6 @@
-'use client';
+'use client'
 
-import React from 'react';
+import React from 'react'
 
 /**
  * Self-contained Blazefire flame mark.
@@ -12,9 +12,9 @@ import React from 'react';
  * is rewritten to a chunk URL in the browser.
  */
 export function BlazefireLogo(props) {
-  var size = (props && props.size) || 40;
-  var className = (props && props.className) || '';
-  var style = (props && props.style) || undefined;
+  var size = (props && props.size) || 40
+  var className = (props && props.className) || ''
+  var style = (props && props.style) || undefined
 
   return React.createElement(
     'svg',
@@ -27,7 +27,10 @@ export function BlazefireLogo(props) {
       role: 'img',
       'aria-label': 'Blazefire',
       className: className,
-      style: Object.assign({ display: 'inline-block', verticalAlign: 'middle' }, style),
+      style: Object.assign(
+        { display: 'inline-block', verticalAlign: 'middle' },
+        style
+      ),
     },
     React.createElement(
       'defs',
@@ -49,8 +52,17 @@ export function BlazefireLogo(props) {
       ),
       React.createElement(
         'filter',
-        { id: 'blazefire-glow', x: '-50%', y: '-50%', width: '200%', height: '200%' },
-        React.createElement('feGaussianBlur', { stdDeviation: '1', result: 'blur' }),
+        {
+          id: 'blazefire-glow',
+          x: '-50%',
+          y: '-50%',
+          width: '200%',
+          height: '200%',
+        },
+        React.createElement('feGaussianBlur', {
+          stdDeviation: '1',
+          result: 'blur',
+        }),
         React.createElement(
           'feMerge',
           null,
@@ -77,5 +89,5 @@ export function BlazefireLogo(props) {
         opacity: '0.8',
       })
     )
-  );
+  )
 }

@@ -133,19 +133,20 @@ function declaresNext(pkg) {
 }
 
 function hasInstalledNext(projectRoot) {
-  if (fs.existsSync(path.join(projectRoot, "node_modules", "next"))) return true;
+  if (fs.existsSync(path.join(projectRoot, 'node_modules', 'next'))) return true
 
   try {
-    createRequire(path.join(projectRoot, "package.json")).resolve("next");
-    return true;
+    createRequire(path.join(projectRoot, 'package.json')).resolve('next')
+    return true
   } catch (error) {
     if (
       error &&
-      (error.code === "MODULE_NOT_FOUND" || error.code === "UNDECLARED_DEPENDENCY")
+      (error.code === 'MODULE_NOT_FOUND' ||
+        error.code === 'UNDECLARED_DEPENDENCY')
     ) {
-      return false;
+      return false
     }
-    throw error;
+    throw error
   }
 }
 
