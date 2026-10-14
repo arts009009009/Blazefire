@@ -148,6 +148,7 @@ export function compileNonPath(value: string, params: Params): string {
     }
   }
   value = value
+    .replace(/\\/g, '\\\\')
     .replace(/(:|\*|\?|\+|\(|\)|\{|\})/g, '\\$1')
     .replace(/--ESCAPED_PARAM_PLUS/g, '+')
     .replace(/--ESCAPED_PARAM_COLON/g, ':')
