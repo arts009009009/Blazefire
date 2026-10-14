@@ -278,9 +278,12 @@ ${sel} {
 
   return `
 ${selectors} {${tokens}}
-/* Blazefire gradient rail across the top of overlay panels */
-.nextjs-container,
-.nextjs-toast {
+/* Blazefire gradient rail across the top of overlay panels.
+   The container panel keeps its opaque surface fill; the indicator pill
+   (.nextjs-toast) draws only the rail — its body is transparent so no black
+   box sits behind the emblem. The rail still renders because the second
+   gradient layer is clipped to the 2px top border. */
+.nextjs-container {
   border-top: 2px solid transparent;
   background-image:
     linear-gradient(${c.surface}, ${c.surface}),
@@ -288,8 +291,31 @@ ${selectors} {${tokens}}
   background-origin: border-box;
   background-clip: padding-box, border-box;
 }
+.nextjs-toast {
+  border-top: 2px solid transparent;
+  background-image:
+    linear-gradient(transparent, transparent),
+    ${branding.topBarGradient};
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+/* Idle badge disc behind the emblem: drop Next's black fill, ring and drop
+   shadow so the logo floats on the page. Scoped to data-error="false" so
+   the red "N Issues" pill keeps its own background. */
+.nextjs-toast [data-next-badge][data-error='false'],
+.nextjs-toast [data-next-badge][data-error='false']:hover {
+  background-color: transparent;
+  box-shadow: none;
+}
 /* Next's "N" glyph -> Blazefire emblem */
 ${logos}
+/* Drop the dark badge plate (rgba(0,0,0,.8) + ring shadow) that Next draws
+   behind the mark, so the transparent-cornered emblem sits directly on the
+   page with no rectangle around it. The error state keeps its red plate. */
+[data-next-badge]:not([data-error='true']) {
+  background: transparent;
+  box-shadow: none;
+}
 `.trim()
 }
 
