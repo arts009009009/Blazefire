@@ -176,17 +176,6 @@ html { color-scheme: dark; }
  * @returns {string}
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
-  if (branding.logo === BLAZEFIRE_BRANDING.logo) {
-    const logoPath = path.join(__dirname, 'assets', 'blazefire-logo.png')
-    try {
-      return `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
-    } catch (err) {
-      // The PNG may not be present (e.g. installed from a GitHub tarball that
-      // does not include the asset). Fall through to the self-contained SVG
-      // instead of throwing during config load.
-    }
-  }
-
   const g = branding.logo.gradient
   const stops = g
     .map(
