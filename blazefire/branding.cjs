@@ -279,10 +279,11 @@ ${sel} {
   return `
 ${selectors} {${tokens}}
 /* Blazefire gradient rail across the top of overlay panels.
-   The container panel keeps its opaque surface fill; the indicator pill
-   (.nextjs-toast) draws only the rail — its body is transparent so no black
-   box sits behind the emblem. The rail still renders because the second
-   gradient layer is clipped to the 2px top border. */
+   The container panel uses the opaque-surface trick: layer 1 fills the
+   padding box so only the 2px top border shows layer 2's rail. The pill
+   (.nextjs-toast) must NOT do that — its body stays transparent so no box
+   sits behind the emblem, and the rail is drawn with border-image instead,
+   which only ever paints in the border area. */
 .nextjs-container {
   border-top: 2px solid transparent;
   background-image:
@@ -293,11 +294,7 @@ ${selectors} {${tokens}}
 }
 .nextjs-toast {
   border-top: 2px solid transparent;
-  background-image:
-    linear-gradient(transparent, transparent),
-    ${branding.topBarGradient};
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
+  border-image: ${branding.topBarGradient} 1;
 }
 /* Idle badge disc behind the emblem: drop Next's black fill, ring and drop
    shadow so the logo floats on the page. Scoped to data-error="false" so
