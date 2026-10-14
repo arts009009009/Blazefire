@@ -168,9 +168,11 @@ html { color-scheme: dark; }
 }
 
 /**
- * The Blazefire logo as a self-contained `data:` URI.
+ * The SVG flame fallback, used when the baked PNG asset (logo-data.cjs) is
+ * absent — e.g. a GitHub tarball installed without running `npm run build:logo`.
  *
- * The package asset is inlined so the overlay can use it from its shadow root.
+ * Built here so the gradient stays in sync with `logo.gradient` and the mark
+ * can be referenced from a stylesheet without shipping an asset.
  *
  * @param {typeof BLAZEFIRE_BRANDING} [branding]
  * @returns {string}
