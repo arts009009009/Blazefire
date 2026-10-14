@@ -10,12 +10,8 @@
 const path = require('path')
 const blazefire = require('../blazefire/plugin.cjs')
 
-const {
-  isNextConfig,
-  mergeConfigs,
-  prependRuntimeToEntries,
-  DEFAULTS,
-} = blazefire
+const { isNextConfig, mergeConfigs, prependRuntimeToEntries, DEFAULTS } =
+  blazefire
 
 const INJECT = path.join(__dirname, '..', 'blazefire', 'runtime', 'inject.cjs')
 
@@ -23,7 +19,9 @@ describe('isNextConfig', () => {
   it('treats a pure options bag as options', () => {
     expect(isNextConfig({})).toBe(false)
     expect(isNextConfig({ theme: false })).toBe(false)
-    expect(isNextConfig({ theme: false, headers: true, poweredBy: 'x' })).toBe(false)
+    expect(isNextConfig({ theme: false, headers: true, poweredBy: 'x' })).toBe(
+      false
+    )
   })
 
   it('recognises a config written only with keys we do not own', () => {
@@ -65,10 +63,15 @@ describe('blazefire(config)', () => {
   })
 
   it('keeps a config and still applies options from the second argument', async () => {
-    const out = blazefire({ trailingSlash: true }, { poweredBy: 'Blazefire Test' })
+    const out = blazefire(
+      { trailingSlash: true },
+      { poweredBy: 'Blazefire Test' }
+    )
     expect(out.trailingSlash).toBe(true)
     const headers = await awaitValue(out.headers)
-    expect(headers.some((h) => h.headers.some((x) => x.value === 'Blazefire Test'))).toBe(true)
+    expect(
+      headers.some((h) => h.headers.some((x) => x.value === 'Blazefire Test'))
+    ).toBe(true)
   })
 
   it('honours a lone options bag without inventing config keys', () => {
@@ -76,7 +79,7 @@ describe('blazefire(config)', () => {
     expect(out.trailingSlash).toBeUndefined()
     expect(out.poweredByHeader).toBe(false)
     // theme off → no entry injection at all
-    const entry = { 'main': ['./next/dist/client/next.js'] }
+    const entry = { main: ['./next/dist/client/next.js'] }
     const cfg = { entry }
     out.webpack(cfg, { isServer: false })
     expect(cfg.entry).toBe(entry)
@@ -94,15 +97,22 @@ describe('blazefire(config)', () => {
   it('applies the options bag even when the first argument is empty', async () => {
     const out = blazefire({}, { poweredBy: 'Second Bag' })
     const headers = await awaitValue(out.headers)
-    expect(headers.some((h) => h.headers.some((x) => x.value === 'Second Bag'))).toBe(true)
+    expect(
+      headers.some((h) => h.headers.some((x) => x.value === 'Second Bag'))
+    ).toBe(true)
   })
 
   it('wraps an existing headers() instead of replacing it', async () => {
-    const userHeaders = [{ source: '/api/:path*', headers: [{ key: 'X-Api', value: '1' }] }]
+    const userHeaders = [
+      { source: '/api/:path*', headers: [{ key: 'X-Api', value: '1' }] },
+    ]
     const out = blazefire({ headers: async () => userHeaders })
     const merged = await awaitValue(out.headers)
     // Both lists reach the wire: the user's own headers survive, ours are added.
-    expect(merged).toEqual([...userHeaders, ...await awaitValue(blazefire().headers)])
+    expect(merged).toEqual([
+      ...userHeaders,
+      ...(await awaitValue(blazefire().headers)),
+    ])
     expect(merged.some((h) => h.source === '/api/:path*')).toBe(true)
     expect(merged.some((h) => h.source === '/:path*')).toBe(true)
   })
@@ -198,7 +208,12 @@ describe('prependRuntimeToEntries', () => {
     expect(prependRuntimeToEntries({ a: ['./a.js'] }, '/rt')).toEqual({
       a: ['/rt', './a.js'],
     })
-    expect(prependRuntimeToEntries({ a: { import: ['./a.js'], dependOn: 'b' } }, '/rt')).toEqual({
+    expect(
+      prependRuntimeToEntries(
+        { a: { import: ['./a.js'], dependOn: 'b' } },
+        '/rt'
+      )
+    ).toEqual({
       a: { import: ['/rt', './a.js'], dependOn: 'b' },
     })
   })
@@ -224,13 +239,21 @@ describe('mergeConfigs', () => {
       { turbopack: { rules: { '**/b.js': [{ loader: 'm' }] } } }
     )
     expect(out.turbopack.root).toBe('/repo')
-    expect(Object.keys(out.turbopack.rules).sort()).toEqual(['**/a.js', '**/b.js'])
+    expect(Object.keys(out.turbopack.rules).sort()).toEqual([
+      '**/a.js',
+      '**/b.js',
+    ])
   })
 
   it('layers our env over the user env rather than replacing it', () => {
     const out = mergeConfigs(
       { env: { NEXT_PUBLIC_APP: 'x' } },
-      { env: { NEXT_PUBLIC_BLAZEFIRE: 'true', NEXT_PUBLIC_BLAZEFIRE_VERSION: 'v1.0.0' } }
+      {
+        env: {
+          NEXT_PUBLIC_BLAZEFIRE: 'true',
+          NEXT_PUBLIC_BLAZEFIRE_VERSION: 'v1.0.0',
+        },
+      }
     )
     // neither side is dropped
     expect(out.env).toEqual({
@@ -241,7 +264,10 @@ describe('mergeConfigs', () => {
   })
 
   it('replacing happens only for scalars ours owns — user fields survive', () => {
-    const out = mergeConfigs({ poweredByHeader: true, reactStrictMode: true }, { poweredByHeader: false })
+    const out = mergeConfigs(
+      { poweredByHeader: true, reactStrictMode: true },
+      { poweredByHeader: false }
+    )
     expect(out.poweredByHeader).toBe(false)
     expect(out.reactStrictMode).toBe(true)
   })

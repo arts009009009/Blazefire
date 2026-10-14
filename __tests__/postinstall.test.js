@@ -30,7 +30,9 @@ afterEach(() => {
 
 describe('rewrite — ESM configs', () => {
   it('wraps `export default nextConfig;`', () => {
-    const out = rewrite('const nextConfig = { trailingSlash: true };\nexport default nextConfig;\n')
+    const out = rewrite(
+      'const nextConfig = { trailingSlash: true };\nexport default nextConfig;\n'
+    )
     expect(out.ok).toBe(true)
     expect(out.code).toContain('import blazefire from "blazefire/plugin";')
     expect(out.code).toContain('export default blazefire(nextConfig);')
@@ -50,17 +52,25 @@ describe('rewrite — ESM configs', () => {
   it('wraps an inline object config', () => {
     const out = rewrite('export default { images: { unoptimized: true } };\n')
     expect(out.ok).toBe(true)
-    expect(out.code).toContain('export default blazefire({ images: { unoptimized: true } });')
+    expect(out.code).toContain(
+      'export default blazefire({ images: { unoptimized: true } });'
+    )
   })
 
   it('wraps a function-style config', () => {
-    const out = rewrite('export default (phase) => ({ trailingSlash: true });\n')
+    const out = rewrite(
+      'export default (phase) => ({ trailingSlash: true });\n'
+    )
     expect(out.ok).toBe(true)
-    expect(out.code).toContain('export default blazefire((phase) => ({ trailingSlash: true }));')
+    expect(out.code).toContain(
+      'export default blazefire((phase) => ({ trailingSlash: true }));'
+    )
   })
 
   it('keeps a `satisfies` clause inside the wrapped expression', () => {
-    const out = rewrite('const nextConfig = {};\nexport default nextConfig satisfies NextConfig;\n')
+    const out = rewrite(
+      'const nextConfig = {};\nexport default nextConfig satisfies NextConfig;\n'
+    )
     expect(out.ok).toBe(true)
     expect(out.code).toContain('blazefire(nextConfig satisfies NextConfig);')
   })
@@ -81,7 +91,9 @@ describe('rewrite — ESM configs', () => {
 
 describe('rewrite — CommonJS configs', () => {
   it('wraps `module.exports = cfg;`', () => {
-    const out = rewrite('const cfg = { trailingSlash: true };\nmodule.exports = cfg;\n')
+    const out = rewrite(
+      'const cfg = { trailingSlash: true };\nmodule.exports = cfg;\n'
+    )
     expect(out.ok).toBe(true)
     expect(out.code).toContain('const blazefire = require("blazefire/plugin");')
     expect(out.code).toContain('module.exports = blazefire(cfg);')
@@ -125,7 +137,10 @@ describe('rewrite — idempotency marker survives', () => {
 
 function makeProject(pkg) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blazefire-test-'))
-  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n')
+  fs.writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify(pkg, null, 2) + '\n'
+  )
   return dir
 }
 
@@ -146,7 +161,9 @@ describe('ensureHook / undoHook', () => {
     })
 
     expect(ensureHook(dir)).toBe(true)
-    expect(readPkg(dir).scripts.postinstall).toBe(HOOK_COMMAND + ' && ' + original)
+    expect(readPkg(dir).scripts.postinstall).toBe(
+      HOOK_COMMAND + ' && ' + original
+    )
     expect(fs.existsSync(recordPath(dir))).toBe(true)
 
     expect(undoHook(dir)).toBe(true)
@@ -209,7 +226,10 @@ describe('ensureHook / undoHook', () => {
     // The user replaces our hook with their own script.
     const pkg = readPkg(dir)
     pkg.scripts.postinstall = 'their own replacement'
-    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n')
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify(pkg, null, 2) + '\n'
+    )
 
     // Regression: this used to return true (so `restore` claimed success) and
     // deleted the record — the only copy of their original script.

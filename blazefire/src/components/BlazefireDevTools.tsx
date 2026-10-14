@@ -1,30 +1,32 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { BlazefireLogo } from './BlazefireLogo.js';
-import { useBlazefire } from '../index.js';
+import React, { useState, useEffect } from 'react'
+import { BlazefireLogo } from './BlazefireLogo.js'
+import { useBlazefire } from '../index.js'
 
 export interface BlazefireDevToolsProps {
-  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
+  position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
 }
 
-export function BlazefireDevTools({ position = 'bottom-right' }: BlazefireDevToolsProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const { version, compiler, runtime } = useBlazefire();
+export function BlazefireDevTools({
+  position = 'bottom-right',
+}: BlazefireDevToolsProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const { version, compiler, runtime } = useBlazefire()
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setMounted(true)
+  }, [])
 
-  if (!mounted) return null;
+  if (!mounted) return null
 
   const positionStyles: Record<string, React.CSSProperties> = {
     'bottom-right': { bottom: 20, right: 20 },
     'bottom-left': { bottom: 20, left: 20 },
     'top-right': { top: 20, right: 20 },
     'top-left': { top: 20, left: 20 },
-  };
+  }
 
   // The panel sits away from the viewport edge: above the button for the
   // bottom positions, below it for the top ones, so neither is pushed off.
@@ -61,7 +63,14 @@ export function BlazefireDevTools({ position = 'bottom-right' }: BlazefireDevToo
       >
         Blazefire
       </div>
-      <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 10px' }}>
+      <dl
+        style={{
+          margin: 0,
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr',
+          gap: '2px 10px',
+        }}
+      >
         <dt style={{ color: '#666' }}>Version</dt>
         <dd style={{ margin: 0 }}>{version}</dd>
         <dt style={{ color: '#666' }}>Compiler</dt>
@@ -70,9 +79,9 @@ export function BlazefireDevTools({ position = 'bottom-right' }: BlazefireDevToo
         <dd style={{ margin: 0 }}>{runtime}</dd>
       </dl>
     </div>
-  ) : null;
+  ) : null
 
-  const showPanelFirst = position.startsWith('bottom');
+  const showPanelFirst = position.startsWith('bottom')
 
   return (
     <div
@@ -110,5 +119,5 @@ export function BlazefireDevTools({ position = 'bottom-right' }: BlazefireDevToo
       </button>
       {!showPanelFirst && panel}
     </div>
-  );
+  )
 }

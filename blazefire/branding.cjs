@@ -113,8 +113,7 @@ const BLAZEFIRE_BRANDING = {
   },
 
   // Gradient that runs across the top of every page
-  topBarGradient:
-    'linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff)',
+  topBarGradient: 'linear-gradient(90deg, #ff8800, #ff006e, #00ffff, #ff00ff)',
 }
 
 /**
@@ -180,7 +179,10 @@ html { color-scheme: dark; }
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
   const g = branding.logo.gradient
   const stops = g
-    .map((colour, i) => `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`)
+    .map(
+      (colour, i) =>
+        `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`
+    )
     .join('')
 
   const svg =
@@ -208,7 +210,10 @@ function flameDataUri(branding = BLAZEFIRE_BRANDING) {
  * @returns {string}
  */
 function logoDataUri(branding = BLAZEFIRE_BRANDING) {
-  if (typeof LOGO_ASSET_DATA_URI === 'string' && /^data:image\//.test(LOGO_ASSET_DATA_URI)) {
+  if (
+    typeof LOGO_ASSET_DATA_URI === 'string' &&
+    /^data:image\//.test(LOGO_ASSET_DATA_URI)
+  ) {
     return LOGO_ASSET_DATA_URI
   }
   return flameDataUri(branding)
@@ -267,7 +272,8 @@ function blazefireOverlayStyles(branding = BLAZEFIRE_BRANDING) {
   const logo = logoDataUri(branding)
   const logos = branding.logo.selectors
     .map((sel) => {
-      const size = (branding.logo.sizes && branding.logo.sizes[sel]) || 'contain'
+      const size =
+        (branding.logo.sizes && branding.logo.sizes[sel]) || 'contain'
       return `${sel} > * { visibility: hidden; }
 ${sel} {
   background-image: url("${logo}");

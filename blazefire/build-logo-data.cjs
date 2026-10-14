@@ -41,4 +41,6 @@ const out = [
 ].join('\n')
 
 fs.writeFileSync(target, out)
-console.log('[blazefire] wrote ' + target + ' (' + base64.length + ' base64 chars)')
+console.log(
+  '[blazefire] wrote ' + target + ' (' + base64.length + ' base64 chars)'
+)

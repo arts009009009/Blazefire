@@ -140,17 +140,34 @@ function injectOverlayTheme() {
       // when something actually differs, so this settles instead of looping.
       rebrand(root)
     })
-    rebrander.observe(root, { childList: true, subtree: true, characterData: true })
+    rebrander.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    })
   }
 
   scan()
 
-  if (typeof MutationObserver !== 'undefined' && document.body) {
-    // Long-lived: the overlay mounts, is dismissed and can come back.
-    var observer = new MutationObserver(function () {
-      scan()
-    })
-    observer.observe(document.body, { childList: true, subtree: true })
+  if (typeof MutationObserver === 'undefined') return
+
+  // Long-lived: the overlay mounts, is dismissed and can come back.
+  var observer = new MutationObserver(function () {
+    scan()
+  })
+
+  function watchBody() {
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true })
+    }
+  }
+
+  if (document.body) {
+    watchBody()
+  } else {
+    // document.body can be missing when this entry runs very early (before
+    // the document body exists); retry on DOM ready like inject() does above.
+    document.addEventListener('DOMContentLoaded', watchBody)
   }
 }
 

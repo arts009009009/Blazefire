@@ -134,8 +134,8 @@ function buildConfig(opts) {
       if (typeof config.entry === 'function') {
         const originalEntry = config.entry
         config.entry = function (...args) {
-          return Promise.resolve(originalEntry.apply(this, args)).then((entry) =>
-            prependRuntimeToEntries(entry, runtime)
+          return Promise.resolve(originalEntry.apply(this, args)).then(
+            (entry) => prependRuntimeToEntries(entry, runtime)
           )
         }
       } else if (config.entry) {
@@ -190,7 +190,8 @@ function pickOptions(x) {
   if (!x || typeof x !== 'object') return {}
   const out = {}
   for (const key of Object.keys(x)) {
-    if (isOurOption(key, /** @type {any} */ (x)[key])) out[key] = /** @type {any} */ (x)[key]
+    if (isOurOption(key, /** @type {any} */ (x)[key]))
+      out[key] = /** @type {any} */ (x)[key]
   }
   return out
 }
@@ -203,7 +204,8 @@ function omitOptions(x) {
   if (!x || typeof x !== 'object') return {}
   const out = {}
   for (const key of Object.keys(x)) {
-    if (!isOurOption(key, /** @type {any} */ (x)[key])) out[key] = /** @type {any} */ (x)[key]
+    if (!isOurOption(key, /** @type {any} */ (x)[key]))
+      out[key] = /** @type {any} */ (x)[key]
   }
   return out
 }
@@ -224,7 +226,9 @@ function omitOptions(x) {
 function isNextConfig(x) {
   if (!x || typeof x !== 'object') return false
 
-  return Object.keys(x).some((key) => !isOurOption(key, /** @type {any} */ (x)[key]))
+  return Object.keys(x).some(
+    (key) => !isOurOption(key, /** @type {any} */ (x)[key])
+  )
 }
 
 /**
@@ -280,7 +284,9 @@ function mergeConfigs(base, ours) {
       // about — is not a webpack config. Hand ours the config we were given
       // rather than letting it read `.entry` off something unusable.
       const usable =
-        afterBase && typeof afterBase === 'object' && typeof afterBase.then !== 'function'
+        afterBase &&
+        typeof afterBase === 'object' &&
+        typeof afterBase.then !== 'function'
       return oursWebpack(usable ? afterBase : config, ctx)
     }
   }
@@ -344,7 +350,11 @@ function prependRuntimeToValue(value, runtime) {
   if (Array.isArray(value)) {
     return value.includes(runtime) ? value : [runtime, ...value]
   }
-  if (value && typeof value === 'object' && Array.isArray(/** @type {any} */ (value).import)) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    Array.isArray(/** @type {any} */ (value).import)
+  ) {
     const descriptor = /** @type {{import: string[]}} */ (value)
     return descriptor.import.includes(runtime)
       ? value

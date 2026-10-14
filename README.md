@@ -8,6 +8,7 @@
 > forking is allowed.
 
 ## Early Showcase of custom error overlay triggered by hydration mismatch
+
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
 
 # Blazefire Framework 🔥
@@ -16,6 +17,7 @@ Blazefire is a chaos‑driven web framework with custom runtime, overlay brandin
 It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
 
 ## Acknowledgements
+
 - [Next.js](https://nextjs.org/) — for pioneering the meta‑framework model and inspiring routing + SSR concepts.
 - Frostfast Compiler — powering Blazefire’s runtime speed.
 - Community devs who shaped the ecosystem we build on.
@@ -70,7 +72,7 @@ both gates:
 nodeLinker: node-modules
 enableScripts: true
 approvedGitRepositories:
-  - "https://github.com/**"
+  - 'https://github.com/**'
 ```
 
 Patterns match the resolved HTTPS URL, and `**` is required —
@@ -97,7 +99,7 @@ defaults.
 
 ### pnpm
 
-pnpm installs fine, but skips a *dependency's* build scripts by default, so
+pnpm installs fine, but skips a _dependency's_ build scripts by default, so
 the very first install activates nothing. Bootstrap it once:
 
 ```bash
@@ -125,7 +127,7 @@ or allow the package outright in your `package.json`:
 ### Monorepos and workspaces
 
 Installing at the repository root is fine even when the root has no Next.js
-config. The installer then looks inside the workspaces you have *declared* —
+config. The installer then looks inside the workspaces you have _declared_ —
 `package.json#workspaces` (npm, yarn, pnpm) or the `packages:` list in
 `pnpm-workspace.yaml` — and activates the one that actually holds a
 `next.config.*`:
@@ -171,15 +173,15 @@ import {
   insertBlazefireStyles,
   createCompiler,
   BlazefireProvider,
-} from 'blazefire';
-import { BlazefireLogo } from 'blazefire/components/BlazefireLogo';
-import { BlazefireErrorOverlay } from 'blazefire/components/BlazefireErrorOverlay';
+} from 'blazefire'
+import { BlazefireLogo } from 'blazefire/components/BlazefireLogo'
+import { BlazefireErrorOverlay } from 'blazefire/components/BlazefireErrorOverlay'
 
 // Insert styles (safe to call from a Server Component — it no-ops on the server)
-insertBlazefireStyles();
+insertBlazefireStyles()
 
 // Create compiler instance
-const compiler = createCompiler();
+const compiler = createCompiler()
 
 // Use components (client components — import them from blazefire/components/*)
 function App() {
@@ -192,7 +194,7 @@ function App() {
         onClose={() => {}}
       />
     </BlazefireProvider>
-  );
+  )
 }
 ```
 
@@ -206,13 +208,13 @@ The Frostfast compiler provides:
 - Hot module replacement
 
 ```js
-import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler';
+import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler'
 
 const compiler = createCompiler({
   // Custom options
-});
+})
 
-console.log(`Compiler v${COMPILER_VERSION}`);
+console.log(`Compiler v${COMPILER_VERSION}`)
 ```
 
 Note: the compiler entry (`blazefire/compiler`) is separate from the root

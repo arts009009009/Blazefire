@@ -7,41 +7,41 @@
  * the whole `blazefire` module. Keep this file in sync with both.
  */
 
-import React, { createContext, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useEffect } from 'react'
 
 export interface BlazefireConfig {
-  theme?: 'dark' | 'light';
-  primaryColor?: string;
-  enableGlow?: boolean;
+  theme?: 'dark' | 'light'
+  primaryColor?: string
+  enableGlow?: boolean
 }
 
 export interface CompilerOptions {
   jsc?: {
-    parser?: { syntax: string; tsx?: boolean };
-    transform?: { react?: { runtime: string } };
-  };
-  module?: { type: string };
+    parser?: { syntax: string; tsx?: boolean }
+    transform?: { react?: { runtime: string } }
+  }
+  module?: { type: string }
 }
 
 export interface CompilerInstance {
-  options: CompilerOptions;
-  version: string;
-  transform(code: string, filename?: string): Promise<{ code: string }>;
+  options: CompilerOptions
+  version: string
+  transform(code: string, filename?: string): Promise<{ code: string }>
 }
 
-export const BLAZEFIRE_VERSION = '1.0.0';
-export const FROSTFAST_VERSION = '1.0.0';
+export const BLAZEFIRE_VERSION = '1.0.0'
+export const FROSTFAST_VERSION = '1.0.0'
 
 export function insertBlazefireStyles(): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined') return
 
-  const existing = document.getElementById('blazefire-styles');
-  if (existing) return;
+  const existing = document.getElementById('blazefire-styles')
+  if (existing) return
 
-  const style = document.createElement('style');
-  style.id = 'blazefire-styles';
-  style.textContent = getBlazefireCSS();
-  document.head.appendChild(style);
+  const style = document.createElement('style')
+  style.id = 'blazefire-styles'
+  style.textContent = getBlazefireCSS()
+  document.head.appendChild(style)
 }
 
 /** Mirrors `getBlazefireCSS()` in the runtime entry (`blazefire/index.js`). */
@@ -85,7 +85,7 @@ function getBlazefireCSS(): string {
       border-radius: 3px;
     }
     html { color-scheme: dark; }
-  `;
+  `
 }
 
 export function createBlazefireLogo(size: number = 40): string {
@@ -107,19 +107,21 @@ export function createBlazefireLogo(size: number = 40): string {
       <path d="M20 11C20 11 25 18 25 23C25 25.8 22.8 28 20 28C17.2 28 15 25.8 15 23C15 18 20 11 20 11Z" fill="url(#bf-flame)" opacity="0.6"/>
       <path d="M20 16C20 16 22.5 20 22.5 23C22.5 24.4 21.4 25.5 20 25.5C18.6 25.5 17.5 24.4 17.5 23C17.5 20 20 16 20 16Z" fill="#ffcc00" opacity="0.8"/>
     </g>
-  </svg>`;
+  </svg>`
 }
 
-export function createCompiler(options: CompilerOptions = {}): CompilerInstance {
+export function createCompiler(
+  options: CompilerOptions = {}
+): CompilerInstance {
   const defaultJsc = {
     parser: { syntax: 'typescript', tsx: true },
     transform: { react: { runtime: 'automatic' } },
-  };
-  const defaultModule = { type: 'es6' };
+  }
+  const defaultModule = { type: 'es6' }
 
   // Merge one level deep: passing `{ jsc: { parser: … } }` must not silently
   // drop `jsc.transform.react` (and with it the automatic JSX runtime).
-  const jsc = options.jsc || {};
+  const jsc = options.jsc || {}
   const merged: CompilerOptions = {
     ...options,
     jsc: {
@@ -127,49 +129,53 @@ export function createCompiler(options: CompilerOptions = {}): CompilerInstance 
       transform: jsc.transform ?? defaultJsc.transform,
     },
     module: { type: options.module?.type ?? defaultModule.type },
-  };
+  }
 
   return {
     options: merged,
     version: FROSTFAST_VERSION,
     async transform(code: string, _filename?: string) {
-      return { code };
+      return { code }
     },
-  };
+  }
 }
 
 interface BlazefireContextValue {
-  version: string;
-  compiler: string;
-  runtime: string;
+  version: string
+  compiler: string
+  runtime: string
 }
 
 const BlazefireContext = createContext<BlazefireContextValue>({
   version: BLAZEFIRE_VERSION,
   compiler: 'frostfast',
   runtime: 'blazefire',
-});
+})
 
 export function useBlazefire(): BlazefireContextValue {
-  return useContext(BlazefireContext);
+  return useContext(BlazefireContext)
 }
 
 export interface BlazefireProviderProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
 export function BlazefireProvider({ children }: BlazefireProviderProps) {
   useEffect(() => {
-    insertBlazefireStyles();
-  }, []);
+    insertBlazefireStyles()
+  }, [])
 
   return (
     <BlazefireContext.Provider
-      value={{ version: BLAZEFIRE_VERSION, compiler: 'frostfast', runtime: 'blazefire' }}
+      value={{
+        version: BLAZEFIRE_VERSION,
+        compiler: 'frostfast',
+        runtime: 'blazefire',
+      }}
     >
       {children}
     </BlazefireContext.Provider>
-  );
+  )
 }
 
 const Blazefire = {
@@ -179,6 +185,6 @@ const Blazefire = {
   createBlazefireLogo,
   BlazefireProvider,
   useBlazefire,
-};
+}
 
-export default Blazefire;
+export default Blazefire

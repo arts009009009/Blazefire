@@ -25,7 +25,10 @@ export function useBlazefire() {
 }
 
 function BlazefireDevToolsAuto() {
-  var isDev = typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development'
+  var isDev =
+    typeof process !== 'undefined' &&
+    process.env &&
+    process.env.NODE_ENV === 'development'
   if (!isDev) return null
   return React.createElement('div', {
     'data-blazefire-devtools': true,
@@ -42,7 +45,13 @@ export function BlazefireProvider(props) {
 
   return React.createElement(
     BlazefireContext.Provider,
-    { value: { version: BLAZEFIRE_VERSION, compiler: 'frostfast', runtime: 'blazefire' } },
+    {
+      value: {
+        version: BLAZEFIRE_VERSION,
+        compiler: 'frostfast',
+        runtime: 'blazefire',
+      },
+    },
     props.children,
     React.createElement(BlazefireDevToolsAuto, null)
   )

@@ -12,7 +12,6 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/__tests__'],
   testMatch: ['**/*.test.js'],
-  // Keep suite output readable: swallow per-test console noise unless a test
-  // fails (jest still shows output for failing tests).
-  silent: true,
+  // Quiet the CLI's "blazefire:" progress logs without hiding real output.
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
 }

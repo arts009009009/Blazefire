@@ -1,19 +1,24 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { BlazefireLogo } from './BlazefireLogo.js';
-import { useBlazefire } from '../index.js';
+import React, { useState, useEffect } from 'react'
+import { BlazefireLogo } from './BlazefireLogo.js'
+import { useBlazefire } from '../index.js'
 
 var positionStyles = {
   'bottom-right': { bottom: 20, right: 20 },
   'bottom-left': { bottom: 20, left: 20 },
   'top-right': { top: 20, right: 20 },
   'top-left': { top: 20, left: 20 },
-};
+}
 
-var rowStyles = { display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 10px', margin: 0 };
-var labelStyles = { color: '#666' };
-var valueStyles = { margin: 0 };
+var rowStyles = {
+  display: 'grid',
+  gridTemplateColumns: 'auto 1fr',
+  gap: '2px 10px',
+  margin: 0,
+}
+var labelStyles = { color: '#666' }
+var valueStyles = { margin: 0 }
 
 function DevToolsPanel(props) {
   return React.createElement(
@@ -62,24 +67,24 @@ function DevToolsPanel(props) {
       React.createElement('dt', { style: labelStyles }, 'Runtime'),
       React.createElement('dd', { style: valueStyles }, props.runtime)
     )
-  );
+  )
 }
 
 export function BlazefireDevTools(props) {
-  var position = props.position || 'bottom-right';
-  var isOpenState = useState(false);
-  var setIsOpen = isOpenState[1];
-  var mountedState = useState(false);
-  var setMounted = mountedState[1];
-  var ctx = useBlazefire();
+  var position = props.position || 'bottom-right'
+  var isOpenState = useState(false)
+  var setIsOpen = isOpenState[1]
+  var mountedState = useState(false)
+  var setMounted = mountedState[1]
+  var ctx = useBlazefire()
 
   useEffect(function () {
-    setMounted(true);
-  }, []);
+    setMounted(true)
+  }, [])
 
-  if (!mountedState[0]) return null;
+  if (!mountedState[0]) return null
 
-  var showPanelFirst = position.indexOf('bottom') === 0;
+  var showPanelFirst = position.indexOf('bottom') === 0
   var panel = isOpenState[0]
     ? React.createElement(DevToolsPanel, {
         key: 'panel',
@@ -87,9 +92,9 @@ export function BlazefireDevTools(props) {
         compiler: ctx.compiler,
         runtime: ctx.runtime,
       })
-    : null;
+    : null
 
-  var children = [showPanelFirst ? panel : null];
+  var children = [showPanelFirst ? panel : null]
   children.push(
     React.createElement(
       'button',
@@ -98,11 +103,12 @@ export function BlazefireDevTools(props) {
         type: 'button',
         onClick: function () {
           setIsOpen(function (v) {
-            return !v;
-          });
+            return !v
+          })
         },
         'aria-expanded': isOpenState[0],
-        'aria-label': (isOpenState[0] ? 'Close' : 'Open') + ' Blazefire Dev Tools',
+        'aria-label':
+          (isOpenState[0] ? 'Close' : 'Open') + ' Blazefire Dev Tools',
         style: {
           width: 40,
           height: 40,
@@ -119,8 +125,8 @@ export function BlazefireDevTools(props) {
       },
       React.createElement(BlazefireLogo, { size: 28 })
     )
-  );
-  if (!showPanelFirst) children.push(panel);
+  )
+  if (!showPanelFirst) children.push(panel)
 
   return React.createElement(
     'div',
@@ -132,11 +138,12 @@ export function BlazefireDevTools(props) {
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          alignItems: position.indexOf('-left') !== -1 ? 'flex-start' : 'flex-end',
+          alignItems:
+            position.indexOf('-left') !== -1 ? 'flex-start' : 'flex-end',
         },
         positionStyles[position]
       ),
     },
     children
-  );
+  )
 }

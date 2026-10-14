@@ -1,13 +1,13 @@
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { BlazefireLogo } from './BlazefireLogo.js';
+import React, { useState, useEffect } from 'react'
+import { BlazefireLogo } from './BlazefireLogo.js'
 
 export interface BlazefireErrorOverlayProps {
-  errorType: string;
-  errorMessage: React.ReactNode;
-  onClose?: () => void;
-  children?: React.ReactNode;
+  errorType: string
+  errorMessage: React.ReactNode
+  onClose?: () => void
+  children?: React.ReactNode
 }
 
 export function BlazefireErrorOverlay({
@@ -16,13 +16,13 @@ export function BlazefireErrorOverlay({
   onClose,
   children,
 }: BlazefireErrorOverlayProps) {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    setMounted(true)
+  }, [])
 
-  if (!mounted) return null;
+  if (!mounted) return null
 
   return (
     <div
@@ -57,7 +57,8 @@ export function BlazefireErrorOverlay({
             alignItems: 'center',
             gap: 10,
             padding: '12px 16px',
-            background: 'linear-gradient(135deg, rgba(0,255,255,0.05), rgba(255,0,255,0.05))',
+            background:
+              'linear-gradient(135deg, rgba(0,255,255,0.05), rgba(255,0,255,0.05))',
             borderBottom: '1px solid rgba(0,255,255,0.15)',
           }}
         >
@@ -122,5 +123,5 @@ export function BlazefireErrorOverlay({
         )}
       </div>
     </div>
-  );
+  )
 }
