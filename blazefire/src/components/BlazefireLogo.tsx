@@ -1,11 +1,11 @@
-'use client';
+'use client'
 
-import React from 'react';
+import React from 'react'
 
 export interface BlazefireLogoProps {
-  size?: number;
-  className?: string;
-  style?: React.CSSProperties;
+  size?: number
+  className?: string
+  style?: React.CSSProperties
 }
 
 /**
@@ -17,7 +17,11 @@ export interface BlazefireLogoProps {
  * is installed from a tarball that does not include the PNG, or when
  * `import.meta.url` is rewritten to a chunk URL in the browser.
  */
-export function BlazefireLogo({ size = 40, className = '', style }: BlazefireLogoProps) {
+export function BlazefireLogo({
+  size = 40,
+  className = '',
+  style,
+}: BlazefireLogoProps) {
   return (
     <svg
       width={size}
@@ -44,7 +48,13 @@ export function BlazefireLogo({ size = 40, className = '', style }: BlazefireLog
           <stop offset="0.7" stopColor="#ff006e" />
           <stop offset="1" stopColor="#cc00cc" />
         </linearGradient>
-        <filter id="blazefire-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <filter
+          id="blazefire-glow"
+          x="-50%"
+          y="-50%"
+          width="200%"
+          height="200%"
+        >
           <feGaussianBlur stdDeviation="1" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -69,5 +79,5 @@ export function BlazefireLogo({ size = 40, className = '', style }: BlazefireLog
         />
       </g>
     </svg>
-  );
+  )
 }

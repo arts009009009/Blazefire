@@ -38,7 +38,9 @@ function blazefireLoader(source) {
   // outside it (it rewrites "/a/b" to "./a/b"). Emitting a path relative to
   // the file being transformed keeps resolution inside the module graph and
   // works whether blazefire is linked or installed under node_modules.
-  const from = this.resourcePath ? path.dirname(this.resourcePath) : process.cwd()
+  const from = this.resourcePath
+    ? path.dirname(this.resourcePath)
+    : process.cwd()
   let rel = path.relative(from, injectPath).replace(/\\/g, '/')
   if (!rel.startsWith('.')) rel = './' + rel
 

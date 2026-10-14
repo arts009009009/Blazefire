@@ -22,8 +22,8 @@ before it is installed.
 ## Usage
 
 ```jsx
-import Blazefire from "blazefire";
-import "blazefire/styles";
-import { BlazefireLogo } from "blazefire/components/BlazefireLogo";
-import translations from "blazefire/data/navbar-translate.json";
+import Blazefire from 'blazefire'
+import 'blazefire/styles'
+import { BlazefireLogo } from 'blazefire/components/BlazefireLogo'
+import translations from 'blazefire/data/navbar-translate.json'
 ```

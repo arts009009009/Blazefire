@@ -3,15 +3,15 @@
  */
 
 export interface TurbopackConfig {
-  entries?: string[];
-  output?: string;
+  entries?: string[]
+  output?: string
 }
 
 export function createTurbopackBuilder(config: TurbopackConfig = {}) {
   return {
     config,
     async build() {
-      return { success: true, errors: [] };
+      return { success: true, errors: [] }
     },
-  };
+  }
 }

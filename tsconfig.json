@@ -1,21 +1,30 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "NodeNext",
     "lib": ["ES2020", "DOM"],
     "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node"
+    "moduleResolution": "NodeNext"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  // The package only ships `blazefire/**` (see package.json "files"/"exports").
+  // `src/compiler/**` is a byte-identical copy of Next.js's `build/**` tree whose
+  // sibling imports (`../trace`, `../../lib/worker`, `next/dist/compiled/*`) do not
+  // exist in this repo, so it has never compiled — it is deliberately left out here.
+  "include": [
+    "blazefire/src/**/*",
+    "src/index.ts",
+    "src/styles.ts",
+    "src/components/**/*"
+  ],
+  "exclude": ["node_modules", "dist", "src/compiler"]
 }

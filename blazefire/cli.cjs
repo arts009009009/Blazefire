@@ -10,9 +10,9 @@
  * Same engine as the postinstall — there is deliberately one implementation
  * of the rewrite, not two.
  */
-"use strict";
+'use strict'
 
-const api = require("./postinstall.cjs");
+const api = require('./postinstall.cjs')
 
 const HELP = `
 Blazefire
@@ -30,33 +30,39 @@ Blazefire
   that hook again.
 
   Opt out of auto-activation on install with BLAZEFIRE_SKIP_AUTO=1.
-`;
+`
 
-const command = (process.argv[2] || "init").toLowerCase();
+const command = (process.argv[2] || 'init').toLowerCase()
 
 function bail(message) {
-  console.error("  blazefire: " + message);
-  process.exitCode = 1;
+  console.error('  blazefire: ' + message)
+  process.exitCode = 1
 }
 
 try {
-  if (command === "init" || command === "setup" || command === "activate") {
-    const status = api.run({ cli: true });
+  if (command === 'init' || command === 'setup' || command === 'activate') {
+    const status = api.run({ cli: true })
     // Distinguish "did nothing" from "did it" so CI/scripts can react — but
     // only when a person asked. When we are the project's own postinstall,
     // "nothing to do" must exit 0 or a `next.config` deletion would brick
     // every future install.
-    if ((status === "manual" || status === "not-found") && !api.isLifecycleHook()) {
-      process.exitCode = 1;
+    if (
+      (status === 'manual' || status === 'not-found') &&
+      !api.isLifecycleHook()
+    ) {
+      process.exitCode = 1
     }
-  } else if (command === "restore" || command === "revert") {
-    process.exitCode = api.restore();
-  } else if (command === "--help" || command === "-h" || command === "help") {
-    console.log(HELP.trim());
+  } else if (command === 'restore' || command === 'revert') {
+    process.exitCode = api.restore()
+  } else if (command === '--help' || command === '-h' || command === 'help') {
+    console.log(HELP.trim())
   } else {
-    bail('unknown command "' + command + '". Try: npx blazefire init');
+    bail('unknown command "' + command + '". Try: npx blazefire init')
   }
 } catch (error) {
-  bail((error && error.message ? error.message : String(error)) + " — nothing was written.");
-  process.exitCode = 1;
+  bail(
+    (error && error.message ? error.message : String(error)) +
+      ' — nothing was written.'
+  )
+  process.exitCode = 1
 }
