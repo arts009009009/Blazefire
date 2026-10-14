@@ -82,9 +82,12 @@ const BLAZEFIRE_BRANDING = {
   // reconciliation — which would throw if we deleted nodes it owns — is
   // never disturbed.
   logo: {
-    // Only these two carry Next's mark. The pagination/copy/close icons and
-    // the Node.js inspector glyph are not Next's identity and stay as-is.
-    selectors: ['#next-logo > svg', '.code-frame-icon > svg'],
+    // Only the dev-tools launcher carries Next's mark. Everything else in
+    // the overlay is functional chrome rather than Next's identity and stays
+    // as-is: the code-frame's file-type glyph and its "open in editor" arrow
+    // (both `.code-frame-icon`), the pagination/copy/close icons, and the
+    // Node.js inspector glyph.
+    selectors: ['#next-logo > svg'],
     // The custom emblem (assets/blazefire-logo.png), baked into
     // logo-data.cjs by build-logo-data.cjs so the client bundle needs no
     // fs access. When that module is absent, logoDataUri() falls back to
@@ -93,9 +96,8 @@ const BLAZEFIRE_BRANDING = {
     // SVG-flame fallback path/gradient (only used when the asset is absent).
     path: 'M12 1.5c1.9 3.9.7 6.2-1.1 8-2 2-3.4 3.9-3.4 6.7a4.5 4.5 0 0 0 9 0c0-2.2-1.1-3.9-2.5-5.4.3 2.3-.6 3.4-1.8 3.9.9-2.7-.4-5.2-2.5-7C9 6 11.6 4.2 12 1.5z',
     gradient: ['#ff8800', '#ff006e', '#00ffff', '#ff00ff'],
-    // Background sizing, per host element (the two glyphs sit in very
-    // differently sized boxes).
-    sizes: { '#next-logo > svg': '80%', '.code-frame-icon > svg': '92%' },
+    // Background sizing for the host element.
+    sizes: { '#next-logo > svg': '80%' },
   },
 
   // Palette — OLED-first cyberpunk
@@ -276,14 +278,22 @@ ${sel} {
     })
     .join('\n')
 
+  // The launcher's <svg> is 40x40 inside a 32x32 button, and the button is a
+  // flex row with Next's default `justify-content: start` — so the <svg>
+  // overflows 8px past its RIGHT edge and is only vertically centred. The
+  // emblem is centred on the <svg>, which puts it 4px right of the button's
+  // centre and makes it spill out of the button's circular background.
+  // Centring the <svg> horizontally lands its paint box exactly on the button.
+  const markHost = `#next-logo {
+  justify-content: center;
+}`
+
   return `
 ${selectors} {${tokens}}
-/* Blazefire gradient rail across the top of overlay panels.
-   The container panel uses the opaque-surface trick: layer 1 fills the
-   padding box so only the 2px top border shows layer 2's rail. The pill
-   (.nextjs-toast) must NOT do that — its body stays transparent so no box
-   sits behind the emblem, and the rail is drawn with border-image instead,
-   which only ever paints in the border area. */
+${markHost}
+/* Blazefire gradient rail across the top of the error-overlay container.
+   The indicator pill (.nextjs-toast) deliberately gets NO rail and no fill
+   — nothing is drawn above or around the emblem. */
 .nextjs-container {
   border-top: 2px solid transparent;
   background-image:
@@ -291,10 +301,6 @@ ${selectors} {${tokens}}
     ${branding.topBarGradient};
   background-origin: border-box;
   background-clip: padding-box, border-box;
-}
-.nextjs-toast {
-  border-top: 2px solid transparent;
-  border-image: ${branding.topBarGradient} 1;
 }
 /* Idle badge disc behind the emblem: drop Next's black fill, ring and drop
    shadow so the logo floats on the page. Scoped to data-error="false" so
