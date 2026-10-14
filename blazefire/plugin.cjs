@@ -54,6 +54,14 @@ const DEFAULTS = {
  * @returns {import('next').NextConfig}
  */
 function blazefire(first = {}, second) {
+  // Update check: fire-and-forget, dev-only, at most once per 24h. Must never
+  // gate or throw here — this runs inside next.config evaluation.
+  try {
+    require('./update-check.cjs').maybeNotify()
+  } catch (_) {
+    /* a missing notifier must never break the config */
+  }
+
   // Next's config export may itself be a function — sync or async:
   //   module.exports = (phase, { defaultConfig }) => ({ ... })
   // It has to be handled before the object path below, because a function has
