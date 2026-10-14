@@ -45,6 +45,27 @@ import { normalizeAppPath } from '../../../../shared/lib/router/utils/app-paths'
 import { normalizePathSep } from '../../../../shared/lib/page-path/normalize-path-sep'
 import { installBindings } from '../../../swc/install-bindings'
 
+const UNSAFE_CHAR_MAP: Record<string, string> = {
+  '<': '\\u003C',
+  '>': '\\u003E',
+  '/': '\\u002F',
+  '\\': '\\\\',
+  '\b': '\\b',
+  '\f': '\\f',
+  '\n': '\\n',
+  '\r': '\\r',
+  '\t': '\\t',
+  '\0': '\\0',
+  '\u2028': '\\u2028',
+  '\u2029': '\\u2029',
+}
+
+const UNSAFE_CHARS_REGEX = /[<>\/\\\b\f\n\r\t\0\u2028\u2029]/g
+
+function escapeUnsafeChars(str: string): string {
+  return str.replace(UNSAFE_CHARS_REGEX, (char) => UNSAFE_CHAR_MAP[char] ?? char)
+}
+
 export type AppLoaderOptions = {
   name: string
   page: string
@@ -1112,8 +1133,8 @@ const nextAppLoader: AppLoader = async function nextAppLoader() {
     `import { instrumentModuleGetter } from 'next/dist/server/app-render/module-loading/instrument-module-getter'\n` +
     collectedDeclarations
       .map(([varName, modulePath]) => {
-        return `const ${varName} = instrumentModuleGetter(() => import(/* webpackMode: "eager" */ ${JSON.stringify(
-          modulePath
+        return `const ${varName} = instrumentModuleGetter(() => import(/* webpackMode: "eager" */ ${escapeUnsafeChars(
+          JSON.stringify(modulePath)
         )}));\n`
       })
       .join('')
