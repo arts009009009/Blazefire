@@ -46,7 +46,8 @@
   ],
   "scripts": {
     "postinstall": "node blazefire/postinstall.cjs",
-    "build": "tsc",
+    "build": "node blazefire/build-logo-data.cjs && tsc",
+    "build:logo": "node blazefire/build-logo-data.cjs",
     "test": "jest",
     "prepublishOnly": "npm run build",
     "blazefire:dev": "echo 'Blazefire dev mode \u2014 use next dev from your project'"
