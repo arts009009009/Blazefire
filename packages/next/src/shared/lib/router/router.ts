@@ -665,7 +665,21 @@ function handleHardNavigation({
       `Invariant: attempted to hard navigate to the same URL ${url} ${location.href}`
     )
   }
-  window.location.href = url
+
+  let targetUrl: URL
+  try {
+    targetUrl = new URL(url, window.location.href)
+  } catch {
+    throw new Error(`Invariant: attempted to hard navigate to an invalid URL ${url}`)
+  }
+
+  if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+    throw new Error(
+      `Invariant: attempted to hard navigate to a non-http URL ${targetUrl.href}`
+    )
+  }
+
+  window.location.href = targetUrl.href
 }
 
 const getCancelledHandler = ({
