@@ -38,7 +38,6 @@ Blazefire
 
   Opt out of auto-activation on install with BLAZEFIRE_SKIP_AUTO=1.
   Opt out of the update check with BLAZEFIRE_SKIP_UPDATE_CHECK=1.
-`;
 `
 
 const command = (process.argv[2] || 'init').toLowerCase()
@@ -61,46 +60,50 @@ try {
     ) {
       process.exitCode = 1
     }
-  } else if (command === "restore" || command === "revert") {
-    process.exitCode = api.restore();
-  } else if (command === "update" || command === "upgrade") {
+  } else if (command === 'restore' || command === 'revert') {
+    process.exitCode = api.restore()
+  } else if (command === 'update' || command === 'upgrade') {
     // Async on purpose: the install is a child process, and nothing below
     // this block depends on it. Callback sets the exit code rather than
     // awaiting, so the CLI's synchronous shape is preserved.
-    const updates = require("./update-check.cjs");
-    const here = process.cwd();
-    const current = updates.getInstalledVersion();
-    console.log("  blazefire: updating from v" + (current || "?") + "…");
+    const updates = require('./update-check.cjs')
+    const here = process.cwd()
+    const current = updates.getInstalledVersion()
+    console.log('  blazefire: updating from v' + (current || '?') + '…')
     updates.runUpdate(here, function (code) {
       if (code === 0) {
-        console.log("  blazefire: done. Restart your dev server to pick it up.");
+        console.log('  blazefire: done. Restart your dev server to pick it up.')
       } else {
-        console.error("  blazefire: update failed (exit " + code + ").");
-        process.exitCode = 1;
+        console.error('  blazefire: update failed (exit ' + code + ').')
+        process.exitCode = 1
       }
-    });
-  } else if (command === "check" || command === "check-update" || command === "outdated") {
-    const updates = require("./update-check.cjs");
+    })
+  } else if (
+    command === 'check' ||
+    command === 'check-update' ||
+    command === 'outdated'
+  ) {
+    const updates = require('./update-check.cjs')
     updates.checkForUpdate().then(function (info) {
       if (!info) {
         console.log(
-          "  blazefire: could not reach the update feed (offline, or no releases published)."
-        );
-        return;
+          '  blazefire: could not reach the update feed (offline, or no releases published).'
+        )
+        return
       }
       console.log(
-        "  blazefire: installed v" + info.current + ", latest v" + info.latest + "."
-      );
+        '  blazefire: installed v' +
+          info.current +
+          ', latest v' +
+          info.latest +
+          '.'
+      )
       if (info.updateAvailable) {
-        console.log("  Run `npx blazefire update` to install it.");
+        console.log('  Run `npx blazefire update` to install it.')
       } else {
-        console.log("  You are up to date.");
+        console.log('  You are up to date.')
       }
-    });
-  } else if (command === "--help" || command === "-h" || command === "help") {
-    console.log(HELP.trim());
-  } else if (command === 'restore' || command === 'revert') {
-    process.exitCode = api.restore()
+    })
   } else if (command === '--help' || command === '-h' || command === 'help') {
     console.log(HELP.trim())
   } else {
