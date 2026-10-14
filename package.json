@@ -34,6 +34,8 @@
     "blazefire/plugin.cjs",
     "blazefire/plugin.d.ts",
     "blazefire/branding.cjs",
+    "blazefire/logo-data.cjs",
+    "blazefire/build-logo-data.cjs",
     "blazefire/runtime/",
     "blazefire/src/",
     "blazefire/assets/",
