@@ -82,6 +82,7 @@ export function BlazefireDevTools(props) {
   var showPanelFirst = position.indexOf('bottom') === 0;
   var panel = isOpenState[0]
     ? React.createElement(DevToolsPanel, {
+        key: 'panel',
         version: ctx.version,
         compiler: ctx.compiler,
         runtime: ctx.runtime,
@@ -131,7 +132,7 @@ export function BlazefireDevTools(props) {
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          alignItems: position.indexOf('left') === position.length - 4 ? 'flex-start' : 'flex-end',
+          alignItems: position.indexOf('-left') !== -1 ? 'flex-start' : 'flex-end',
         },
         positionStyles[position]
       ),
