@@ -1,38 +1,34 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect } from 'react'
+import React from 'react';
 
 export interface BlazefireLogoProps {
-  size?: number
-  className?: string
-  style?: React.CSSProperties
+  size?: number;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-export function BlazefireLogo({
-  size = 40,
-  className = '',
-  style,
-}: BlazefireLogoProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return (
-      <span style={{ width: size, height: size, display: 'inline-block' }} />
-    )
-  }
-
+/**
+ * Self-contained Blazefire flame mark.
+ *
+ * Rendered as an inline <svg> so it works in any React runtime (server,
+ * client, RSC) and any bundler without shipping or resolving an external
+ * image asset — a <img src={new URL(...)} approach breaks once the package
+ * is installed from a tarball that does not include the PNG, or when
+ * `import.meta.url` is rewritten to a chunk URL in the browser.
+ */
+export function BlazefireLogo({ size = 40, className = '', style }: BlazefireLogoProps) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 40 40"
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Blazefire"
       className={className}
-      style={style}
+      style={{ display: 'inline-block', verticalAlign: 'middle', ...style }}
     >
       <defs>
         <linearGradient
@@ -48,7 +44,7 @@ export function BlazefireLogo({
           <stop offset="0.7" stopColor="#ff006e" />
           <stop offset="1" stopColor="#cc00cc" />
         </linearGradient>
-        <filter id="blazefire-glow">
+        <filter id="blazefire-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="1" result="blur" />
           <feMerge>
             <feMergeNode in="blur" />
@@ -73,5 +69,5 @@ export function BlazefireLogo({
         />
       </g>
     </svg>
-  )
+  );
 }

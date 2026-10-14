@@ -17,7 +17,7 @@
  *   1. never throws; any failure is logged and swallowed (exit 0)
  *   2. only ever writes a next.config.* found in the project we were
  *      installed INTO, never our own package and never a random ancestor
- *   3. requires <project>/node_modules/next to exist before writing
+ *   3. requires Next.js to be resolvable from the project before writing
  *   4. copies the original into "<project>/Blazefire Backup/" first, and
  *      never overwrites an existing backup — the first copy is the pristine
  *      pre-Blazefire original
@@ -38,6 +38,7 @@
 'use strict'
 
 const fs = require('fs')
+const { createRequire } = require('module')
 const path = require('path')
 
 const CONFIG_NAMES = [
@@ -129,6 +130,23 @@ function declaresNext(pkg) {
   return dependencyBags(pkg).some((bag) =>
     Object.prototype.hasOwnProperty.call(bag, 'next')
   )
+}
+
+function hasInstalledNext(projectRoot) {
+  if (fs.existsSync(path.join(projectRoot, "node_modules", "next"))) return true;
+
+  try {
+    createRequire(path.join(projectRoot, "package.json")).resolve("next");
+    return true;
+  } catch (error) {
+    if (
+      error &&
+      (error.code === "MODULE_NOT_FOUND" || error.code === "UNDECLARED_DEPENDENCY")
+    ) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** Only a project that actually depends on us should get the hook. */
@@ -238,23 +256,6 @@ function blazefireInstalledAt(projectRoot) {
       fs.existsSync(path.join(dir, 'node_modules', 'blazefire', 'package.json'))
     )
       return true
-    const parent = path.dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  return false
-}
-
-/**
- * Is `next` installed for this project? Walks up for the same reason
- * {@link blazefireInstalledAt} does: a workspace child's dependencies are
- * hoisted to the monorepo root, so `<child>/node_modules/next` usually does
- * not exist even though the project runs Next fine.
- */
-function nextInstalledAt(projectRoot) {
-  let dir = path.resolve(projectRoot)
-  for (let i = 0; i < 16; i++) {
-    if (fs.existsSync(path.join(dir, 'node_modules', 'next'))) return true
     const parent = path.dirname(dir)
     if (parent === dir) break
     dir = parent
@@ -805,12 +806,12 @@ function run(opts) {
         return 'already'
       }
 
-      // Only ever write where `next` is genuinely installed — here or hoisted
-      // above. Checking this package alone meant a hoisted workspace (npm/yarn
-      // put `next` at the repo root) could never auto-activate, which is the
-      // exact layout `findWorkspaceProjects` exists to serve.
-      const hasInstalledNext = nextInstalledAt(root)
-      if (!hasInstalledNext && !(cli && declaresNext(pkg))) continue
+      // Only ever write where `next` is genuinely installed. Resolution runs
+      // through the project's own dependency context, so a hoisted workspace
+      // (npm/yarn put `next` at the repo root) and Yarn Plug'n'Play both work
+      // — the exact layout `findWorkspaceProjects` exists to serve.
+      const hasNext = hasInstalledNext(root)
+      if (!hasNext && !(cli && declaresNext(pkg))) continue
 
       activate(root, configPath, original)
       hookBoth(root, projectRoot)
@@ -828,7 +829,7 @@ function run(opts) {
     say(
       'found ' +
         path.basename(sawConfig.configPath) +
-        ' but node_modules/next is missing — skipped.'
+        ' but Next.js is not installed — skipped.'
     )
     say(
       'the next install will activate it automatically, or run: npx blazefire init'

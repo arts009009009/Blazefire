@@ -13,6 +13,8 @@
 
 # Blazefire Framework 🔥
 
+![Blazefire logo](./blazefire/assets/blazefire-logo.png)
+
 Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
 It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
 
@@ -33,19 +35,21 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 
 ## Installation
 
-Install straight from GitHub — the package is not published to npm.
+Install straight from GitHub — the package is not published to npm. For Yarn
+Berry, use the archive URL so Yarn does not require a Git repository approval.
 
 ```bash
+# npm
 npm install github:arts009009009/Blazefire
 
-# Yarn 1 (Classic) - use full HTTPS URL
-yarn add https://github.com/arts009009009/Blazefire
+# Yarn (Classic or Berry)
+yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
 
-# Yarn Berry (2+)
-yarn add blazefire@github:arts009009009/Blazefire
-
+# pnpm
 pnpm add github:arts009009009/Blazefire
-bun add  github:arts009009009/Blazefire
+
+# Bun
+bun add github:arts009009009/Blazefire
 ```
 
 That is all for npm, Yarn 1, and pnpm. Yarn Berry and pnpm each need one extra
@@ -91,6 +95,10 @@ Or skip the git allowlist entirely by installing the tarball:
 ```bash
 yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/tags/v1.0.0.tar.gz
 ```
+
+Using Yarn Plug'n'Play instead (no `node_modules`)? Run `yarn blazefire init`
+rather than `npx`, so Yarn loads its PnP environment and `next` resolves
+through it.
 
 This is **one-time** setup: once the hook exists in `package.json`,
 project scripts always run regardless of `enableScripts`, so later
@@ -149,19 +157,17 @@ outcome is deterministic.
 ### Not supported: Deno
 
 Deno's installer only resolves npm-registry and JSR specifiers, so it drops
-`github:` (and `git+https`) dependencies without an error. Use npm, yarn or
-pnpm to install, then run `npx blazefire init`.
+`github:` (and `git+https`) dependencies without an error. Use npm, Yarn, pnpm,
+or Bun to install, then run `npx blazefire init`.
 
-### Fallback (any manager, incl. `--ignore-scripts`)
+### Restore
+
+To undo activation, restore the original config and remove Blazefire's
+postinstall hook:
 
 ```bash
-npx blazefire init      # activate
-npx blazefire restore   # put the original config back AND remove the hook
+npx blazefire restore
 ```
-
-`init` never exits non-zero when it is running as your `postinstall` — a
-deleted `next.config.*` must not be able to brick your install — but it still
-exits 1 when you invoke it yourself and finds nothing to do.
 
 Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
 is written, and an existing hook honours the flag too.

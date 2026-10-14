@@ -11,7 +11,9 @@
 // The emblem, baked in as a data URI (see build-logo-data.cjs). Required in
 // a try/catch because this module also runs inside the client bundle, where
 // a missing generated file must degrade to the SVG flame, not break the
-// build's runtime.
+// build's runtime. Deliberately NOT read from disk at runtime: `fs` does not
+// exist in the browser bundle, so a synchronous read here would throw at
+// import time.
 let LOGO_ASSET_DATA_URI = ''
 try {
   LOGO_ASSET_DATA_URI = require('./logo-data.cjs')
@@ -82,12 +84,9 @@ const BLAZEFIRE_BRANDING = {
   // reconciliation — which would throw if we deleted nodes it owns — is
   // never disturbed.
   logo: {
-    // Only the dev-tools launcher carries Next's mark. Everything else in
-    // the overlay is functional chrome rather than Next's identity and stays
-    // as-is: the code-frame's file-type glyph and its "open in editor" arrow
-    // (both `.code-frame-icon`), the pagination/copy/close icons, and the
-    // Node.js inspector glyph.
-    selectors: ['#next-logo > svg'],
+    // Only these two carry Next's mark. The pagination/copy/close icons and
+    // the Node.js inspector glyph are not Next's identity and stay as-is.
+    selectors: ['#next-logo > svg', '.code-frame-icon > svg'],
     // The custom emblem (assets/blazefire-logo.png), baked into
     // logo-data.cjs by build-logo-data.cjs so the client bundle needs no
     // fs access. When that module is absent, logoDataUri() falls back to
@@ -96,8 +95,9 @@ const BLAZEFIRE_BRANDING = {
     // SVG-flame fallback path/gradient (only used when the asset is absent).
     path: 'M12 1.5c1.9 3.9.7 6.2-1.1 8-2 2-3.4 3.9-3.4 6.7a4.5 4.5 0 0 0 9 0c0-2.2-1.1-3.9-2.5-5.4.3 2.3-.6 3.4-1.8 3.9.9-2.7-.4-5.2-2.5-7C9 6 11.6 4.2 12 1.5z',
     gradient: ['#ff8800', '#ff006e', '#00ffff', '#ff00ff'],
-    // Background sizing for the host element.
-    sizes: { '#next-logo > svg': '80%' },
+    // Background sizing, per host element (the two glyphs sit in very
+    // differently sized boxes).
+    sizes: { '#next-logo > svg': '62%', '.code-frame-icon > svg': '92%' },
   },
 
   // Palette — OLED-first cyberpunk
@@ -168,15 +168,25 @@ html { color-scheme: dark; }
 }
 
 /**
- * The flame mark as a self-contained `data:` URI.
+ * The Blazefire logo as a self-contained `data:` URI.
  *
- * Built here so the gradient stays in sync with `logo.gradient` and the mark
- * can be referenced from a stylesheet without shipping an asset.
+ * The package asset is inlined so the overlay can use it from its shadow root.
  *
  * @param {typeof BLAZEFIRE_BRANDING} [branding]
  * @returns {string}
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
+  if (branding.logo === BLAZEFIRE_BRANDING.logo) {
+    const logoPath = path.join(__dirname, 'assets', 'blazefire-logo.png')
+    try {
+      return `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+    } catch (err) {
+      // The PNG may not be present (e.g. installed from a GitHub tarball that
+      // does not include the asset). Fall through to the self-contained SVG
+      // instead of throwing during config load.
+    }
+  }
+
   const g = branding.logo.gradient
   const stops = g
     .map(

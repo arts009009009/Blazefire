@@ -12,6 +12,19 @@
 export const BLAZEFIRE_VERSION = '1.0.0'
 export const FROSTFAST_VERSION = '1.0.0'
 
+// Self-contained inline SVG flame mark, used by createBlazefireLogo() below.
+var BLAZEFIRE_LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">' +
+  '<defs><linearGradient id="bf-flame" x1="20" y1="5" x2="20" y2="35" gradientUnits="userSpaceOnUse">' +
+  '<stop stop-color="#ff8800"/><stop offset="0.4" stop-color="#ff4400"/>' +
+  '<stop offset="0.7" stop-color="#ff006e"/><stop offset="1" stop-color="#cc00cc"/>' +
+  '</linearGradient></defs>' +
+  '<path d="M20 3C20 3 30 14 30 23C30 28 25.5 32 20 32C14.5 32 10 28 10 23C10 14 20 3 20 3Z" fill="url(#bf-flame)"/>' +
+  '<path d="M20 11C20 11 25 18 25 23C25 25.8 22.8 28 20 28C17.2 28 15 25.8 15 23C15 18 20 11 20 11Z" fill="url(#bf-flame)" opacity="0.6"/>' +
+  '<path d="M20 16C20 16 22.5 20 22.5 23C22.5 24.4 21.4 25.5 20 25.5C18.6 25.5 17.5 24.4 17.5 23C17.5 20 20 16 20 16Z" fill="#ffcc00" opacity="0.8"/>' +
+  '</svg>'
+var BLAZEFIRE_LOGO_URL = 'data:image/svg+xml,' + encodeURIComponent(BLAZEFIRE_LOGO_SVG)
+
 /** SSR-safe style injection — a no-op on the server. */
 export function insertBlazefireStyles() {
   if (typeof document === 'undefined') return
@@ -68,33 +81,25 @@ function getBlazefireCSS() {
   `
 }
 
-/** Returns the flame mark as a standalone SVG string. */
+/**
+ * The flame mark as a self-contained `<img>` string.
+ *
+ * The image URL is an inline SVG data URI rather than `new URL('./assets/
+ * blazefire-logo.png', import.meta.url)`: that broke when the PNG was not
+ * shipped with the package, and `import.meta.url` is rewritten to the bundled
+ * chunk URL in the browser so the relative path 404'd anyway. A data URI needs
+ * no external asset and works in SSR, the browser, and any bundler.
+ */
 export function createBlazefireLogo(size) {
   size = size || 40
   return (
-    '<svg width="' +
+    '<img src="' +
+    BLAZEFIRE_LOGO_URL +
+    '" width="' +
     size +
     '" height="' +
     size +
-    '" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<defs>' +
-    '<linearGradient id="bf-flame" x1="20" y1="5" x2="20" y2="35" gradientUnits="userSpaceOnUse">' +
-    '<stop stop-color="#ff8800"/>' +
-    '<stop offset="0.4" stop-color="#ff4400"/>' +
-    '<stop offset="0.7" stop-color="#ff006e"/>' +
-    '<stop offset="1" stop-color="#cc00cc"/>' +
-    '</linearGradient>' +
-    '<filter id="bf-glow">' +
-    '<feGaussianBlur stdDeviation="1" result="blur"/>' +
-    '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
-    '</filter>' +
-    '</defs>' +
-    '<g filter="url(#bf-glow)">' +
-    '<path d="M20 3C20 3 30 14 30 23C30 28 25.5 32 20 32C14.5 32 10 28 10 23C10 14 20 3 20 3Z" fill="url(#bf-flame)"/>' +
-    '<path d="M20 11C20 11 25 18 25 23C25 25.8 22.8 28 20 28C17.2 28 15 25.8 15 23C15 18 20 11 20 11Z" fill="url(#bf-flame)" opacity="0.6"/>' +
-    '<path d="M20 16C20 16 22.5 20 22.5 23C22.5 24.4 21.4 25.5 20 25.5C18.6 25.5 17.5 24.4 17.5 23C17.5 20 20 16 20 16Z" fill="#ffcc00" opacity="0.8"/>' +
-    '</g>' +
-    '</svg>'
+    '" alt="Blazefire" style="object-fit:contain" draggable="false">'
   )
 }
 

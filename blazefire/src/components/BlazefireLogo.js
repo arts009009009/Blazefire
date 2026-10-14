@@ -1,23 +1,20 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect } from 'react'
+import React from 'react';
 
+/**
+ * Self-contained Blazefire flame mark.
+ *
+ * Rendered as an inline <svg> so it works in any React runtime and any
+ * bundler without shipping or resolving an external image asset — an
+ * <img src={new URL(...)} approach breaks once the package is installed
+ * from a tarball that does not include the PNG, or when `import.meta.url`
+ * is rewritten to a chunk URL in the browser.
+ */
 export function BlazefireLogo(props) {
-  var size = props.size || 40
-  var className = props.className || ''
-  var style = props.style
-  var mounted = useState(false)
-  var setMounted = mounted[1]
-
-  useEffect(function () {
-    setMounted(true)
-  }, [])
-
-  if (!mounted[0]) {
-    return React.createElement('span', {
-      style: { width: size, height: size, display: 'inline-block' },
-    })
-  }
+  var size = (props && props.size) || 40;
+  var className = (props && props.className) || '';
+  var style = (props && props.style) || undefined;
 
   return React.createElement(
     'svg',
@@ -26,8 +23,11 @@ export function BlazefireLogo(props) {
       height: size,
       viewBox: '0 0 40 40',
       fill: 'none',
+      xmlns: 'http://www.w3.org/2000/svg',
+      role: 'img',
+      'aria-label': 'Blazefire',
       className: className,
-      style: style,
+      style: Object.assign({ display: 'inline-block', verticalAlign: 'middle' }, style),
     },
     React.createElement(
       'defs',
@@ -49,11 +49,8 @@ export function BlazefireLogo(props) {
       ),
       React.createElement(
         'filter',
-        { id: 'blazefire-glow' },
-        React.createElement('feGaussianBlur', {
-          stdDeviation: '1',
-          result: 'blur',
-        }),
+        { id: 'blazefire-glow', x: '-50%', y: '-50%', width: '200%', height: '200%' },
+        React.createElement('feGaussianBlur', { stdDeviation: '1', result: 'blur' }),
         React.createElement(
           'feMerge',
           null,
@@ -80,5 +77,5 @@ export function BlazefireLogo(props) {
         opacity: '0.8',
       })
     )
-  )
+  );
 }
