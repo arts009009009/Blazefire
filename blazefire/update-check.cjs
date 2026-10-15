@@ -25,7 +25,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
-const { spawn } = require('child_process')
+const { spawn, spawnSync } = require('child_process')
 
 /** Where updates come from. Overridable for testing and for forks. */
 const DEFAULT_REPO = 'arts009009009/Blazefire'
@@ -222,9 +222,11 @@ function detectPackageManager(projectRoot) {
  * The specifier the user installed us with — a branch, a tag, a tarball URL.
  *
  * Re-adding the *same* spec is what "update" means for a git dependency: a
- * `github:owner/repo` ref re-resolves to the branch tip, while an immutable
- * tarball URL correctly resolves to the same commit (nothing to update to,
- * and pretending otherwise would be a lie).
+ * `github:owner/repo` ref re-resolves to the branch tip, and a branch archive
+ * URL (`…/archive/refs/heads/main.tar.gz`) re-downloads the tip once
+ * purgeCachedInstall() has cleared the manager's cached copy of it. An
+ * immutable, commit-pinned tarball URL correctly resolves to the same commit
+ * (nothing to update to, and pretending otherwise would be a lie).
  */
 function readInstalledSpec(projectRoot) {
   try {
@@ -256,6 +258,394 @@ function updateCommand(projectRoot, manager) {
       return { command: 'bun', args: ['add', spec] }
     default:
       return { command: 'npm', args: ['install', spec] }
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * cache invalidation — why `add` alone is not an update
+ *
+ * Re-running `<pm> add <same spec>` re-downloads nothing on yarn (both
+ * flavours) and pnpm: those managers key their caches by specifier, never by
+ * content, so the first download is reused forever. Measured directly — a
+ * local server that changed the tarball behind the same URL — every one of
+ * them kept installing the old copy, while npm revalidated and picked up the
+ * new one. The updater therefore clears blazefire's cached traces first, so
+ * the add that follows really is an update.
+ *
+ *   yarn berry    the yarn.lock entry (it pins the old checksum), the
+ *                 `blazefire-*.zip` cache in every cache dir, and the
+ *                 installed copy — the linker skips a package whose locator
+ *                 has not changed, so deleting node_modules matters as much
+ *                 as deleting the cache.
+ *   yarn classic  the yarn.lock entry, <cache>/v6/npm-blazefire-* dirs, the
+ *                 hash-named .tmp resolution metadata (which survives
+ *                 `yarn cache clean`), node_modules/.yarn-integrity, and the
+ *                 installed copy.
+ *   pnpm          the entries in pnpm-lock.yaml and node_modules/.pnpm/lock.yaml,
+ *                 the per-URL side entry under `pnpm store path` (its manifest
+ *                 cache), and the installed copy.
+ *   npm           revalidates tarball URLs on its own — nothing to clear.
+ *   bun           not measured; left alone rather than guessed at.
+ *
+ * Best-effort by design (rule 1 above): an unusual layout yields fewer
+ * removals, never a thrown error. Returns the paths that were removed so
+ * callers can report that something actually happened.
+ * ------------------------------------------------------------------ */
+
+/** Delete one top-level-entry block (column-0 key) from a yarn.lock. */
+function removeYarnLockEntry(file) {
+  let text
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (_) {
+    return false
+  }
+
+  const lines = text.split('\n')
+  const kept = []
+  let skipping = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    // Top-level keys start at column 0; comments and indented fields do not.
+    if (/^[^\s#]/.test(line)) skipping = /^"?blazefire@/.test(line)
+    if (!skipping) kept.push(line)
+  }
+
+  const next = kept.join('\n').replace(/\n{3,}/g, '\n\n')
+  if (next === text) return false
+  try {
+    fs.writeFileSync(file, next)
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/** Delete the two-space-indented `blazefire@…` blocks from a pnpm lockfile. */
+function removePnpmLockEntry(file) {
+  let text
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (_) {
+    return false
+  }
+
+  const lines = text.split('\n')
+  const kept = []
+  let skipping = false
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (/^ {2}blazefire@/.test(line)) {
+      skipping = true
+    } else if (skipping && line.trim() !== '' && !/^ {4}/.test(line)) {
+      // A non-empty line that is not part of our entry ends it; blank lines
+      // inside the block are ours to drop with it.
+      skipping = false
+    }
+    if (!skipping) kept.push(line)
+  }
+
+  const next = kept.join('\n').replace(/\n{3,}/g, '\n\n')
+  if (next === text) return false
+  try {
+    fs.writeFileSync(file, next)
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/** Remove one path (dir, file, or even a dangling symlink). */
+function removePath(target) {
+  try {
+    fs.lstatSync(target)
+  } catch (_) {
+    return false
+  }
+  try {
+    fs.rmSync(target, { recursive: true, force: true })
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/**
+ * Clear blazefire's entries from one package-manager cache directory.
+ *
+ * Covers both layouts that matter: Berry (`blazefire-*.zip` at the top) and
+ * Classic (`v6/npm-blazefire-*` plus the hash-named `.tmp` resolution
+ * metadata, whose keys contain no package name at all and must be
+ * recognised by content).
+ */
+function purgeCacheDir(dir) {
+  const removed = []
+
+  const entries = function (base) {
+    try {
+      return fs.readdirSync(base, { withFileTypes: true })
+    } catch (_) {
+      return []
+    }
+  }
+
+  const scan = function (base) {
+    const list = entries(base)
+    for (let i = 0; i < list.length; i++) {
+      if (!/blazefire/i.test(list[i].name)) continue
+      if (removePath(path.join(base, list[i].name))) {
+        removed.push(path.join(base, list[i].name))
+      }
+    }
+  }
+
+  scan(dir)
+  scan(path.join(dir, 'v6'))
+
+  const tmpRoots = [path.join(dir, '.tmp'), path.join(dir, 'v6', '.tmp')]
+  for (let r = 0; r < tmpRoots.length; r++) {
+    const list = entries(tmpRoots[r])
+    for (let i = 0; i < list.length; i++) {
+      if (!list[i].isDirectory()) continue
+      const holder = path.join(tmpRoots[r], list[i].name)
+      try {
+        const meta = fs.readFileSync(
+          path.join(holder, '.yarn-metadata.json'),
+          'utf8'
+        )
+        if (/blazefire/i.test(meta) && removePath(holder)) removed.push(holder)
+      } catch (_) {
+        /* not ours, or already gone */
+      }
+    }
+  }
+
+  return removed
+}
+
+/** `cacheFolder` / `globalFolder` overrides from the project's yarn config. */
+function yarnCacheFoldersFromConfig(root) {
+  const found = []
+  const resolve = function (value) {
+    const clean = String(value).trim()
+    return path.isAbsolute(clean) ? clean : path.join(root, clean)
+  }
+
+  try {
+    const yml = fs.readFileSync(path.join(root, '.yarnrc.yml'), 'utf8')
+    let m = yml.match(/^\s*cacheFolder:\s*"?([^"\n#]+?)"?\s*$/m)
+    if (m) found.push(resolve(m[1]))
+    m = yml.match(/^\s*globalFolder:\s*"?([^"\n#]+?)"?\s*$/m)
+    if (m) found.push(path.join(resolve(m[1]), 'cache'))
+  } catch (_) {
+    /* no Berry config */
+  }
+
+  try {
+    const ini = fs.readFileSync(path.join(root, '.yarnrc'), 'utf8')
+    const m =
+      ini.match(/^\s*cache-folder\s+"([^"]+)"/m) ||
+      ini.match(/^\s*cache-folder\s+(\S+)/m)
+    if (m) found.push(resolve(m[1]))
+  } catch (_) {
+    /* no Classic config */
+  }
+
+  return found
+}
+
+/** Every place yarn (Berry or Classic) could be holding a cached copy. */
+function yarnCacheFolders(root, options) {
+  const home = (options && options.homeDir) || os.homedir()
+  const found = []
+  const add = function (dir) {
+    if (dir && found.indexOf(dir) === -1) found.push(dir)
+  }
+
+  if (process.env.YARN_CACHE_FOLDER) add(process.env.YARN_CACHE_FOLDER)
+  add(path.join(root, '.yarn', 'cache'))
+  add(path.join(home, '.yarn', 'berry', 'cache'))
+  add(path.join(home, '.cache', 'yarn'))
+  if (process.env.LOCALAPPDATA) {
+    add(path.join(process.env.LOCALAPPDATA, 'Yarn', 'Cache'))
+  }
+
+  const configured = yarnCacheFoldersFromConfig(root)
+  for (let i = 0; i < configured.length; i++) add(configured[i])
+
+  return found
+}
+
+function purgeYarnInstall(root, options) {
+  const removed = []
+
+  const lock = path.join(root, 'yarn.lock')
+  if (removeYarnLockEntry(lock)) removed.push(lock)
+
+  const folders = yarnCacheFolders(root, options)
+  for (let i = 0; i < folders.length; i++) {
+    const hits = purgeCacheDir(folders[i])
+    for (let j = 0; j < hits.length; j++) removed.push(hits[j])
+  }
+
+  // The installed copy — without this the linker sees an unchanged locator
+  // and never re-extracts the freshly downloaded package.
+  if (removePath(path.join(root, 'node_modules', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', 'blazefire'))
+  }
+  if (removePath(path.join(root, 'node_modules', '.bin', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', '.bin', 'blazefire'))
+  }
+  // Classic's resolution snapshot (Berry's .yarn-state.yml needs no touch:
+  // with the copy gone it relinks anyway).
+  if (removePath(path.join(root, 'node_modules', '.yarn-integrity'))) {
+    removed.push(path.join(root, 'node_modules', '.yarn-integrity'))
+  }
+
+  const unplugged = path.join(root, '.yarn', 'unplugged')
+  let entries = []
+  try {
+    entries = fs.readdirSync(unplugged)
+  } catch (_) {
+    entries = []
+  }
+  for (let i = 0; i < entries.length; i++) {
+    if (!/blazefire/i.test(entries[i])) continue
+    const target = path.join(unplugged, entries[i])
+    if (removePath(target)) removed.push(target)
+  }
+
+  return removed
+}
+
+/** Where pnpm keeps its store for *this* project (the location varies). */
+function pnpmStoreDir(root, options) {
+  if (options && options.pnpmStorePath) return options.pnpmStorePath
+  try {
+    const res = spawnSync('pnpm', ['store', 'path'], {
+      cwd: root,
+      encoding: 'utf8',
+      timeout: 15000,
+      windowsHide: true,
+    })
+    if (res && res.status === 0) {
+      const out = String(res.stdout || '')
+        .split('\n')
+        .map(function (line) {
+          return line.trim()
+        })
+        .filter(Boolean)
+      if (out.length) return out[out.length - 1]
+    }
+  } catch (_) {
+    /* pnpm missing or not runnable — nothing to clear */
+  }
+  return null
+}
+
+/** How pnpm mangles a spec into a side-store directory name. */
+function pnpmSideEntryNames(spec) {
+  const names = []
+  if (typeof spec !== 'string' || !spec) return names
+  names.push(spec.replace(/[^a-zA-Z0-9.]/g, '+'))
+  const keepDash = spec.replace(/[^a-zA-Z0-9.-]/g, '+')
+  if (keepDash !== names[0]) names.push(keepDash)
+  return names
+}
+
+function purgePnpmSideEntries(root, spec, options) {
+  const removed = []
+  const store = pnpmStoreDir(root, options)
+  if (!store) return removed
+
+  const names = pnpmSideEntryNames(spec)
+
+  // `github:owner/repo` specs end up keyed by the redirected codeload URL
+  // (`…/tar.gz/<commit>`), which the literal names above cannot predict —
+  // match on the spec's last path segment instead. Short tokens are skipped
+  // so a 1-letter repo name cannot sweep unrelated entries along.
+  let token = ''
+  if (typeof spec === 'string' && spec) {
+    const parts = spec.split(/[/?#]/).filter(Boolean)
+    token = (parts[parts.length - 1] || '').replace(/\.(tar\.gz|tgz|zip)$/i, '')
+  }
+
+  let entries = []
+  try {
+    entries = fs.readdirSync(store)
+  } catch (_) {
+    return removed
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const name = entries[i]
+    const hit =
+      names.indexOf(name) !== -1 ||
+      (token.length >= 4 &&
+        name.toLowerCase().indexOf('+' + token.toLowerCase()) !== -1)
+    if (!hit) continue
+    const target = path.join(store, name)
+    if (removePath(target)) removed.push(target)
+  }
+
+  return removed
+}
+
+function purgePnpmInstall(root, spec, options) {
+  const removed = []
+
+  const locks = [
+    path.join(root, 'pnpm-lock.yaml'),
+    path.join(root, 'node_modules', '.pnpm', 'lock.yaml'),
+  ]
+  for (let i = 0; i < locks.length; i++) {
+    if (removePnpmLockEntry(locks[i])) removed.push(locks[i])
+  }
+
+  if (removePath(path.join(root, 'node_modules', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', 'blazefire'))
+  }
+  if (removePath(path.join(root, 'node_modules', '.bin', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', '.bin', 'blazefire'))
+  }
+
+  const virtualStore = path.join(root, 'node_modules', '.pnpm')
+  let entries = []
+  try {
+    entries = fs.readdirSync(virtualStore)
+  } catch (_) {
+    entries = []
+  }
+  for (let i = 0; i < entries.length; i++) {
+    if (!/^blazefire@/i.test(entries[i])) continue
+    const target = path.join(virtualStore, entries[i])
+    if (removePath(target)) removed.push(target)
+  }
+
+  const side = purgePnpmSideEntries(root, spec, options)
+  for (let i = 0; i < side.length; i++) removed.push(side[i])
+
+  return removed
+}
+
+/**
+ * Clear every cached trace of blazefire for `manager` so the `<pm> add` that
+ * follows re-downloads. See the block comment above for the per-manager
+ * vectors. Returns the removed paths (empty when there was nothing to do —
+ * including for npm and bun).
+ */
+function purgeCachedInstall(projectRoot, manager, spec, options) {
+  try {
+    const root = projectRoot || process.cwd()
+    if (manager === 'yarn') return purgeYarnInstall(root, options)
+    if (manager === 'pnpm') {
+      const target =
+        typeof spec === 'string' && spec ? spec : readInstalledSpec(root)
+      return purgePnpmInstall(root, target, options)
+    }
+    return []
+  } catch (_) {
+    return []
   }
 }
 
