@@ -250,8 +250,12 @@ function readInstalledSpec(projectRoot) {
 function updateCommand(projectRoot, manager) {
   const spec = readInstalledSpec(projectRoot)
   switch (manager) {
-    case 'yarn':
-      return { command: 'yarn', args: ['add', spec] }
+    case 'yarn': {
+      // Yarn 4 refuses a bare tarball URL ("package names to be explicitly
+      // specified") and wants `name@spec`; Yarn 1 accepts that shape too, so
+      // one form serves both.
+      return { command: 'yarn', args: ['add', 'blazefire@' + spec] }
+    }
     case 'pnpm':
       return { command: 'pnpm', args: ['add', spec] }
     case 'bun':

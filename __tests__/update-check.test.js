@@ -239,7 +239,8 @@ describe('updateCommand', () => {
     })
     expect(updates.updateCommand(scratch, 'yarn')).toEqual({
       command: 'yarn',
-      args: ['add', spec],
+      // Yarn 4 refuses a bare URL (or any other spec) without the name.
+      args: ['add', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'pnpm')).toEqual({
       command: 'pnpm',
