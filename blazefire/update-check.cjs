@@ -662,6 +662,18 @@ function runUpdate(projectRoot, callback) {
   const command = cmd.command
   const args = cmd.args
 
+  // Re-adding the same specifier re-downloads nothing on yarn/pnpm — clear
+  // the cached copy first so this really is an update (best-effort, never
+  // throws; see purgeCachedInstall).
+  const removed = purgeCachedInstall(root, manager, args[args.length - 1])
+  if (removed.length) {
+    try {
+      console.log('  blazefire: cleared the cached copy so the reinstall is fresh…')
+    } catch (_) {
+      /* stdout gone — the child's output still streams below */
+    }
+  }
+
   const isWin = process.platform === 'win32'
   const child = isWin
     ? spawn(command + ' ' + args.join(' '), {
@@ -873,6 +885,7 @@ module.exports = {
   getRepoSlug,
   maybeNotify,
   promptYesNo,
+  purgeCachedInstall,
   readInstalledSpec,
   readState,
   recentlyChecked,
