@@ -288,7 +288,10 @@ function updateCommand(projectRoot, manager) {
  *   pnpm          the entries in pnpm-lock.yaml and node_modules/.pnpm/lock.yaml,
  *                 the per-URL side entry under `pnpm store path` (its manifest
  *                 cache), and the installed copy.
- *   npm           revalidates tarball URLs on its own — nothing to clear.
+ *   npm           the package-lock.json entry (it pins `resolved` + `integrity`
+ *                 for the URL, which npm then satisfies straight from cacache
+ *                 with no HTTP at all), the cacache index entry keyed by the
+ *                 tarball URL, and the installed copy.
  *   bun           not measured; left alone rather than guessed at.
  *
  * Best-effort by design (rule 1 above): an unusual layout yields fewer
