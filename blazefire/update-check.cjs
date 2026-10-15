@@ -562,11 +562,12 @@ function purgePnpmSideEntries(root, spec, options) {
 
   // `github:owner/repo` specs end up keyed by the redirected codeload URL
   // (`…/tar.gz/<commit>`), which the literal names above cannot predict —
-  // match on the spec's last path segment instead. Short tokens are skipped
-  // so a 1-letter repo name cannot sweep unrelated entries along.
+  // match on the spec's repo/path segment instead (ref stripped first, so
+  // `github:o/r#dev` matches on `o/r`, not on `dev`). Short tokens are
+  // skipped so a 1-letter repo name cannot sweep unrelated entries along.
   let token = ''
   if (typeof spec === 'string' && spec) {
-    const parts = spec.split(/[/?#]/).filter(Boolean)
+    const parts = spec.split('#')[0].split(/[/?]/).filter(Boolean)
     token = (parts[parts.length - 1] || '').replace(/\.(tar\.gz|tgz|zip)$/i, '')
   }
 
