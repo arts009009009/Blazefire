@@ -689,17 +689,106 @@ describe('purgeCachedInstall', () => {
     expect(fs.existsSync(other)).toBe(true)
   })
 
-  test('npm and bun are left untouched (npm refetches on its own)', () => {
+  test('npm: lockfiles, installed copy and the URL cache entry are cleared', () => {
+    // v2-style lock: packages tree *and* the parallel legacy dependencies tree.
+    fs.writeFileSync(
+      path.join(scratch, 'package-lock.json'),
+      JSON.stringify(
+        {
+          name: 'app',
+          lockfileVersion: 2,
+          requires: true,
+          packages: {
+            '': { name: 'app', dependencies: { blazefire: SPEC } },
+            'node_modules/blazefire': {
+              version: '5.0.0',
+              resolved: SPEC,
+              integrity: 'sha512-abc',
+              bin: { blazefire: 'cli.js' },
+            },
+            'node_modules/react': { version: '19.0.0' },
+            'node_modules/x/node_modules/blazefire': {
+              version: '1.0.0',
+              resolved: SPEC,
+            },
+          },
+          dependencies: {
+            blazefire: { version: '5.0.0', resolved: SPEC, integrity: 'sha512-abc' },
+            react: { version: '19.0.0' },
+          },
+        },
+        null,
+        2
+      )
+    )
+    fs.writeFileSync(
+      path.join(scratch, 'npm-shrinkwrap.json'),
+      JSON.stringify({
+        lockfileVersion: 1,
+        dependencies: {
+          blazefire: { version: '5.0.0', resolved: SPEC },
+          react: { version: '19.0.0' },
+        },
+      })
+    )
+
+    // npm's cacache index entry for the URL: sha256 of the request-cache key.
+    const crypto = require('crypto')
+    const cacheDir = path.join(scratch, '.npm')
+    const hash = crypto
+      .createHash('sha256')
+      .update('make-fetch-happen:request-cache:' + SPEC)
+      .digest('hex')
+    const entry = path.join(
+      cacheDir,
+      'index-v5',
+      hash.slice(0, 2),
+      hash.slice(2, 4),
+      hash.slice(4)
+    )
+    const otherEntry = path.join(cacheDir, 'index-v5', 'aa', 'bb', 'cccc')
+    fs.mkdirSync(path.dirname(entry), { recursive: true })
+    fs.mkdirSync(path.dirname(otherEntry), { recursive: true })
+    fs.writeFileSync(entry, 'our key')
+    fs.writeFileSync(otherEntry, 'someone else')
+
     fs.mkdirSync(path.join(scratch, 'node_modules', 'blazefire'), {
       recursive: true,
     })
-    fs.writeFileSync(path.join(scratch, 'pnpm-lock.yaml'), 'blazefire@x:\n')
+    fs.mkdirSync(path.join(scratch, 'node_modules', '.bin'))
+    fs.writeFileSync(path.join(scratch, 'node_modules', '.bin', 'blazefire'), 'x')
 
-    for (const manager of ['npm', 'bun']) {
-      expect(updates.purgeCachedInstall(scratch, manager, SPEC, home())).toEqual(
-        []
-      )
-    }
+    const removed = updates.purgeCachedInstall(scratch, 'npm', SPEC, {
+      homeDir: scratch,
+      npmCachePath: cacheDir,
+    })
+
+    const lock = JSON.parse(fs.readFileSync(path.join(scratch, 'package-lock.json'), 'utf8'))
+    expect(lock.packages['node_modules/blazefire']).toBeUndefined()
+    expect(lock.packages['node_modules/x/node_modules/blazefire']).toBeUndefined()
+    expect(lock.packages['node_modules/react']).toEqual({ version: '19.0.0' })
+    expect(lock.dependencies.blazefire).toBeUndefined()
+    expect(lock.dependencies.react).toEqual({ version: '19.0.0' })
+
+    const shrink = JSON.parse(
+      fs.readFileSync(path.join(scratch, 'npm-shrinkwrap.json'), 'utf8')
+    )
+    expect(shrink.dependencies.blazefire).toBeUndefined()
+    expect(shrink.dependencies.react).toEqual({ version: '19.0.0' })
+
+    expect(fs.existsSync(entry)).toBe(false)
+    expect(fs.existsSync(otherEntry)).toBe(true)
+    expect(exists('node_modules/blazefire')).toBe(false)
+    expect(exists('node_modules/.bin/blazefire')).toBe(false)
+    expect(removed).toContain(path.join(scratch, 'package-lock.json'))
+    expect(removed.length).toBeGreaterThan(2)
+  })
+
+  test('bun is left alone (its lock behaviour is not measured)', () => {
+    fs.mkdirSync(path.join(scratch, 'node_modules', 'blazefire'), {
+      recursive: true,
+    })
+    expect(updates.purgeCachedInstall(scratch, 'bun', SPEC, home())).toEqual([])
     expect(exists('node_modules/blazefire')).toBe(true)
   })
 

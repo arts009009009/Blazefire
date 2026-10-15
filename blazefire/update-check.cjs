@@ -269,12 +269,13 @@ function updateCommand(projectRoot, manager) {
  * cache invalidation — why `add` alone is not an update
  *
  * Re-running `<pm> add <same spec>` re-downloads nothing on yarn (both
- * flavours) and pnpm: those managers key their caches by specifier, never by
- * content, so the first download is reused forever. Measured directly — a
- * local server that changed the tarball behind the same URL — every one of
- * them kept installing the old copy, while npm revalidated and picked up the
- * new one. The updater therefore clears blazefire's cached traces first, so
- * the add that follows really is an update.
+ * flavours), pnpm, or npm-with-a-lockfile: those managers key their caches by
+ * specifier, never by content, so the first download is reused forever.
+ * Measured directly — a local server that changed the tarball behind the same
+ * URL — each of them kept installing the old copy (npm only revalidated when
+ * no package-lock.json entry pinned the old integrity). The updater
+ * therefore clears blazefire's cached traces first, so the add that follows
+ * really is an update.
  *
  *   yarn berry    the yarn.lock entry (it pins the old checksum), the
  *                 `blazefire-*.zip` cache in every cache dir, and the
@@ -637,15 +638,119 @@ function purgePnpmInstall(root, spec, options) {
 }
 
 /**
+ * Drop blazefire's entry from a package-lock.json / npm-shrinkwrap.json.
+ *
+ * A locked `resolved`+`integrity` pair is exactly what lets npm satisfy the
+ * tarball from its cache with no HTTP at all, so the entry has to go — at
+ * every path the package is locked at, nested workspace entries included.
+ */
+function removeNpmLockEntry(file) {
+  let parsed
+  try {
+    parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch (_) {
+    return false
+  }
+
+  let changed = false
+
+  const packages = parsed.packages
+  if (packages && typeof packages === 'object') {
+    const keys = Object.keys(packages)
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      if (key !== 'node_modules/blazefire' && !/\/node_modules\/blazefire$/.test(key)) {
+        continue
+      }
+      delete packages[key]
+      changed = true
+    }
+  }
+
+  // lockfileVersion 1 keeps a parallel top-level `dependencies` tree.
+  if (
+    parsed.dependencies &&
+    typeof parsed.dependencies === 'object' &&
+    parsed.dependencies.blazefire
+  ) {
+    delete parsed.dependencies.blazefire
+    changed = true
+  }
+
+  if (!changed) return false
+  try {
+    fs.writeFileSync(file, JSON.stringify(parsed, null, 2) + '\n')
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/**
+ * Remove npm's cacache index entry for the tarball URL (the content blob
+ * stays, but without the index it is unreachable — a guaranteed miss).
+ *
+ * Only http(s) specs are handled: a `github:`/`git:` spec re-resolves its
+ * commit through git on every install once the lock entry is gone, so there
+ * is no URL-keyed cache to predict.
+ */
+function removeNpmCacheEntry(cacheDir, spec) {
+  if (!/^https?:\/\//i.test(String(spec || ''))) return false
+  const key = 'make-fetch-happen:request-cache:' + spec
+  const hash = crypto.createHash('sha256').update(key).digest('hex')
+  const file = path.join(
+    cacheDir,
+    'index-v5',
+    hash.slice(0, 2),
+    hash.slice(2, 4),
+    hash.slice(4)
+  )
+  return removePath(file)
+}
+
+function purgeNpmInstall(root, spec, options) {
+  const removed = []
+
+  const locks = [
+    path.join(root, 'package-lock.json'),
+    path.join(root, 'npm-shrinkwrap.json'),
+  ]
+  for (let i = 0; i < locks.length; i++) {
+    if (removeNpmLockEntry(locks[i])) removed.push(locks[i])
+  }
+
+  if (removePath(path.join(root, 'node_modules', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', 'blazefire'))
+  }
+  if (removePath(path.join(root, 'node_modules', '.bin', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', '.bin', 'blazefire'))
+  }
+
+  const home = (options && options.homeDir) || os.homedir()
+  const cacheDir =
+    (options && options.npmCachePath) ||
+    process.env.npm_config_cache ||
+    path.join(home, '.npm')
+  if (removeNpmCacheEntry(cacheDir, spec)) removed.push(cacheDir + ' (tarball cache entry)')
+
+  return removed
+}
+
+/**
  * Clear every cached trace of blazefire for `manager` so the `<pm> add` that
  * follows re-downloads. See the block comment above for the per-manager
  * vectors. Returns the removed paths (empty when there was nothing to do —
- * including for npm and bun).
+ * including for bun, which is not covered).
  */
 function purgeCachedInstall(projectRoot, manager, spec, options) {
   try {
     const root = projectRoot || process.cwd()
     if (manager === 'yarn') return purgeYarnInstall(root, options)
+    if (manager === 'npm') {
+      const target =
+        typeof spec === 'string' && spec ? spec : readInstalledSpec(root)
+      return purgeNpmInstall(root, target, options)
+    }
     if (manager === 'pnpm') {
       const target =
         typeof spec === 'string' && spec ? spec : readInstalledSpec(root)
@@ -670,9 +775,9 @@ function runUpdate(projectRoot, callback) {
   const command = cmd.command
   const args = cmd.args
 
-  // Re-adding the same specifier re-downloads nothing on yarn/pnpm — clear
-  // the cached copy first so this really is an update (best-effort, never
-  // throws; see purgeCachedInstall).
+  // Re-adding the same specifier re-downloads nothing on yarn, pnpm, or
+  // npm-with-a-lockfile — clear the cached copy first so this really is an
+  // update (best-effort, never throws; see purgeCachedInstall).
   const removed = purgeCachedInstall(root, manager, args[args.length - 1])
   if (removed.length) {
     try {
