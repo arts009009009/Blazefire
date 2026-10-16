@@ -116,7 +116,7 @@ export async function createStaticMetadataFromRoute(
 
         const imageModule = `(async (props) => (await instrumentModuleGetter(() => import(/* webpackMode: "eager" */ ${JSON.stringify(
           imageModuleImportSource
-        )}))()).default(props))`
+        ).replace(/[\r\n]+/g, '')}))()).default(props))`
         hasStaticMetadataFiles = true
         if (type === 'favicon') {
           staticImagesMetadata.icon.unshift(imageModule)

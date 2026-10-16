@@ -4,10 +4,16 @@ import {
 } from './interception-routes'
 
 // Identify /.*[param].*/ in route string
-const TEST_ROUTE = /\/[^/]*\[[^/]+\][^/]*(?=\/|$)/
+// The inner group only treats a `]` as part of the parameter when the
+// fixed-width lookahead shows it is not the closing bracket, so the repeated
+// group and the literal "]" can never both consume the same character —
+// matching stays linear while behaving identically to the previous `[^/]+`
+// form, including optional catch-alls like /[[...slug]] and segments like
+// /[a]].
+const TEST_ROUTE = /\/[^/[]*\[(?:[^\]/]|\](?!\/|$))+\][^/]*(?=\/|$)/
 
-// Identify /[param]/ in route string
-const TEST_STRICT_ROUTE = /\/\[[^/]+\](?=\/|$)/
+// Identify /[param]/ in route string (same linear inner group as above)
+const TEST_STRICT_ROUTE = /\/\[(?:[^\]/]|\](?!\/|$))+\](?=\/|$)/
 
 /**
  * Check if a route is dynamic.

@@ -22,7 +22,7 @@ export function modifyRouteRegex(regex: string, restrictedPaths?: string[]) {
     regex = regex.replace(
       /\^/,
       `^(?!${restrictedPaths
-        .map((path) => path.replace(/\//g, '\\/'))
+        .map((path) => path.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'))
         .join('|')})`
     )
   }

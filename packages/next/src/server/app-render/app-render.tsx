@@ -410,6 +410,14 @@ const flightDataPathHeadKey = 'h'
 const getFlightViewportKey = (requestId: string) => requestId + 'v'
 const getFlightMetadataKey = (requestId: string) => requestId + 'm'
 
+// Matches the static HTML export docs URL when it appears in an error
+// message. The match is anchored to a message boundary (start, whitespace,
+// quote, or bracket) so an arbitrary host or path cannot smuggle the URL in
+// (e.g. `https://evil.com/?u=https://nextjs.org/docs/…`), while still
+// matching the URL wherever it naturally occurs in the message.
+const STATIC_HTML_EXPORT_DOCS_RE =
+  /(?:^|[\s"'`<([,{])https:\/\/nextjs\.org\/docs\/advanced-features\/static-html-export/
+
 const filterStackFrame =
   process.env.NODE_ENV !== 'production'
     ? (require('../lib/source-maps') as typeof import('../lib/source-maps'))
@@ -4091,9 +4099,7 @@ async function renderToStream(
           err !== null &&
           'message' in err &&
           typeof err.message === 'string' &&
-          err.message.includes(
-            'https://nextjs.org/docs/advanced-features/static-html-export'
-          ))
+          STATIC_HTML_EXPORT_DOCS_RE.test(err.message))
       ) {
         // Ensure that "next dev" prints the red error overlay
         endSpanWithError(err)
@@ -9669,9 +9675,7 @@ async function prerenderToStream(
         err !== null &&
         'message' in err &&
         typeof err.message === 'string' &&
-        err.message.includes(
-          'https://nextjs.org/docs/advanced-features/static-html-export'
-        ))
+        STATIC_HTML_EXPORT_DOCS_RE.test(err.message))
     ) {
       // Ensure that "next dev" prints the red error overlay
       throw err

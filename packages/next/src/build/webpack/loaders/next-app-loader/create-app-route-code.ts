@@ -33,7 +33,7 @@ export async function createAppRouteCode({
 }): Promise<string> {
   // routePath is the path to the route handler file,
   // but could be aliased e.g. private-next-app-dir/favicon.ico
-  const routePath = pagePath.replace(/[\\/]/, '/')
+  const routePath = pagePath.replace(/[\\/]/g, '/')
 
   // This, when used with the resolver will give us the pathname to the built
   // route handler file.
