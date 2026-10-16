@@ -293,7 +293,13 @@ function updateCommand(projectRoot, manager) {
  *                 for the URL, which npm then satisfies straight from cacache
  *                 with no HTTP at all), the cacache index entry keyed by the
  *                 tarball URL, and the installed copy.
- *   bun           not measured; left alone rather than guessed at.
+ *   bun           the resolved `packages` entry in bun.lock (its pinned sha512
+ *                 is what lets bun satisfy the tarball from cache with no HTTP
+ *                 at all — and it fails with IntegrityCheckFailed if the cache
+ *                 is cleared but the pin remains), the global cache index at
+ *                 `<cache>/blazefire` (symlinks into URL-hashed `@T@` content
+ *                 dirs) and the installed copy. The legacy binary bun.lockb is
+ *                 removed so bun regenerates it.
  *
  * Best-effort by design (rule 1 above): an unusual layout yields fewer
  * removals, never a thrown error. Returns the paths that were removed so
@@ -737,15 +743,191 @@ function purgeNpmInstall(root, spec, options) {
 }
 
 /**
+ * Strip comments and trailing commas from JSONC — but only outside string
+ * literals, so values like `http://...` survive intact.
+ */
+function normalizeJsonc(text) {
+  let out = ''
+  let inString = false
+  let escaped = false
+  let lineComment = false
+  let blockComment = false
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    const next = text[i + 1]
+
+    if (lineComment) {
+      if (c === '\n') {
+        lineComment = false
+        out += c
+      }
+      continue
+    }
+    if (blockComment) {
+      if (c === '*' && next === '/') {
+        blockComment = false
+        i++
+      }
+      continue
+    }
+    if (inString) {
+      out += c
+      if (escaped) escaped = false
+      else if (c === '\\') escaped = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') {
+      inString = true
+      out += c
+      continue
+    }
+    if (c === '/' && next === '/') {
+      lineComment = true
+      i++
+      continue
+    }
+    if (c === '/' && next === '*') {
+      blockComment = true
+      i++
+      continue
+    }
+    if (c === ',') {
+      // A comma followed only by whitespace and a closer is a trailing comma.
+      let j = i + 1
+      while (j < text.length && /[ \t\r\n]/.test(text[j])) j++
+      if (text[j] === '}' || text[j] === ']') continue
+    }
+    out += c
+  }
+  return out
+}
+
+/**
+ * Drop blazefire's resolved entries from a bun.lock (JSONC).
+ *
+ * Only the `packages` entries go: that is where bun stores the pinned sha512
+ * that lets it satisfy the tarball from cache without any HTTP. The
+ * `workspaces.dependencies` declaration is left alone — the `bun add` that
+ * follows re-declares it.
+ */
+function removeBunLockEntry(file) {
+  let text
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (_) {
+    return false
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(normalizeJsonc(text))
+  } catch (_) {
+    return false
+  }
+
+  const packages = parsed.packages
+  if (!packages || typeof packages !== 'object') return false
+
+  let changed = false
+  const keys = Object.keys(packages)
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i]
+    if (key !== 'blazefire' && key.indexOf('blazefire@') !== 0) continue
+    delete packages[key]
+    changed = true
+  }
+  if (!changed) return false
+
+  try {
+    fs.writeFileSync(file, JSON.stringify(parsed, null, 2) + '\n')
+    return true
+  } catch (_) {
+    return false
+  }
+}
+
+/**
+ * Remove bun's global cache index for blazefire — `<cache>/blazefire`, a
+ * directory of symlinks into URL-hashed `@T@` content dirs — and the content
+ * those symlinks point at. Only targets inside the cache are followed, so a
+ * stray symlink cannot delete anything outside it.
+ */
+function purgeBunCache(cacheDir) {
+  const removed = []
+  const indexDir = path.join(cacheDir, 'blazefire')
+
+  let entries
+  try {
+    entries = fs.readdirSync(indexDir)
+  } catch (_) {
+    return removed
+  }
+
+  // Compare against the resolved path: the cache dir itself may sit under a
+  // symlinked location (e.g. macOS /tmp), and symlink targets resolve to the
+  // physical path.
+  let realCache = cacheDir
+  try {
+    realCache = fs.realpathSync(cacheDir)
+  } catch (_) {
+    /* keep the literal path */
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    let target
+    try {
+      target = fs.realpathSync(path.join(indexDir, entries[i]))
+    } catch (_) {
+      continue // broken symlink — nothing to follow
+    }
+    if (target.indexOf(realCache + path.sep) !== 0) continue // refuse outside the cache
+    if (removePath(target)) removed.push(target)
+  }
+
+  if (removePath(indexDir)) removed.push(indexDir)
+  return removed
+}
+
+function purgeBunInstall(root, options) {
+  const removed = []
+
+  // The legacy binary lockfile cannot be edited — remove it so bun
+  // regenerates a text bun.lock on the next add.
+  if (removePath(path.join(root, 'bun.lockb'))) {
+    removed.push(path.join(root, 'bun.lockb'))
+  }
+  if (removeBunLockEntry(path.join(root, 'bun.lock'))) {
+    removed.push(path.join(root, 'bun.lock'))
+  }
+
+  if (removePath(path.join(root, 'node_modules', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', 'blazefire'))
+  }
+  if (removePath(path.join(root, 'node_modules', '.bin', 'blazefire'))) {
+    removed.push(path.join(root, 'node_modules', '.bin', 'blazefire'))
+  }
+
+  const home = (options && options.homeDir) || os.homedir()
+  const cacheDir =
+    (options && options.bunCachePath) ||
+    process.env.BUN_INSTALL_CACHE_DIR ||
+    path.join(home, '.bun', 'install', 'cache')
+  removed.push.apply(removed, purgeBunCache(cacheDir))
+
+  return removed
+}
+
+/**
  * Clear every cached trace of blazefire for `manager` so the `<pm> add` that
  * follows re-downloads. See the block comment above for the per-manager
- * vectors. Returns the removed paths (empty when there was nothing to do —
- * including for bun, which is not covered).
+ * vectors. Returns the removed paths (empty when there was nothing to do).
  */
 function purgeCachedInstall(projectRoot, manager, spec, options) {
   try {
     const root = projectRoot || process.cwd()
     if (manager === 'yarn') return purgeYarnInstall(root, options)
+    if (manager === 'bun') return purgeBunInstall(root, options)
     if (manager === 'npm') {
       const target =
         typeof spec === 'string' && spec ? spec : readInstalledSpec(root)
@@ -776,8 +958,8 @@ function runUpdate(projectRoot, callback) {
   const args = cmd.args
 
   // Re-adding the same specifier re-downloads nothing on yarn, pnpm, or
-  // npm-with-a-lockfile — clear the cached copy first so this really is an
-  // update (best-effort, never throws; see purgeCachedInstall).
+  // npm/bun-with-a-lockfile — clear the cached copy first so this really is
+  // an update (best-effort, never throws; see purgeCachedInstall).
   const removed = purgeCachedInstall(root, manager, args[args.length - 1])
   if (removed.length) {
     try {

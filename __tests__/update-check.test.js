@@ -784,12 +784,83 @@ describe('purgeCachedInstall', () => {
     expect(removed.length).toBeGreaterThan(2)
   })
 
-  test('bun is left alone (its lock behaviour is not measured)', () => {
+  test('bun: bun.lock entry, cache index and installed copy are cleared', () => {
+    // JSONC on purpose: bun.lock carries trailing commas, and the declared
+    // URL contains `//` — a naive comment-stripper would corrupt it.
+    fs.writeFileSync(
+      path.join(scratch, 'bun.lock'),
+      [
+        '{',
+        '  "lockfileVersion": 2,',
+        '  "workspaces": {',
+        '    "": {',
+        '      "name": "app",',
+        '      "dependencies": {',
+        `        "blazefire": "${SPEC}",`,
+        '        "react": "19.0.0",',
+        '      },',
+        '    },',
+        '  },',
+        '  "packages": {',
+        `    "blazefire": ["blazefire@${SPEC}", { "bin": { "blazefire": "cli.js" } }, "sha512-abc=="],`,
+        '    "react": ["react@19.0.0", {}, "sha512-def=="],',
+        '  },',
+        '}',
+        '',
+      ].join('\n')
+    )
+    // Legacy binary lockfile: cannot be edited, must be removed outright.
+    fs.writeFileSync(path.join(scratch, 'bun.lockb'), 'bun-lockfile-vendored')
+
     fs.mkdirSync(path.join(scratch, 'node_modules', 'blazefire'), {
       recursive: true,
     })
-    expect(updates.purgeCachedInstall(scratch, 'bun', SPEC, home())).toEqual([])
-    expect(exists('node_modules/blazefire')).toBe(true)
+    fs.mkdirSync(path.join(scratch, 'node_modules', '.bin'))
+    fs.writeFileSync(path.join(scratch, 'node_modules', '.bin', 'blazefire'), 'x')
+
+    // Global cache: an index dir of symlinks into URL-hashed @T@ content dirs.
+    const cacheDir = path.join(scratch, '.bun', 'install', 'cache')
+    const target = path.join(cacheDir, '@T@abcdef0123456789@@@1')
+    fs.mkdirSync(target, { recursive: true })
+    fs.writeFileSync(path.join(target, 'cli.js'), 'old copy')
+    fs.mkdirSync(path.join(cacheDir, 'blazefire'))
+    fs.symlinkSync(target, path.join(cacheDir, 'blazefire', '@T@abcdef0123456789@@@1'))
+    // An unrelated package's cache entry must survive.
+    const otherTarget = path.join(cacheDir, 'react@19.0.0@@@1')
+    fs.mkdirSync(otherTarget, { recursive: true })
+    fs.mkdirSync(path.join(cacheDir, 'react'))
+    fs.symlinkSync(otherTarget, path.join(cacheDir, 'react', 'index'))
+
+    const removed = updates.purgeCachedInstall(scratch, 'bun', SPEC, home())
+
+    const lock = JSON.parse(fs.readFileSync(path.join(scratch, 'bun.lock'), 'utf8'))
+    expect(lock.packages.blazefire).toBeUndefined()
+    expect(lock.packages.react).toEqual(['react@19.0.0', {}, 'sha512-def=='])
+    // The declared dependency stays — the `bun add` re-adds it.
+    expect(lock.workspaces[''].dependencies.blazefire).toBe(SPEC)
+
+    expect(exists('bun.lockb')).toBe(false)
+    expect(exists('node_modules/blazefire')).toBe(false)
+    expect(exists('node_modules/.bin/blazefire')).toBe(false)
+    expect(fs.existsSync(path.join(cacheDir, 'blazefire'))).toBe(false)
+    expect(fs.existsSync(target)).toBe(false)
+    expect(fs.existsSync(otherTarget)).toBe(true)
+    expect(removed).toContain(path.join(scratch, 'bun.lock'))
+    expect(removed.length).toBeGreaterThan(3)
+  })
+
+  test('bun: a cache symlink pointing outside the cache is not followed', () => {
+    const outside = path.join(scratch, 'precious')
+    fs.mkdirSync(outside, { recursive: true })
+    fs.writeFileSync(path.join(outside, 'keep.txt'), 'not blazefire')
+
+    const cacheDir = path.join(scratch, '.bun', 'install', 'cache')
+    fs.mkdirSync(path.join(cacheDir, 'blazefire'), { recursive: true })
+    fs.symlinkSync(outside, path.join(cacheDir, 'blazefire', 'escape'))
+
+    updates.purgeCachedInstall(scratch, 'bun', SPEC, home())
+
+    expect(fs.existsSync(path.join(outside, 'keep.txt'))).toBe(true)
   })
 
   test('a project with no trace of blazefire purges nothing, never throws', () => {

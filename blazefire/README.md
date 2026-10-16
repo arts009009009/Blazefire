@@ -6,27 +6,47 @@ Blazefire framework powered by Frostfast compiler.
 
 ## Install
 
+Blazefire installs with npm, pnpm, Yarn, and bun:
+
 ```bash
 npm install github:arts009009009/Blazefire
 
-# pnpm (in a pnpm-managed project — see the note below)
+# pnpm (in a pnpm-managed project — see the notes below)
 pnpm add github:arts009009009/Blazefire
 
 # Yarn Berry (2+): avoids the Git repository approval gate
 yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
+
+# bun
+bun add github:arts009009009/Blazefire
 ```
 
 When dependency install scripts are enabled, Blazefire automatically activates
 the nearest Next.js config and saves the original in `Blazefire Backup/`.
-Yarn Plug'n'Play is supported. Package-manager security settings can prevent
-dependency scripts from running; a dependency cannot change those settings
-before it is installed.
+Yarn Plug'n'Play is supported.
 
-pnpm refuses to touch a project whose `packageManager` field names yarn or
-npm (`This project is configured to use yarn`). That check runs before any
-package is fetched, so no dependency — Blazefire included — can override it:
-use the manager the project is configured for, or drop the field to adopt
-pnpm.
+Notes per package manager:
+
+- **bun** blocks a dependency's own postinstall script by default
+  (`Blocked 1 postinstall`). Either run `npx blazefire init` once after
+  installing, or allowlist the script by adding
+  `"trustedDependencies": ["blazefire"]` to your package.json before adding
+  Blazefire.
+- **pnpm** refuses to touch a project whose `packageManager` field names yarn
+  or npm (`This project is configured to use yarn`). That check runs before
+  any package is fetched, so no dependency — Blazefire included — can
+  override it: use the manager the project is configured for, or drop the
+  field to adopt pnpm.
+- **Yarn Berry** asks for approval before fetching Git dependencies; the
+  tarball-URL form above avoids the gate.
+- **npm** needs no extra setup.
+
+Package-manager security settings can prevent dependency scripts from running;
+a dependency cannot change those settings before it is installed.
+
+`npx blazefire update` re-installs the latest release using whichever manager
+your project uses (npm, pnpm, Yarn, or bun), clearing the manager's cached
+copy first so the update really lands.
 
 ## Usage
 
