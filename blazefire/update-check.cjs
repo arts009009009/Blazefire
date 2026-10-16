@@ -950,6 +950,34 @@ function purgeCachedInstall(projectRoot, manager, spec, options) {
  * Calls back with the child's exit code (never rejects) so callers can report
  * without a try/catch of their own.
  */
+/**
+ * Is this package specifier safe to put on a package-manager command line?
+ *
+ * The specifier comes from this project's own package.json — a file that may
+ * have been written by whoever authored the repo being installed. On Windows
+ * the command runs through cmd.exe, where `&`, `;`, newlines, quotes, and
+ * backticks would break out of the argument and execute as commands. Only
+ * accept the characters that can legitimately appear in a spec (registry
+ * names, URLs, `github:` shorthands, version ranges) — none of which are
+ * shell syntax — and never let one masquerade as a command-line flag.
+ */
+function isSafeSpec(spec) {
+  return (
+    typeof spec === 'string' &&
+    /^[A-Za-z0-9@/+._~^*(),|<>=\[\]:#-]+$/.test(spec) &&
+    spec.charAt(0) !== '-'
+  )
+}
+
+/**
+ * Quote one argument for a cmd.exe command line. The spec allowlist already
+ * excludes quotes, but quoting every argument keeps the command correct for
+ * any future argument shape (e.g. a path with spaces).
+ */
+function quoteForCmd(value) {
+  return '"' + String(value).replace(/"/g, '""') + '"'
+}
+
 function runUpdate(projectRoot, callback) {
   const root = projectRoot || process.cwd()
   const manager = detectPackageManager(root)
@@ -957,10 +985,28 @@ function runUpdate(projectRoot, callback) {
   const command = cmd.command
   const args = cmd.args
 
+  // The specifier comes from package.json and ends up on a command line —
+  // through cmd.exe on Windows. Refuse anything that is not a plausible
+  // package specifier before touching anything (see isSafeSpec).
+  const spec = args[args.length - 1]
+  if (!isSafeSpec(spec)) {
+    try {
+      console.error(
+        'blazefire: refusing to run the update — the "blazefire" entry in ' +
+          'package.json is not a plausible package specifier. Reinstall ' +
+          'manually with your package manager.'
+      )
+    } catch (_) {
+      /* stderr gone — the exit code still reports the failure */
+    }
+    if (typeof callback === 'function') callback(1)
+    return
+  }
+
   // Re-adding the same specifier re-downloads nothing on yarn, pnpm, or
   // npm/bun-with-a-lockfile — clear the cached copy first so this really is
   // an update (best-effort, never throws; see purgeCachedInstall).
-  const removed = purgeCachedInstall(root, manager, args[args.length - 1])
+  const removed = purgeCachedInstall(root, manager, spec)
   if (removed.length) {
     try {
       console.log('  blazefire: cleared the cached copy so the reinstall is fresh…')
@@ -971,12 +1017,15 @@ function runUpdate(projectRoot, callback) {
 
   const isWin = process.platform === 'win32'
   const child = isWin
-    ? spawn(command + ' ' + args.join(' '), {
-        cwd: root,
-        stdio: 'inherit',
-        shell: true,
-        env: process.env,
-      })
+    ? spawn(
+        [command].concat(args).map(quoteForCmd).join(' '),
+        {
+          cwd: root,
+          stdio: 'inherit',
+          shell: true,
+          env: process.env,
+        }
+      )
     : spawn(command, args, {
         cwd: root,
         stdio: 'inherit',
@@ -1178,6 +1227,7 @@ module.exports = {
   fetchLatestVersion,
   getInstalledVersion,
   getRepoSlug,
+  isSafeSpec,
   maybeNotify,
   promptYesNo,
   purgeCachedInstall,

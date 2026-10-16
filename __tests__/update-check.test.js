@@ -874,3 +874,73 @@ describe('purgeCachedInstall', () => {
     })).toEqual([])
   })
 })
+
+describe('isSafeSpec and the update refusal path', () => {
+  const ORIGINAL_USER_AGENT = process.env.npm_config_user_agent
+
+  afterEach(() => {
+    if (ORIGINAL_USER_AGENT === undefined) {
+      delete process.env.npm_config_user_agent
+    } else {
+      process.env.npm_config_user_agent = ORIGINAL_USER_AGENT
+    }
+  })
+
+  test('accepts real-world specifiers', () => {
+    for (const spec of [
+      'https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz',
+      'github:arts009009009/Blazefire',
+      'github:arts009009009/Blazefire#main',
+      '@scope/pkg@^1.2.0',
+      'blazefire@1.0.9',
+      './local/blazefire.tgz',
+    ]) {
+      expect(updates.isSafeSpec(spec)).toBe(true)
+    }
+  })
+
+  test('rejects shell syntax, flag-shaped values and blank input', () => {
+    for (const spec of [
+      'x; rm -rf /',
+      'x && curl http://evil.example',
+      'x | tee /tmp/x',
+      '$(id)',
+      '`id`',
+      'x\ny',
+      'a b',
+      '%PATH%',
+      '-g',
+      '--prefix=/tmp/evil',
+      '',
+      undefined,
+    ]) {
+      expect(updates.isSafeSpec(spec)).toBe(false)
+    }
+  })
+
+  test('runUpdate refuses a hostile spec without spawning anything', (done) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-run-'))
+    const pwned = path.join(dir, 'pwned.txt')
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        name: 'app',
+        version: '1.0.0',
+        dependencies: { blazefire: 'x.tgz && touch ' + pwned },
+      })
+    )
+    delete process.env.npm_config_user_agent // no lockfiles -> npm
+
+    updates.runUpdate(dir, (code) => {
+      try {
+        expect(code).toBe(1)
+        expect(fs.existsSync(pwned)).toBe(false)
+        done()
+      } catch (e) {
+        done(e)
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+})
