@@ -9,6 +9,9 @@ Blazefire framework powered by Frostfast compiler.
 ```bash
 npm install github:arts009009009/Blazefire
 
+# pnpm (in a pnpm-managed project — see the note below)
+pnpm add github:arts009009009/Blazefire
+
 # Yarn Berry (2+): avoids the Git repository approval gate
 yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
 ```
@@ -18,6 +21,12 @@ the nearest Next.js config and saves the original in `Blazefire Backup/`.
 Yarn Plug'n'Play is supported. Package-manager security settings can prevent
 dependency scripts from running; a dependency cannot change those settings
 before it is installed.
+
+pnpm refuses to touch a project whose `packageManager` field names yarn or
+npm (`This project is configured to use yarn`). That check runs before any
+package is fetched, so no dependency — Blazefire included — can override it:
+use the manager the project is configured for, or drop the field to adopt
+pnpm.
 
 ## Usage
 
