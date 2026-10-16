@@ -23,7 +23,10 @@ interface ResolvedBuildPaths {
 function escapeBrackets(pattern: string): string {
   // Match Next.js dynamic route patterns: [name], [...name], [[...name]]
   return pattern.replace(/\[\[?\.\.\.[^\]]+\]?\]|\[[^\]]+\]/g, (match) =>
-    match.replace(/\[/g, '\\[').replace(/\]/g, '\\]')
+    match
+      .replace(/\\/g, '\\\\')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]')
   )
 }
 

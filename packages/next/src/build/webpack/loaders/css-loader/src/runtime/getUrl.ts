@@ -19,7 +19,13 @@ module.exports = function (url: any, options: any) {
   // See https://drafts.csswg.org/css-values-3/#urls
 
   if (/["'() \t\n]/.test(url) || options.needQuotes) {
-    return '"'.concat(url.replace(/"/g, '\\"').replace(/\n/g, '\\n'), '"')
+    return '"'.concat(
+      url
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n'),
+      '"'
+    )
   }
 
   return url

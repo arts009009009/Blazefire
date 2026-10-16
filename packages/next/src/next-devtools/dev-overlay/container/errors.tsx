@@ -54,7 +54,12 @@ interface ErrorsProps extends ErrorBaseProps {
 }
 
 function matchLinkType(text: string): string | null {
-  if (text.startsWith('https://nextjs.org')) {
+  // Require the full `https://nextjs.org/` prefix (or the exact origin) so
+  // hosts like `https://nextjs.org.evil.com/…` are not classified as internal.
+  if (
+    text === 'https://nextjs.org' ||
+    text.startsWith('https://nextjs.org/')
+  ) {
     return 'blazefire-link'
   }
   if (text.startsWith('https://') || text.startsWith('http://')) {
