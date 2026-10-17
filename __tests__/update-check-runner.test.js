@@ -110,10 +110,7 @@ describe('maybeNotify', () => {
   const statePath = upd.stateFile(process.cwd())
   const originalFetch = global.fetch
   const originalArgv = process.argv
-  const ttyDescriptor = Object.getOwnPropertyDescriptor(
-    process.stdout,
-    'isTTY'
-  )
+  const ttyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
 
   function setTTY(value) {
     Object.defineProperty(process.stdout, 'isTTY', {
@@ -139,7 +136,8 @@ describe('maybeNotify', () => {
 
   afterEach(() => {
     process.argv = originalArgv
-    if (ttyDescriptor) Object.defineProperty(process.stdout, 'isTTY', ttyDescriptor)
+    if (ttyDescriptor)
+      Object.defineProperty(process.stdout, 'isTTY', ttyDescriptor)
     else delete process.stdout.isTTY
     global.fetch = originalFetch
     delete process.env.CI
@@ -244,7 +242,8 @@ describe('runUpdate', () => {
 
   afterEach(() => {
     process.env.PATH = originalPath
-    if (originalUserAgent === undefined) delete process.env.npm_config_user_agent
+    if (originalUserAgent === undefined)
+      delete process.env.npm_config_user_agent
     else process.env.npm_config_user_agent = originalUserAgent
     for (const dir of created.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true })

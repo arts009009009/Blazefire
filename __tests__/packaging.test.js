@@ -37,7 +37,8 @@ describe('manifest entry points', () => {
     const targets = []
     const walk = (value) => {
       if (typeof value === 'string') targets.push(value)
-      else if (value && typeof value === 'object') Object.values(value).forEach(walk)
+      else if (value && typeof value === 'object')
+        Object.values(value).forEach(walk)
     }
     walk(pkg.exports)
 
@@ -76,7 +77,9 @@ describe('blazefire/components/* export pairs', () => {
   const dir = path.join(PKG_DIR, 'src', 'components')
   const files = fs.readdirSync(dir)
 
-  const runtimes = files.filter((f) => f.endsWith('.js')).map((f) => f.slice(0, -3))
+  const runtimes = files
+    .filter((f) => f.endsWith('.js'))
+    .map((f) => f.slice(0, -3))
   const types = files
     .filter((f) => f.endsWith('.tsx') || f.endsWith('.ts'))
     .map((f) => f.replace(/\.tsx?$/, ''))
@@ -160,9 +163,7 @@ function resolvesFrom(baseFile, spec, isTypeScriptFile) {
     candidates.push(target.replace(/\.(js|mjs|cjs)$/, '.tsx'))
     candidates.push(target.replace(/\.(js|mjs|cjs)$/, '.d.ts'))
   }
-  return candidates.some(
-    (c) => fs.existsSync(c) && fs.statSync(c).isFile()
-  )
+  return candidates.some((c) => fs.existsSync(c) && fs.statSync(c).isFile())
 }
 
 describe('relative imports in shipped files resolve', () => {
@@ -173,9 +174,7 @@ describe('relative imports in shipped files resolve', () => {
       const isTs = /\.(ts|tsx)$/.test(file)
       for (const spec of relativeSpecifiers(code)) {
         if (!resolvesFrom(file, spec, isTs)) {
-          broken.push(
-            path.relative(ROOT, file) + ' → ' + spec
-          )
+          broken.push(path.relative(ROOT, file) + ' → ' + spec)
         }
       }
     }
@@ -214,7 +213,8 @@ describe('files allow-list covers the exports map', () => {
     const targets = [pkg.main, pkg.types, ...Object.values(pkg.bin)]
     const walk = (value) => {
       if (typeof value === 'string') targets.push(value)
-      else if (value && typeof value === 'object') Object.values(value).forEach(walk)
+      else if (value && typeof value === 'object')
+        Object.values(value).forEach(walk)
     }
     walk(pkg.exports)
 
@@ -240,44 +240,40 @@ describe('files allow-list covers the exports map', () => {
  * ------------------------------------------------------------------ */
 
 describe('npm pack dry run', () => {
-  it(
-    'includes every runtime file consumers load',
-    () => {
-      const raw = execFileSync(
-        'npm',
-        ['pack', '--dry-run', '--json', '--ignore-scripts'],
-        { cwd: ROOT, encoding: 'utf8', timeout: 60000 }
-      )
-      const report = JSON.parse(raw)
-      const files = report[0].files.map((f) => f.path)
+  it('includes every runtime file consumers load', () => {
+    const raw = execFileSync(
+      'npm',
+      ['pack', '--dry-run', '--json', '--ignore-scripts'],
+      { cwd: ROOT, encoding: 'utf8', timeout: 60000 }
+    )
+    const report = JSON.parse(raw)
+    const files = report[0].files.map((f) => f.path)
 
-      const mustShip = [
-        'blazefire/index.js',
-        'blazefire/utils.js',
-        'blazefire/provider.js',
-        'blazefire/plugin.cjs',
-        'blazefire/plugin.d.ts',
-        'blazefire/branding.cjs',
-        'blazefire/branding.d.ts',
-        'blazefire/logo-data.cjs',
-        'blazefire/postinstall.cjs',
-        'blazefire/update-check.cjs',
-        'blazefire/cli.cjs',
-        'blazefire/runtime/inject.cjs',
-        'blazefire/runtime/turbopack-loader.cjs',
-        'blazefire/src/index.tsx',
-        'blazefire/src/compiler/index.js',
-        'blazefire/src/compiler/index.ts',
-        'blazefire/src/components/BlazefireDevTools.js',
-        'blazefire/src/components/BlazefireDevTools.tsx',
-        'blazefire/assets/blazefire-global.css',
-        'blazefire/data/theme.json',
-        'package.json',
-      ]
+    const mustShip = [
+      'blazefire/index.js',
+      'blazefire/utils.js',
+      'blazefire/provider.js',
+      'blazefire/plugin.cjs',
+      'blazefire/plugin.d.ts',
+      'blazefire/branding.cjs',
+      'blazefire/branding.d.ts',
+      'blazefire/logo-data.cjs',
+      'blazefire/postinstall.cjs',
+      'blazefire/update-check.cjs',
+      'blazefire/cli.cjs',
+      'blazefire/runtime/inject.cjs',
+      'blazefire/runtime/turbopack-loader.cjs',
+      'blazefire/src/index.tsx',
+      'blazefire/src/compiler/index.js',
+      'blazefire/src/compiler/index.ts',
+      'blazefire/src/components/BlazefireDevTools.js',
+      'blazefire/src/components/BlazefireDevTools.tsx',
+      'blazefire/assets/blazefire-global.css',
+      'blazefire/data/theme.json',
+      'package.json',
+    ]
 
-      const missing = mustShip.filter((f) => !files.includes(f))
-      expect(missing).toEqual([])
-    },
-    90000
-  )
+    const missing = mustShip.filter((f) => !files.includes(f))
+    expect(missing).toEqual([])
+  }, 90000)
 })

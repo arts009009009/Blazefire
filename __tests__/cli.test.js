@@ -14,7 +14,11 @@ const os = require('os')
 const path = require('path')
 
 const CLI = path.join(__dirname, '..', 'blazefire', 'cli.cjs')
-const { MARKER, BACKUP_DIR, HOOK_COMMAND } = require('../blazefire/postinstall.cjs')
+const {
+  MARKER,
+  BACKUP_DIR,
+  HOOK_COMMAND,
+} = require('../blazefire/postinstall.cjs')
 
 const created = []
 
@@ -90,9 +94,9 @@ describe('blazefire init / restore', () => {
 
     const wired = fs.readFileSync(path.join(root, 'next.config.js'), 'utf8')
     expect(wired).toContain(MARKER)
-    expect(
-      fs.existsSync(path.join(root, BACKUP_DIR, 'next.config.js'))
-    ).toBe(true)
+    expect(fs.existsSync(path.join(root, BACKUP_DIR, 'next.config.js'))).toBe(
+      true
+    )
     const pkg = JSON.parse(
       fs.readFileSync(path.join(root, 'package.json'), 'utf8')
     )

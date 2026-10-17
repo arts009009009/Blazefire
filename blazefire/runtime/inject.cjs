@@ -20,7 +20,11 @@ var branding = require('../branding.cjs')
  */
 function blazefireEnabled(name) {
   try {
-    if (typeof process !== 'undefined' && process.env && process.env[name] === 'false') {
+    if (
+      typeof process !== 'undefined' &&
+      process.env &&
+      process.env[name] === 'false'
+    ) {
       return false
     }
   } catch (_) {

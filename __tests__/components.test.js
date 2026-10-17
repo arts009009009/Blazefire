@@ -18,10 +18,7 @@ import { renderToString } from 'react-dom/server'
 import { BlazefireLogo } from '../blazefire/src/components/BlazefireLogo.js'
 import { BlazefireErrorOverlay } from '../blazefire/src/components/BlazefireErrorOverlay.js'
 import { BlazefireDevTools } from '../blazefire/src/components/BlazefireDevTools.js'
-import {
-  BlazefireProvider,
-  useBlazefire,
-} from '../blazefire/provider.js'
+import { BlazefireProvider, useBlazefire } from '../blazefire/provider.js'
 import { insertBlazefireStyles } from '../blazefire/utils.js'
 
 const pkg = require('../package.json')
@@ -250,9 +247,9 @@ describe('BlazefireDevTools (client)', () => {
     expect(dialog.textContent).toContain('Runtime')
     expect(dialog.textContent).toContain('blazefire')
 
-    expect(
-      container.querySelector('button').getAttribute('aria-label')
-    ).toBe('Close Blazefire Dev Tools')
+    expect(container.querySelector('button').getAttribute('aria-label')).toBe(
+      'Close Blazefire Dev Tools'
+    )
     expect(
       container.querySelector('button').getAttribute('aria-expanded')
     ).toBe('true')

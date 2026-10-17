@@ -13,7 +13,13 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
-const { run, restore, MARKER, BACKUP_DIR, HOOK_COMMAND } = require('../blazefire/postinstall.cjs')
+const {
+  run,
+  restore,
+  MARKER,
+  BACKUP_DIR,
+  HOOK_COMMAND,
+} = require('../blazefire/postinstall.cjs')
 
 const REPO_ROOT = path.join(__dirname, '..')
 const HOOK_RECORD = 'scripts.postinstall.json'
@@ -21,7 +27,12 @@ const HOOK_RECORD = 'scripts.postinstall.json'
 const created = []
 
 /** Build a throwaway project; returns its root. */
-function makeProject({ config, configName = 'next.config.js', deps, nextInstalled = true }) {
+function makeProject({
+  config,
+  configName = 'next.config.js',
+  deps,
+  nextInstalled = true,
+}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-life-'))
   created.push(root)
 
@@ -321,7 +332,10 @@ describe('restore lifecycle', () => {
 
   it('the config file with priority is the one that gets wrapped', () => {
     // next.config.ts ranks above next.config.js in CONFIG_NAMES.
-    const root = makeProject({ config: CJS_CONFIG, configName: 'next.config.js' })
+    const root = makeProject({
+      config: CJS_CONFIG,
+      configName: 'next.config.js',
+    })
     fs.writeFileSync(path.join(root, 'next.config.ts'), ESM_CONFIG)
     targeting(root)
 

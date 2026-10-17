@@ -44,8 +44,7 @@ describe('insertBlazefireStyles', () => {
     const appended = []
     const existing = []
     global.document = {
-      getElementById: (id) =>
-        existing.find((el) => el.id === id) || null,
+      getElementById: (id) => existing.find((el) => el.id === id) || null,
       createElement: () => ({ id: '', textContent: '' }),
       head: {
         appendChild: (el) => {

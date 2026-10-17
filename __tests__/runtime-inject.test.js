@@ -93,7 +93,9 @@ describe('overlay rebrand (shadow root)', () => {
 
     const versionChecker = root.querySelector('[data-nextjs-version-checker]')
     expect(versionChecker.textContent).toBe('Blazefire ' + pkg.version)
-    expect(versionChecker.getAttribute('title')).toBe('Blazefire ' + pkg.version)
+    expect(versionChecker.getAttribute('title')).toBe(
+      'Blazefire ' + pkg.version
+    )
 
     expect(root.querySelector('.turbopack-text').textContent).toBe('Frostfast')
 
@@ -123,9 +125,9 @@ describe('overlay rebrand (shadow root)', () => {
     loadRuntime()
     const root = document.querySelector('nextjs-portal').shadowRoot
     expect(root.querySelectorAll('#blazefire-overlay-styles')).toHaveLength(1)
-    expect(root.querySelector('[data-nextjs-version-checker]').textContent).toBe(
-      'Blazefire ' + pkg.version
-    )
+    expect(
+      root.querySelector('[data-nextjs-version-checker]').textContent
+    ).toBe('Blazefire ' + pkg.version)
   })
 
   it('heals when React re-renders Next’s strings back', async () => {
@@ -143,9 +145,7 @@ describe('overlay rebrand (shadow root)', () => {
 
   it('rebrands a portal that mounts after the runtime (body observer)', async () => {
     loadRuntime() // no portal yet
-    expect(
-      document.querySelector('nextjs-portal') ?? null
-    ).toBeNull()
+    expect(document.querySelector('nextjs-portal') ?? null).toBeNull()
 
     makePortal(OVERLAY_HTML)
     await flushMutations()

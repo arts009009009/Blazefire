@@ -26,7 +26,9 @@ function ctx({ options = { injectPath: INJECT }, resourcePath } = {}) {
 describe('blazefireLoader', () => {
   it('prepends a side-effect require of the runtime with the idempotency marker', () => {
     const out = blazefireLoader.call(ctx(), 'console.log("boot")')
-    expect(out).toMatch(/^require\("(.+)blazefire[\\/]runtime[\\/]inject\.cjs"\); \/\* blazefire-injected \*\//)
+    expect(out).toMatch(
+      /^require\("(.+)blazefire[\\/]runtime[\\/]inject\.cjs"\); \/\* blazefire-injected \*\//
+    )
     expect(out).toContain('console.log("boot")')
   })
 
