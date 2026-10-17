@@ -109,13 +109,12 @@ describe('overlay rebrand (shadow root)', () => {
 
     loadRuntime()
 
-    // element count unchanged: nothing removed or re-parented
-    expect(root.querySelectorAll('*').length).toBe(before)
-    expect(root.querySelector('#next-logo')).not.toBeNull()
+    // exactly one node added — our <style>; nothing removed or re-parented
+    expect(root.querySelectorAll('*').length).toBe(before + 1)
+    expect(root.querySelector('#next-logo svg')).not.toBeNull()
     expect(root.querySelector('.turbopack-text')).not.toBeNull()
     expect(root.querySelector('button')).not.toBeNull()
-    // …but a style element was ADDED (attribute/text writes + one append)
-    expect(root.querySelectorAll('*').length).toBe(before + 1)
+    expect(root.querySelector('[data-nextjs-version-checker]')).not.toBeNull()
   })
 
   it('is idempotent across runtime reloads', () => {

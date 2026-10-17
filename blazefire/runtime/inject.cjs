@@ -125,12 +125,18 @@ function injectOverlayTheme() {
   }
 
   function rebrand(root) {
+    // Same teardown guard as scan(): a queued callback must not throw when
+    // the document has already gone away.
+    if (typeof document === 'undefined' || !document) return
     applyTheme(root)
     applyLabels(root)
     watchShadowRoot(root)
   }
 
   function scan() {
+    // A pending MutationObserver callback can land after the document is gone
+    // (environment teardown, a detached window) — there is nothing to scan.
+    if (typeof document === 'undefined' || !document) return
     // Tag name comparison is case-insensitive via querySelector on the
     // lowercased custom element name.
     var portals = document.querySelectorAll('nextjs-portal, blazefire-portal')

@@ -53,7 +53,7 @@ describe('blazefireStyles() (document theme)', () => {
 describe('blazefireOverlayStyles() (shadow-root overlay theme)', () => {
   const css = blazefireOverlayStyles()
 
-  it('is a non-empty stylesheet that rebrands Next's overlay', () => {
+  it('is a non-empty stylesheet that rebrands the Next overlay', () => {
     expect(typeof css).toBe('string')
     expect(css.length).toBeGreaterThan(1000)
     // hides / repaints Next's own mark and carries the baked emblem
