@@ -96,12 +96,18 @@ describe('updateCommand — per package manager', () => {
     fs.rmSync(scratch, { recursive: true, force: true })
   })
 
-  it('npm installs, the others add — each with the installed spec verbatim', () => {
+  it('npm/pnpm/bun use the spec verbatim; yarn prefixes the package name', () => {
     expect(upd.updateCommand(scratch, 'npm')).toEqual({
       command: 'npm',
       args: ['install', SPEC],
     })
-    for (const pm of ['pnpm', 'yarn', 'bun']) {
+    // Yarn 4 refuses a bare tarball URL and wants `name@spec`; Yarn 1
+    // accepts that shape too.
+    expect(upd.updateCommand(scratch, 'yarn')).toEqual({
+      command: 'yarn',
+      args: ['add', 'blazefire@' + SPEC],
+    })
+    for (const pm of ['pnpm', 'bun']) {
       expect(upd.updateCommand(scratch, pm)).toEqual({
         command: pm,
         args: ['add', SPEC],
@@ -126,7 +132,7 @@ describe('updateCommand — per package manager', () => {
     )
     expect(upd.updateCommand(scratch, 'yarn')).toEqual({
       command: 'yarn',
-      args: ['add', 'github:arts009009009/Blazefire'],
+      args: ['add', 'blazefire@github:arts009009009/Blazefire'],
     })
   })
 })
@@ -179,7 +185,7 @@ describe('runUpdate — yarn and bun child processes', () => {
     process.env.npm_config_user_agent = 'yarn/1.22.22 npm/? node/v22'
 
     expect(await runUpdate(fixture())).toBe(3)
-    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add ' + SPEC)
+    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add blazefire@' + SPEC)
   })
 
   it('bun: `add <spec>`, exit code propagated', async () => {

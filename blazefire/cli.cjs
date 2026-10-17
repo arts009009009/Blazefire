@@ -127,7 +127,6 @@ try {
     command === '-v' ||
     command === 'version'
   ) {
-  } else if (command === '--version' || command === '-v' || command === 'version') {
     console.log('blazefire v' + (installedVersion() || 'unknown'))
   } else {
     // Name the version on purpose: "unknown command" usually means the

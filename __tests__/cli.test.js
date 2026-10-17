@@ -82,6 +82,17 @@ describe('blazefire --help', () => {
   })
 })
 
+describe('blazefire --version', () => {
+  it.each([['--version'], ['-v'], ['version']])(
+    'prints the installed version for %s',
+    (arg) => {
+      const res = cli([arg], os.tmpdir())
+      expect(res.status).toBe(0)
+      expect(res.stdout.trim()).toBe('blazefire v' + require('../package.json').version)
+    }
+  )
+})
+
 describe('blazefire <unknown>', () => {
   it('fails with a helpful message', () => {
     const res = cli(['frobnicate'], os.tmpdir())
