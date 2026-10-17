@@ -32,7 +32,7 @@ export interface CompilerInstance {
 // NOTE: must match `version` in the package manifest (kept in sync with the
 // runtime constants in `blazefire/utils.js`; asserted by
 // __tests__/version-sync.test.js).
-export const BLAZEFIRE_VERSION = '1.1.1'
+export const BLAZEFIRE_VERSION = '1.1.2'
 export const FROSTFAST_VERSION = '1.0.0'
 
 // Self-contained inline SVG flame mark — no external PNG asset.

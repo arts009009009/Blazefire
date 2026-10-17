@@ -15,7 +15,7 @@ const path = require('path')
 
 const upd = require('../blazefire/update-check.cjs')
 
-const SPEC = 'file:/tmp/blazefire-1.0.9.tgz'
+const SPEC = 'file:/tmp/blazefire-fixture.tgz'
 
 describe('detectPackageManager — lockfiles', () => {
   let scratch

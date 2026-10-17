@@ -39,7 +39,7 @@ function makeProject({
   const packageJson = {
     name: 'fixture',
     version: '0.0.0',
-    dependencies: deps || { next: '16.0.0', blazefire: '^1.0.9' },
+    dependencies: deps || { next: '16.0.0', blazefire: '^1.1.2' },
   }
   fs.writeFileSync(
     path.join(root, 'package.json'),
@@ -135,7 +135,7 @@ describe('init lifecycle (run)', () => {
     const root = makeProject({
       config: CJS_CONFIG,
       nextInstalled: false,
-      deps: { next: '16.0.0', blazefire: '^1.0.9' },
+      deps: { next: '16.0.0', blazefire: '^1.1.2' },
     })
     targeting(root)
     expect(run({ cli: true })).toBe('activated')
@@ -145,7 +145,7 @@ describe('init lifecycle (run)', () => {
     const root = makeProject({
       config: CJS_CONFIG,
       nextInstalled: false,
-      deps: { next: '16.0.0', blazefire: '^1.0.9' },
+      deps: { next: '16.0.0', blazefire: '^1.1.2' },
     })
     targeting(root)
     expect(run()).toBe('manual')
@@ -231,7 +231,7 @@ describe('monorepo (workspace) activation', () => {
         name: 'mono',
         private: true,
         workspaces: ['apps/*'],
-        dependencies: { next: '16.0.0', blazefire: '^1.0.9' },
+        dependencies: { next: '16.0.0', blazefire: '^1.1.2' },
       })
     )
     fs.writeFileSync(
@@ -293,7 +293,7 @@ describe('restore lifecycle', () => {
     expect(exists(root, BACKUP_DIR)).toBe(false) // backup consumed
     const pkg = JSON.parse(read(root, 'package.json'))
     expect(pkg.scripts.postinstall).toBeUndefined()
-    expect(pkg.dependencies).toEqual({ next: '16.0.0', blazefire: '^1.0.9' })
+    expect(pkg.dependencies).toEqual({ next: '16.0.0', blazefire: '^1.1.2' })
   })
 
   it('a second restore reports nothing to restore (regression)', () => {

@@ -132,8 +132,7 @@ try {
   } else {
     // Name the version on purpose: "unknown command" usually means the
     // installed copy predates the command the user just ran, and seeing
-    // "blazefire v1.1.1" next to it says that instantly.
-    // "blazefire v1.0.0" next to it says that instantly.
+    // "blazefire v1.1.2" next to it says that instantly.
     const version = installedVersion()
     bail(
       'unknown command "' +

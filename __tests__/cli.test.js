@@ -36,7 +36,7 @@ function makeProject(config) {
     JSON.stringify({
       name: 'fixture',
       version: '0.0.0',
-      dependencies: { next: '16.0.0', blazefire: '^1.0.9' },
+      dependencies: { next: '16.0.0', blazefire: '^1.1.2' },
     })
   )
   fs.mkdirSync(path.join(root, 'node_modules', 'next'), { recursive: true })

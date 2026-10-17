@@ -36,7 +36,7 @@ const PACKAGE_VERSION = (function () {
   } catch (_) {
     /* fall through to the fallback below */
   }
-  return '1.1.1'
+  return '1.1.2'
 })()
 
 const BLAZEFIRE_BRANDING = {
