@@ -4,6 +4,7 @@
 </div>
 
 ## Early Showcase of custom error overlay triggered by hydration mismatch
+## ⚠️ Note only yarn and bun that has been tested and output no errors ⚠️
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
 
