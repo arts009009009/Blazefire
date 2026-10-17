@@ -890,6 +890,15 @@ function restore() {
           fs.copyFileSync(saved, path.join(root, name))
           say('restored ' + name + ' from ' + BACKUP_DIR + '/')
           restored += 1
+          // The backup has served its purpose — consume it. Keeping it meant
+          // every later `restore` re-copied a stale original over whatever the
+          // user had written since, and a following `init` skipped writing a
+          // fresh backup ("the first copy wins"), silently losing edits.
+          try {
+            fs.unlinkSync(saved)
+          } catch (_) {
+            /* best effort — a leftover file is restored again next time */
+          }
         }
       } else if (root !== projectRoot) {
         continue // a workspace child with no backup holds nothing of ours
@@ -900,6 +909,19 @@ function restore() {
       // even though its backup lives in the child, so undo it regardless of
       // whether this particular root holds a backup directory.
       if (undoHook(root)) restored += 1
+
+      // Drop the backup directory once it is empty, so a second `restore`
+      // correctly reports "nothing to restore" instead of a phantom success.
+      try {
+        if (
+          fs.existsSync(backupRoot) &&
+          fs.readdirSync(backupRoot).length === 0
+        ) {
+          fs.rmdirSync(backupRoot)
+        }
+      } catch (_) {
+        /* best effort */
+      }
     }
     if (restored > 0) return 0
   }

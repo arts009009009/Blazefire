@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect } from 'react'
 import { BlazefireLogo } from './BlazefireLogo.js'
-import { useBlazefire } from '../index.js'
+// The package runtime entry (`blazefire/index.js`), which re-exports
+// `useBlazefire` from provider.js — the SAME context instance a consumer's
+// `<BlazefireProvider>` renders. `../index.js` (the types-only source tree)
+// does not exist at runtime, so importing it broke this component entirely.
+import { useBlazefire } from '../../index.js'
 
 var positionStyles = {
   'bottom-right': { bottom: 20, right: 20 },

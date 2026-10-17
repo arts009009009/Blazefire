@@ -127,13 +127,11 @@ try {
     command === '-v' ||
     command === 'version'
   ) {
-  } else if (command === '--version' || command === '-v' || command === 'version') {
     console.log('blazefire v' + (installedVersion() || 'unknown'))
   } else {
     // Name the version on purpose: "unknown command" usually means the
     // installed copy predates the command the user just ran, and seeing
-    // "blazefire v1.1.1" next to it says that instantly.
-    // "blazefire v1.0.0" next to it says that instantly.
+    // "blazefire v1.1.2" next to it says that instantly.
     const version = installedVersion()
     bail(
       'unknown command "' +

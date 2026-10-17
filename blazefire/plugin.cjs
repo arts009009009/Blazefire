@@ -29,9 +29,12 @@ const DEFAULTS = {
   theme: true, // inject cyberpunk/OLED CSS into the document
   headers: true, // X-Powered-By / X-Compiler
   overlay: true, // rebrand the dev overlay (best effort)
-  poweredBy: 'Blazefire Framework',
-  compiler: 'Frostfast v1.0.0',
-  version: 'v1.0.0',
+  // Derived from the single source of truth (branding.cjs → package.json)
+  // so the header value and the advertised version can never drift from the
+  // version actually installed.
+  poweredBy: BLAZEFIRE_BRANDING.headers.poweredBy,
+  compiler: BLAZEFIRE_BRANDING.headers.compiler,
+  version: 'v' + BLAZEFIRE_BRANDING.version,
 }
 
 /**
@@ -98,11 +101,26 @@ function blazefire(first = {}, second) {
  * @returns {import('next').NextConfig}
  */
 function buildConfig(opts) {
+  // Both halves of the client runtime — the document theme and the overlay
+  // rebrand — travel through ONE injected file (runtime/inject.cjs), which
+  // cannot see this config object. Publish each toggle through an inlined
+  // NEXT_PUBLIC_* env value instead: Next inlines those into the client
+  // bundle (webpack and turbopack both), so the runtime knows which halves
+  // to apply. Absent flags mean "on", so hand-injected runtimes keep working.
+  const applyTheme = !!opts.theme
+  const applyOverlay = !!opts.overlay
+  const injectRuntime = applyTheme || applyOverlay
+
   return {
     // Next sets `X-Powered-By: Next.js` unconditionally in sendRenderResult()
     // AFTER custom headers() are applied, which would clobber ours. Disabling
     // it lets the headers() entry below stand on its own.
-    poweredByHeader: false,
+    //
+    // Only when we actually emit our own headers — with `headers: false`
+    // there is nothing below to stand on, and forcing `poweredByHeader:
+    // false` would strip Next's default too. Opting out of Blazefire's
+    // headers must not opt the project out of Next's.
+    ...(opts.headers && { poweredByHeader: false }),
 
     // ---- 1. HTTP identity (works on webpack AND turbopack) ----
     ...(opts.headers && {
@@ -122,6 +140,8 @@ function buildConfig(opts) {
       NEXT_PUBLIC_BLAZEFIRE: 'true',
       NEXT_PUBLIC_BLAZEFIRE_VERSION: opts.version,
       NEXT_PUBLIC_BLAZEFIRE_COMPILER: 'frostfast',
+      NEXT_PUBLIC_BLAZEFIRE_THEME: applyTheme ? 'true' : 'false',
+      NEXT_PUBLIC_BLAZEFIRE_OVERLAY: applyOverlay ? 'true' : 'false',
     },
 
     // ---- 3. Client-side theme injection (webpack builds) ----
@@ -134,7 +154,7 @@ function buildConfig(opts) {
     // delete the app — and running first is what lets the theme register
     // before application code.
     webpack(config, ctx) {
-      if (!opts.theme || !config || typeof config !== 'object') return config
+      if (!injectRuntime || !config || typeof config !== 'object') return config
       if (ctx && ctx.isServer) return config
 
       const runtime = path.join(__dirname, 'runtime', 'inject.cjs')
@@ -383,7 +403,9 @@ function prependRuntimeToValue(value, runtime) {
  * @returns {Record<string, Array<{loader: string, options: object}>>}
  */
 function buildTurbopackRules(opts) {
-  if (!opts.theme) return {}
+  // Gate on the same condition as the webpack entry: any enabled half of the
+  // runtime (theme or overlay) needs the injection.
+  if (!opts.theme && !opts.overlay) return {}
 
   const loader = path.join(__dirname, 'runtime', 'turbopack-loader.cjs')
   const inject = path.join(__dirname, 'runtime', 'inject.cjs')

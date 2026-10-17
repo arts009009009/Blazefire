@@ -19,9 +19,12 @@ export interface BlazefireOptions {
   overlay?: boolean
   /** Value for the `X-Powered-By` header. Default `'Blazefire Framework'`. */
   poweredBy?: string
-  /** Value for the `X-Compiler` header. Default `'Frostfast v1.0.0'`. */
+  /** Value for the `X-Compiler` header. Default `'Frostfast v<compilerVersion>'`. */
   compiler?: string
-  /** Version surfaced to the runtime. Default `'v1.0.0'`. */
+  /**
+   * Version surfaced to the runtime. Default `'v<package version>'` — read
+   * from the installed manifest, so it tracks the actual release.
+   */
   version?: string
 }
 

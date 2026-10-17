@@ -56,7 +56,9 @@ describe('compareVersions', () => {
     // The repo really does carry this tag; it must never out-rank 1.0.1.
     expect(compareVersions('v1.0.1-blazefire-pnpm', '1.0.1')).toBe(-1)
     expect(compareVersions('1.0.1', 'v1.0.1-blazefire-pnpm')).toBe(1)
-    expect(compareVersions('v1.0.1-blazefire-pnpm', 'v1.0.1-blazefire-pnpm')).toBe(0)
+    expect(
+      compareVersions('v1.0.1-blazefire-pnpm', 'v1.0.1-blazefire-pnpm')
+    ).toBe(0)
   })
 
   test('a prerelease still beats the older release', () => {
@@ -117,7 +119,9 @@ describe('throttle state', () => {
     )
 
     // At (and after) the boundary: allowed to ask again.
-    expect(updates.recentlyChecked(scratch, now + CHECK_INTERVAL_MS)).toBe(false)
+    expect(updates.recentlyChecked(scratch, now + CHECK_INTERVAL_MS)).toBe(
+      false
+    )
     expect(updates.recentlyChecked(scratch, now + CHECK_INTERVAL_MS + 1)).toBe(
       false
     )
@@ -156,7 +160,8 @@ describe('detectPackageManager', () => {
   })
 
   test('trusts the user-agent the package manager sets', () => {
-    process.env.npm_config_user_agent = 'pnpm/9.0.0 npm/? node/v20.0.0 linux x64'
+    process.env.npm_config_user_agent =
+      'pnpm/9.0.0 npm/? node/v20.0.0 linux x64'
     expect(updates.detectPackageManager(scratch)).toBe('pnpm')
 
     process.env.npm_config_user_agent = 'yarn/1.22.19 npm/? node/v20.0.0'

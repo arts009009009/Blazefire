@@ -75,10 +75,10 @@ describe('blazefire(config)', () => {
   })
 
   it('honours a lone options bag without inventing config keys', () => {
-    const out = blazefire({ theme: false })
+    const out = blazefire({ theme: false, overlay: false })
     expect(out.trailingSlash).toBeUndefined()
     expect(out.poweredByHeader).toBe(false)
-    // theme off → no entry injection at all
+    // theme and overlay both off → no entry injection at all
     const entry = { main: ['./next/dist/client/next.js'] }
     const cfg = { entry }
     out.webpack(cfg, { isServer: false })
@@ -87,11 +87,58 @@ describe('blazefire(config)', () => {
   })
 
   it('keeps options and config when both arrive in one object', () => {
-    const out = blazefire({ trailingSlash: true, theme: false })
+    const out = blazefire({ trailingSlash: true, theme: false, overlay: false })
     expect(out.trailingSlash).toBe(true)
     const cfg = { entry: { main: ['./next/dist/client/next.js'] } }
     out.webpack(cfg, { isServer: false })
     expect(cfg.entry['main']).toEqual(['./next/dist/client/next.js'])
+  })
+
+  it('injects the runtime for the overlay even when the theme is off', () => {
+    // theme: false alone must not disable the overlay rebrand — it travels
+    // through the same runtime file, gated at runtime by the env flags.
+    const out = blazefire({ theme: false })
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_THEME).toBe('false')
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY).toBe('true')
+    const cfg = { entry: { main: ['./next/dist/client/next.js'] } }
+    out.webpack(cfg, { isServer: false })
+    expect(cfg.entry['main'][0]).toMatch(/runtime[\\/]inject\.cjs$/)
+  })
+
+  it('does not inject when only the theme is off AND overlay is off', () => {
+    const out = blazefire({ theme: false, overlay: false })
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_THEME).toBe('false')
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY).toBe('false')
+    expect(out.turbopack.rules).toEqual({})
+    const cfg = { entry: { main: ['./next/dist/client/next.js'] } }
+    out.webpack(cfg, { isServer: false })
+    expect(cfg.entry['main']).toEqual(['./next/dist/client/next.js'])
+  })
+
+  it('overlay: false stops the overlay rebrand but keeps the theme', () => {
+    const out = blazefire({ overlay: false })
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_THEME).toBe('true')
+    expect(out.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY).toBe('false')
+    // the runtime is still injected — it carries the document theme
+    const cfg = { entry: { main: ['./next/dist/client/next.js'] } }
+    out.webpack(cfg, { isServer: false })
+    expect(cfg.entry['main'][0]).toMatch(/runtime[\\/]inject\.cjs$/)
+    expect(Object.keys(out.turbopack.rules).length).toBeGreaterThan(0)
+  })
+
+  it('headers: false strips our headers but leaves Next default alone', async () => {
+    const out = blazefire({ headers: false })
+    // no headers() entry and — unlike the default config — poweredByHeader is
+    // NOT forced off, so Next's own default behaviour is restored.
+    expect(out.headers).toBeUndefined()
+    expect(out.poweredByHeader).toBeUndefined()
+  })
+
+  it('defaults advertise the installed package version', () => {
+    const pkg = require('../package.json')
+    expect(blazefire.DEFAULTS.version).toBe('v' + pkg.version)
+    expect(blazefire.DEFAULTS.compiler).toBe('Frostfast v1.0.0')
+    expect(blazefire.DEFAULTS.poweredBy).toBe('Blazefire Framework')
   })
 
   it('applies the options bag even when the first argument is empty', async () => {

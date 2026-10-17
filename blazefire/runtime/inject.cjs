@@ -12,9 +12,30 @@
 
 var branding = require('../branding.cjs')
 
+/**
+ * The next.config plugin publishes its `theme` / `overlay` toggles as inlined
+ * NEXT_PUBLIC_* values (see plugin.cjs buildConfig). Both default to ON when
+ * absent, so a hand-injected runtime keeps today's behaviour; "false" turns
+ * one half off without disabling the other.
+ */
+function blazefireEnabled(name) {
+  try {
+    if (
+      typeof process !== 'undefined' &&
+      process.env &&
+      process.env[name] === 'false'
+    ) {
+      return false
+    }
+  } catch (_) {
+    /* no process shim — treat as enabled */
+  }
+  return true
+}
+
 if (typeof document !== 'undefined') {
-  inject()
-  injectOverlayTheme()
+  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_THEME')) inject()
+  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_OVERLAY')) injectOverlayTheme()
 }
 
 function inject() {
@@ -108,12 +129,18 @@ function injectOverlayTheme() {
   }
 
   function rebrand(root) {
+    // Same teardown guard as scan(): a queued callback must not throw when
+    // the document has already gone away.
+    if (typeof document === 'undefined' || !document) return
     applyTheme(root)
     applyLabels(root)
     watchShadowRoot(root)
   }
 
   function scan() {
+    // A pending MutationObserver callback can land after the document is gone
+    // (environment teardown, a detached window) — there is nothing to scan.
+    if (typeof document === 'undefined' || !document) return
     // Tag name comparison is case-insensitive via querySelector on the
     // lowercased custom element name.
     var portals = document.querySelectorAll('nextjs-portal, blazefire-portal')

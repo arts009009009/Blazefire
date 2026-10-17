@@ -21,10 +21,28 @@ try {
   // no baked asset — flameDataUri() fallback is used instead
 }
 
+/**
+ * The installed package version, read from our own manifest so every brand
+ * string (`X-Powered-By` metadata, `NEXT_PUBLIC_BLAZEFIRE_VERSION`, the
+ * overlay's "Blazefire <version>" label, the startup banner) reports the
+ * version actually installed instead of a literal that silently drifts.
+ * The manifest is bundled by webpack/turbopack like any JSON module; the
+ * fallback keeps a missing/unparsable manifest from breaking the build.
+ */
+const PACKAGE_VERSION = (function () {
+  try {
+    const v = require('../package.json').version
+    if (typeof v === 'string' && /^\d+\.\d+\.\d+/.test(v)) return v
+  } catch (_) {
+    /* fall through to the fallback below */
+  }
+  return '1.1.2'
+})()
+
 const BLAZEFIRE_BRANDING = {
   name: 'Blazefire',
   compiler: 'Frostfast',
-  version: '1.0.0',
+  version: PACKAGE_VERSION,
   compilerVersion: '1.0.0',
 
   // Response headers
@@ -34,7 +52,8 @@ const BLAZEFIRE_BRANDING = {
   },
 
   // Startup banner shown by `next dev` / `next start`
-  banner: 'Blazefire Runtime v1.0.0 | Frostfast Compiler v1.0.0',
+  banner:
+    'Blazefire Runtime v' + PACKAGE_VERSION + ' | Frostfast Compiler v1.0.0',
 
   // Dev-overlay text identities.
   //
@@ -55,8 +74,8 @@ const BLAZEFIRE_BRANDING = {
     {
       selector: '[data-nextjs-version-checker]',
       match: /^Next\.js\s+[\w.\-+]+/,
-      replace: 'Blazefire 1.0.0',
-      title: 'Blazefire 1.0.0',
+      replace: 'Blazefire ' + PACKAGE_VERSION,
+      title: 'Blazefire ' + PACKAGE_VERSION,
     },
     // "Turbopack" pill -> "Frostfast"
     {
@@ -179,10 +198,14 @@ html { color-scheme: dark; }
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
   const g = branding.logo.gradient
+  // A single-stop (or empty) gradient has no second stop to interpolate
+  // against; `i / (length - 1)` would emit `offset="NaN"` and produce an
+  // invalid SVG. Every single stop gets offset 0 in that case.
+  const span = g.length - 1
   const stops = g
     .map(
       (colour, i) =>
-        `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`
+        `<stop offset="${(span > 0 ? i / span : 0).toFixed(3)}" stop-color="${colour}"/>`
     )
     .join('')
 
