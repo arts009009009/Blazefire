@@ -12,9 +12,26 @@
 
 var branding = require('../branding.cjs')
 
+/**
+ * The next.config plugin publishes its `theme` / `overlay` toggles as inlined
+ * NEXT_PUBLIC_* values (see plugin.cjs buildConfig). Both default to ON when
+ * absent, so a hand-injected runtime keeps today's behaviour; "false" turns
+ * one half off without disabling the other.
+ */
+function blazefireEnabled(name) {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env[name] === 'false') {
+      return false
+    }
+  } catch (_) {
+    /* no process shim — treat as enabled */
+  }
+  return true
+}
+
 if (typeof document !== 'undefined') {
-  inject()
-  injectOverlayTheme()
+  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_THEME')) inject()
+  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_OVERLAY')) injectOverlayTheme()
 }
 
 function inject() {
