@@ -103,16 +103,19 @@ describe('overlay rebrand (shadow root)', () => {
   })
 
   it('leaves nodes in place (React owns them — only text/attributes change)', () => {
-    makePortal(OVERLAY_HTML)
+    const portal = makePortal(OVERLAY_HTML)
+    const root = portal.shadowRoot
+    const before = root.querySelectorAll('*').length
+
     loadRuntime()
-    const root = document.querySelector('nextjs-portal').shadowRoot
+
     // element count unchanged: nothing removed or re-parented
-    expect(root.querySelectorAll('*')).toHaveLength(
-      root.querySelectorAll('*').length
-    )
+    expect(root.querySelectorAll('*').length).toBe(before)
     expect(root.querySelector('#next-logo')).not.toBeNull()
     expect(root.querySelector('.turbopack-text')).not.toBeNull()
     expect(root.querySelector('button')).not.toBeNull()
+    // …but a style element was ADDED (attribute/text writes + one append)
+    expect(root.querySelectorAll('*').length).toBe(before + 1)
   })
 
   it('is idempotent across runtime reloads', () => {
