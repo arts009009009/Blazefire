@@ -15,7 +15,7 @@
 // on older Node — so a test (__tests__/version-sync.test.js) asserts the two
 // stay identical and fails the suite when a release bumps one without the
 // other.
-export const BLAZEFIRE_VERSION = '1.0.9'
+export const BLAZEFIRE_VERSION = '1.1.1'
 export const FROSTFAST_VERSION = '1.0.0'
 
 // Self-contained inline SVG flame mark, used by createBlazefireLogo() below.
