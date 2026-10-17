@@ -29,6 +29,32 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 - DevTools indicator
 - Frostfast compiler (SWC + Turbopack)
 
+## Quick start
+
+The full loop, end to end, with Bun (swap the first command for your package
+manager — see [Installation](#installation)):
+
+```bash
+# 1. install straight from GitHub (the package is not on npm)
+bun add github:arts009009009/Blazefire
+
+# 2. activate — automatic via postinstall; if your manager blocks
+#    dependency scripts (bun, pnpm, CI with ignore-scripts), run it once:
+bunx blazefire init
+
+# 3. run your app — your usual Next.js scripts, unchanged
+bun run dev          # npm run dev / yarn dev / pnpm dev
+
+# 4. verify and maintain
+bunx blazefire --version   # installed version (npx blazefire --version)
+bunx blazefire check       # installed vs. latest release
+bunx blazefire update      # install the latest release
+bunx blazefire restore     # undo activation
+```
+
+On `next dev`, Blazefire offers the update it finds at most once every 24
+hours; answering no just continues your dev server.
+
 ## Installation
 
 Install straight from GitHub — the package is not published to npm. For Yarn
@@ -86,10 +112,12 @@ allow just this package from `package.json`:
 { "dependenciesMeta": { "blazefire": { "built": true } } }
 ```
 
-Or skip the git allowlist entirely by installing the tarball:
+Or skip the git allowlist entirely by installing the archive directly —
+a `refs/tags/vX.Y.Z.tar.gz` URL pins a release, `main.tar.gz` tracks the
+branch tip:
 
 ```bash
-yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/tags/v1.0.0.tar.gz
+yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
 ```
 
 Using Yarn Plug'n'Play instead (no `node_modules`)? Run `yarn blazefire init`
@@ -167,6 +195,37 @@ npx blazefire restore
 
 Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
 is written, and an existing hook honours the flag too.
+
+## CLI
+
+Every command works through npx — or `bunx blazefire …`, `yarn blazefire …`,
+`pnpm exec blazefire …` if you prefer your package manager's runner:
+
+```text
+blazefire init       wire Blazefire into this project's next.config.*
+blazefire restore    put the original back from "Blazefire Backup/"
+blazefire update     re-install the latest Blazefire release
+blazefire check      report the installed and latest version
+blazefire --version  print the installed version   (-v, version)
+blazefire --help     show all of the above with details (-h, help)
+```
+
+`init` is idempotent — a second run reports `already active` and writes
+nothing. If the config shape is not recognised it prints exactly what to
+paste rather than guessing.
+
+`update` re-runs your package manager's add for the specifier you installed
+with, so a branch install re-resolves to its tip while a pinned tarball URL
+resolves to the same commit. Restart your dev server afterwards to pick it
+up.
+
+If an unknown command ever prints `(blazefire vX.Y.Z)` next to it, that
+installed copy simply predates the command — run `blazefire update`.
+
+Note: package managers may warn that Blazefire's peer dependencies
+(`next`, `react`, `react-dom`) are not provided — harmless when your app
+itself depends on them; the warning only means the manager found them
+higher up (or not at all) in the tree.
 
 ## Usage
 

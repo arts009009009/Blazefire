@@ -17,6 +17,11 @@ const api = require('./postinstall.cjs')
 const HELP = `
 Blazefire
 
+  npx blazefire init      wire Blazefire into this project's next.config.*
+  npx blazefire restore   put the original back from "Blazefire Backup/"
+  npx blazefire update    re-install the latest Blazefire release
+  npx blazefire check     report the installed and latest version
+  npx blazefire --version print the installed version
   npx blazefire init       wire Blazefire into this project's next.config.*
   npx blazefire restore    put the original back from "Blazefire Backup/"
   npx blazefire update     re-install the latest Blazefire release
@@ -117,11 +122,17 @@ try {
     })
   } else if (command === '--help' || command === '-h' || command === 'help') {
     console.log(HELP.trim())
+  } else if (
+    command === '--version' ||
+    command === '-v' ||
+    command === 'version'
+  ) {
   } else if (command === '--version' || command === '-v' || command === 'version') {
     console.log('blazefire v' + (installedVersion() || 'unknown'))
   } else {
     // Name the version on purpose: "unknown command" usually means the
     // installed copy predates the command the user just ran, and seeing
+    // "blazefire v1.1.1" next to it says that instantly.
     // "blazefire v1.0.0" next to it says that instantly.
     const version = installedVersion()
     bail(
