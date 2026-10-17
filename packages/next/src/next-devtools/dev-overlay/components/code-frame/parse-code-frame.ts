@@ -87,7 +87,7 @@ export function parseLineNumberFromCodeFrameLine(
   while (i < line.length && isLineNumberPrefixToken(line[i]?.content)) {
     i++
   }
-  const trimmed = line[i]?.content?.replace('|', '').trim()
+  const trimmed = line[i]?.content?.replace(/\|/g, '').trim()
   const line1 = trimmed && /^\d+$/.test(trimmed) ? trimmed : undefined
 
   return {

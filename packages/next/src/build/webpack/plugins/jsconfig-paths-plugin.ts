@@ -251,7 +251,7 @@ export class JsConfigPathsPlugin implements ResolvePluginPlugin {
             paths[matchedPatternText],
             (subst, pathCallback) => {
               const curPath = matchedStar
-                ? subst.replace('*', matchedStar)
+                ? subst.replace(/\*/g, matchedStar)
                 : subst
               // Ensure .d.ts is not matched
               if (curPath.endsWith('.d.ts')) {

@@ -22,6 +22,11 @@ Blazefire
   npx blazefire update    re-install the latest Blazefire release
   npx blazefire check     report the installed and latest version
   npx blazefire --version print the installed version
+  npx blazefire init       wire Blazefire into this project's next.config.*
+  npx blazefire restore    put the original back from "Blazefire Backup/"
+  npx blazefire update     re-install the latest Blazefire release
+  npx blazefire check      report the installed and latest version
+  npx blazefire --version  print the installed version
 
   Init backs the original up first and never runs twice on the same file.
   If the config shape is not recognised it prints exactly what to paste
@@ -32,10 +37,11 @@ Blazefire
   own postinstall — still self-activate on every install. "restore" removes
   that hook again.
 
-  Update re-runs your package manager's add for the specifier you installed
-  with (a branch re-resolves to its tip; an immutable tarball URL resolves to
-  the same commit). On \`next dev\` Blazefire offers this same update at most
-  once per 24 hours; answering no just continues your dev server.
+  Update clears your package manager's cached copy of Blazefire, then re-adds
+  the specifier you installed with, so a branch re-resolves to its tip while a
+  commit-pinned URL stays put. On \`next dev\` Blazefire offers this same
+  update at most once per 24 hours; answering no just continues your dev
+  server.
 
   Opt out of auto-activation on install with BLAZEFIRE_SKIP_AUTO=1.
   Opt out of the update check with BLAZEFIRE_SKIP_UPDATE_CHECK=1.
@@ -121,11 +127,13 @@ try {
     command === '-v' ||
     command === 'version'
   ) {
+  } else if (command === '--version' || command === '-v' || command === 'version') {
     console.log('blazefire v' + (installedVersion() || 'unknown'))
   } else {
     // Name the version on purpose: "unknown command" usually means the
     // installed copy predates the command the user just ran, and seeing
     // "blazefire v1.1.1" next to it says that instantly.
+    // "blazefire v1.0.0" next to it says that instantly.
     const version = installedVersion()
     bail(
       'unknown command "' +

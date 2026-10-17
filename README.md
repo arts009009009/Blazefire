@@ -3,10 +3,6 @@
   <p>Blazefire framework powered by Frostfast compiler</p>
 </div>
 
-> **⚠️ Experimental**
-> This repo is not ready for any use — it is experimental. No contributing or
-> forking is allowed.
-
 ## Early Showcase of custom error overlay triggered by hydration mismatch
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
