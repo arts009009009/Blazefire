@@ -64,14 +64,15 @@ describe('blazefireLoader', () => {
     expect(firstLine).toMatch(/require\("\.\//)
   })
 
-  it('works on source that is not a string by returning it unchanged', () => {
-    const bufferSource = Buffer.from('bytes')
-    // The guard `typeof source === 'string'` short-circuits; only string
-    // sources are ever passed by turbopack, but a non-string must not throw.
+  it('does not throw on a non-string source (coerces it into the result)', () => {
+    // Only string sources are ever passed by turbopack, but the guard must not
+    // throw: the buffer is coerced into the emitted string.
     let result
     expect(() => {
-      result = blazefireLoader.call(ctx(), bufferSource)
+      result = blazefireLoader.call(ctx(), Buffer.from('bytes'))
     }).not.toThrow()
-    expect(result.equals(bufferSource)).toBe(true)
+    expect(typeof result).toBe('string')
+    expect(result).toContain('bytes')
+    expect(result).toContain('blazefire-injected')
   })
 })
