@@ -9,7 +9,13 @@
  * throw. Keeping the two sides in separate modules is what lets both work.
  */
 
-export const BLAZEFIRE_VERSION = '1.0.0'
+// NOTE: this string must match `version` in the package manifest. It cannot
+// be read at runtime here — this module also ships inside the browser bundle,
+// where a JSON import would be either a bundler dependency or a hard failure
+// on older Node — so a test (__tests__/version-sync.test.js) asserts the two
+// stay identical and fails the suite when a release bumps one without the
+// other.
+export const BLAZEFIRE_VERSION = '1.0.9'
 export const FROSTFAST_VERSION = '1.0.0'
 
 // Self-contained inline SVG flame mark, used by createBlazefireLogo() below.
@@ -29,14 +35,24 @@ var BLAZEFIRE_LOGO_URL =
 /** SSR-safe style injection — a no-op on the server. */
 export function insertBlazefireStyles() {
   if (typeof document === 'undefined') return
-
-  var existing = document.getElementById('blazefire-styles')
-  if (existing) return
+  if (document.getElementById('blazefire-styles')) return
 
   var style = document.createElement('style')
   style.id = 'blazefire-styles'
   style.textContent = getBlazefireCSS()
-  document.head.appendChild(style)
+
+  // `document.head` can be missing when this is called extremely early (or in
+  // a non-HTML document); retry on DOM ready instead of throwing a TypeError
+  // out of a user's component.
+  if (document.head) {
+    document.head.appendChild(style)
+  } else {
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!document.getElementById('blazefire-styles') && document.head) {
+        document.head.appendChild(style)
+      }
+    })
+  }
 }
 
 function getBlazefireCSS() {
@@ -92,14 +108,18 @@ function getBlazefireCSS() {
  * no external asset and works in SSR, the browser, and any bundler.
  */
 export function createBlazefireLogo(size) {
-  size = size || 40
+  // The size is interpolated into an attribute list, so it must be a number —
+  // an unvalidated string like `40" onerror="…` would close the attribute and
+  // inject markup. Anything non-numeric falls back to the default.
+  var n = Number(size)
+  if (!Number.isFinite(n) || n <= 0) n = 40
   return (
     '<img src="' +
     BLAZEFIRE_LOGO_URL +
     '" width="' +
-    size +
+    n +
     '" height="' +
-    size +
+    n +
     '" alt="Blazefire" style="object-fit:contain" draggable="false">'
   )
 }
@@ -119,15 +139,19 @@ export function createCompiler(options) {
   var defaultModule = { type: 'es6' }
 
   // Merge one level deep: passing `{ jsc: { parser: … } }` must not silently
-  // drop `jsc.transform.react` (and with it the automatic JSX runtime).
+  // drop `jsc.transform.react` (and with it the automatic JSX runtime) — and
+  // equally, keys we do not know about (`jsc.target`, `module.noInterop`, …)
+  // must survive rather than be deleted by the merge.
   var jsc = options.jsc || {}
+  var mod = options.module || {}
   var merged = {
     ...options,
     jsc: {
+      ...jsc,
       parser: jsc.parser ?? defaultJsc.parser,
       transform: jsc.transform ?? defaultJsc.transform,
     },
-    module: { type: options.module?.type ?? defaultModule.type },
+    module: { ...mod, type: mod.type ?? defaultModule.type },
   }
 
   return {

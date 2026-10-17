@@ -198,10 +198,14 @@ html { color-scheme: dark; }
  */
 function flameDataUri(branding = BLAZEFIRE_BRANDING) {
   const g = branding.logo.gradient
+  // A single-stop (or empty) gradient has no second stop to interpolate
+  // against; `i / (length - 1)` would emit `offset="NaN"` and produce an
+  // invalid SVG. Every single stop gets offset 0 in that case.
+  const span = g.length - 1
   const stops = g
     .map(
       (colour, i) =>
-        `<stop offset="${(i / (g.length - 1)).toFixed(3)}" stop-color="${colour}"/>`
+        `<stop offset="${(span > 0 ? i / span : 0).toFixed(3)}" stop-color="${colour}"/>`
     )
     .join('')
 

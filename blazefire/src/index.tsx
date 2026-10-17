@@ -29,7 +29,10 @@ export interface CompilerInstance {
   transform(code: string, filename?: string): Promise<{ code: string }>
 }
 
-export const BLAZEFIRE_VERSION = '1.0.0'
+// NOTE: must match `version` in the package manifest (kept in sync with the
+// runtime constants in `blazefire/utils.js`; asserted by
+// __tests__/version-sync.test.js).
+export const BLAZEFIRE_VERSION = '1.0.9'
 export const FROSTFAST_VERSION = '1.0.0'
 
 // Self-contained inline SVG flame mark — no external PNG asset.
@@ -50,14 +53,23 @@ const BLAZEFIRE_LOGO_URL =
 
 export function insertBlazefireStyles(): void {
   if (typeof document === 'undefined') return
-
-  const existing = document.getElementById('blazefire-styles')
-  if (existing) return
+  if (document.getElementById('blazefire-styles')) return
 
   const style = document.createElement('style')
   style.id = 'blazefire-styles'
   style.textContent = getBlazefireCSS()
-  document.head.appendChild(style)
+
+  // `document.head` can be missing when this runs extremely early; retry on
+  // DOM ready rather than throwing a TypeError out of a user's component.
+  if (document.head) {
+    document.head.appendChild(style)
+  } else {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (!document.getElementById('blazefire-styles') && document.head) {
+        document.head.appendChild(style)
+      }
+    })
+  }
 }
 
 /** Mirrors `getBlazefireCSS()` in the runtime entry (`blazefire/index.js`). */
@@ -104,8 +116,13 @@ function getBlazefireCSS(): string {
   `
 }
 
-export function createBlazefireLogo(size: number = 40): string {
-  return `<img src="${BLAZEFIRE_LOGO_URL}" width="${size}" height="${size}" alt="Blazefire" style="object-fit:contain" draggable="false">`
+export function createBlazefireLogo(size?: number): string {
+  // The size is interpolated into an attribute list, so it must be a number —
+  // an unvalidated string like `40" onerror="…` would close the attribute and
+  // inject markup. Anything non-numeric falls back to the default.
+  const n = Number(size)
+  const safe = Number.isFinite(n) && n > 0 ? n : 40
+  return `<img src="${BLAZEFIRE_LOGO_URL}" width="${safe}" height="${safe}" alt="Blazefire" style="object-fit:contain" draggable="false">`
 }
 
 export function createCompiler(
@@ -118,15 +135,18 @@ export function createCompiler(
   const defaultModule = { type: 'es6' }
 
   // Merge one level deep: passing `{ jsc: { parser: … } }` must not silently
-  // drop `jsc.transform.react` (and with it the automatic JSX runtime).
+  // drop `jsc.transform.react` (and with it the automatic JSX runtime) — and
+  // equally, keys we do not know about must survive rather than be deleted.
   const jsc = options.jsc || {}
+  const mod: { type?: string } = options.module || {}
   const merged: CompilerOptions = {
     ...options,
     jsc: {
+      ...jsc,
       parser: jsc.parser ?? defaultJsc.parser,
       transform: jsc.transform ?? defaultJsc.transform,
     },
-    module: { type: options.module?.type ?? defaultModule.type },
+    module: { ...mod, type: mod.type ?? defaultModule.type },
   }
 
   return {
@@ -158,6 +178,27 @@ export interface BlazefireProviderProps {
   children: React.ReactNode
 }
 
+// `process.env.NODE_ENV` is defined by the bundler on both server and client.
+// Declared locally (module-scoped, shadowing any global) so this types entry
+// compiles without @types/node while keeping the exact literal form the
+// bundler statically replaces — see provider.js for the runtime original.
+declare const process: { env: { NODE_ENV?: string } } | undefined
+
+/** Mirrors `BlazefireDevToolsAuto` in the runtime provider (`blazefire/provider.js`). */
+function BlazefireDevToolsAuto() {
+  const isDev =
+    typeof process !== 'undefined' &&
+    process.env &&
+    process.env.NODE_ENV === 'development'
+  if (!isDev) return null
+  return React.createElement('div', {
+    'data-blazefire-devtools': true,
+    role: 'status',
+    style: { position: 'fixed', bottom: 20, right: 20, zIndex: 2147483647 },
+    'aria-label': 'Blazefire Dev Tools',
+  })
+}
+
 export function BlazefireProvider({ children }: BlazefireProviderProps) {
   useEffect(() => {
     insertBlazefireStyles()
@@ -172,6 +213,7 @@ export function BlazefireProvider({ children }: BlazefireProviderProps) {
       }}
     >
       {children}
+      <BlazefireDevToolsAuto />
     </BlazefireContext.Provider>
   )
 }
