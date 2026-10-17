@@ -313,3 +313,4 @@ import { insertBlazefireStyles } from 'blazefire'
 ## License
 
 MIT
+Copyright (c) 2025 Vercel, Inc.
