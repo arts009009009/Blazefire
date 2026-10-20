@@ -1049,7 +1049,7 @@ function restore() {
         for (const name of CONFIG_NAMES) {
           const saved = path.join(backupRoot, name)
           if (!fs.existsSync(saved)) continue
-          fs.copyFileSync(saved, path.join(root, name))
+          writeAtomicSync(path.join(root, name), fs.readFileSync(saved, 'utf8'))
           say('restored ' + name + ' from ' + BACKUP_DIR + '/')
           restored += 1
           // The backup has served its purpose — consume it. Keeping it meant
