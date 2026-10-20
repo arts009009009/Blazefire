@@ -2,6 +2,8 @@
  * Blazefire Frostfast Compiler Entry Point
  */
 
+import { transform } from './swc/index.js'
+
 export interface CompilerConfig {
   target?: string
   module?: string
@@ -22,8 +24,20 @@ export function createCompiler(config: CompilerConfig = {}) {
   return {
     config: { ...defaults, ...config },
     version: COMPILER_VERSION,
-    async compile(code: string) {
-      return { code, error: null }
+    async compile(code: string, filename?: string) {
+      const options = {
+        jsc: {
+          target: config.target,
+          parser: { syntax: 'typescript', tsx: true },
+          transform: {
+            react: { runtime: config.jsx === 'react' ? 'classic' : 'automatic' },
+          },
+        },
+        module: { type: config.module },
+        ...(filename ? { filename } : {}),
+      }
+      const result = await transform(code, options)
+      return { code: result.code, error: null }
     },
   }
 }

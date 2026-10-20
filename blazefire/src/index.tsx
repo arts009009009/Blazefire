@@ -157,8 +157,22 @@ export function createCompiler(
   return {
     options: merged,
     version: FROSTFAST_VERSION,
-    async transform(code: string, _filename?: string) {
-      return { code }
+    async transform(code: string, filename?: string) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
+      const swc = await import(
+        /* webpackIgnore: true */
+        /* turbopackIgnore: true */
+        './compiler/swc/index.js'
+      )
+      const transformOptions = filename
+        ? { ...merged, filename }
+        : merged
+      const result = await swc.transform(code, transformOptions)
+      return { code: result.code }
     },
   }
 }
