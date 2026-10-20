@@ -299,6 +299,7 @@ describe('shouldNotify', () => {
     CI: process.env.CI,
     SKIP: process.env.BLAZEFIRE_SKIP_UPDATE_CHECK,
     TTY: process.stdout.isTTY,
+    ARGV: process.argv,
   }
 
   afterEach(() => {
@@ -309,6 +310,10 @@ describe('shouldNotify', () => {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
+    // Restore argv too: jest reuses worker processes across files, and a
+    // leaked ['node','next','dev'] would make later suites that evaluate
+    // shouldNotify() see a phantom dev invocation.
+    process.argv = ORIGINAL_ENV.ARGV
     Object.defineProperty(process.stdout, 'isTTY', {
       value: ORIGINAL_ENV.TTY,
       configurable: true,
