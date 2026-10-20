@@ -149,6 +149,29 @@ describe('throttle state', () => {
     expect(updates.readState(scratch)).toEqual({})
     expect(updates.recentlyChecked(scratch, Date.now())).toBe(false)
   })
+
+  test('a non-object state file is normalised, not thrown on', () => {
+    // `null` used to make recentlyChecked throw on `state.lastCheck` and
+    // writeState throw on Object.assign — disabling the notifier entirely.
+    fs.writeFileSync(updates.stateFile(scratch), 'null')
+    expect(updates.readState(scratch)).toEqual({})
+    expect(updates.recentlyChecked(scratch, Date.now())).toBe(false)
+    expect(updates.writeState(scratch, { lastCheck: 456 })).toBe(true)
+    expect(updates.readState(scratch).lastCheck).toBe(456)
+
+    fs.writeFileSync(updates.stateFile(scratch), '"a string"')
+    expect(updates.readState(scratch)).toEqual({})
+    fs.writeFileSync(updates.stateFile(scratch), '[1,2,3]')
+    expect(updates.readState(scratch)).toEqual({})
+  })
+
+  test('a future-dated stamp does not pin the throttle open', () => {
+    // A clock corrected backwards (or a tampered file) used to suppress
+    // every check until now caught up with lastCheck + 24h.
+    const now = 1_000_000_000_000
+    updates.writeState(scratch, { lastCheck: now + 999_999_999 })
+    expect(updates.recentlyChecked(scratch, now)).toBe(false)
+  })
 })
 
 describe('detectPackageManager', () => {
