@@ -1161,7 +1161,9 @@ function shouldNotify() {
   // Only the *subcommand* counts. Matching any argv element means
   // `next lint dev` or a positional dir named `dev` gets a raw-mode
   // mid-command prompt, violating the "build and start stay silent" rule.
-  // The first non-flag token after the script/entry is the subcommand.
+  // Scan positionals; skip flag values and anything that looks like the
+  // invoked script path (`node --flag path/to/next dev` puts the binary
+  // inside slice(2)).
   const argv = process.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -1172,6 +1174,7 @@ function shouldNotify() {
       if (/^--(dir|config|name|distDir|plugin|envFile)$/.test(a)) i++
       continue
     }
+    if (/[\\/]/.test(a) || /\.(c?js|mjs|ts)$/.test(a)) continue // script path
     return a === 'dev'
   }
   return false
