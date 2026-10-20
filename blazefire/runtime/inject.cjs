@@ -17,25 +17,30 @@ var branding = require('../branding.cjs')
  * NEXT_PUBLIC_* values (see plugin.cjs buildConfig). Both default to ON when
  * absent, so a hand-injected runtime keeps today's behaviour; "false" turns
  * one half off without disabling the other.
+ *
+ * The flags are read with STATIC member expressions on purpose. A bundler
+ * only inlines static `process.env.NEXT_PUBLIC_*` reads — webpack via
+ * DefinePlugin, turbopack via its define phase — so each read below is
+ * replaced by the literal build-time value in the client bundle. The previous
+ * dynamic `process.env[name]` survived into the browser as a lookup on the
+ * empty process polyfill, which silently made both toggles no-ops: the theme
+ * injected even when the project passed `blazefire(config, { theme: false })`.
+ *
+ * The try/catch keeps the module loadable in a bare runtime with neither the
+ * inlining nor a `process` at all — the flags then stay at their default, ON.
  */
-function blazefireEnabled(name) {
-  try {
-    if (
-      typeof process !== 'undefined' &&
-      process.env &&
-      process.env[name] === 'false'
-    ) {
-      return false
-    }
-  } catch (_) {
-    /* no process shim — treat as enabled */
-  }
-  return true
+var THEME_ENABLED = true
+var OVERLAY_ENABLED = true
+try {
+  THEME_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_THEME !== 'false'
+  OVERLAY_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY !== 'false'
+} catch (_) {
+  /* no process shim and no build-time inlining — treat as enabled */
 }
 
 if (typeof document !== 'undefined') {
-  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_THEME')) inject()
-  if (blazefireEnabled('NEXT_PUBLIC_BLAZEFIRE_OVERLAY')) injectOverlayTheme()
+  if (THEME_ENABLED) inject()
+  if (OVERLAY_ENABLED) injectOverlayTheme()
 }
 
 function inject() {
