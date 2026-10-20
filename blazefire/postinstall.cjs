@@ -418,10 +418,41 @@ function statementEnd(src, start) {
  */
 function startsNewStatement(src, i) {
   return (
-    /^(module\s*\.|exports\s*\.|export\s|import\s|const\s|let\s|var\s|function\s|class\s|require\s*\(|module\s*\(\)/.test(
+    /^(module\s*\.|exports\s*\.|export\s|import\s|const\s|let\s|var\s|function\s|class\s|require\s*\(|module\s*\(\))/.test(
       src.slice(i, i + 40)
     )
   )
+}
+
+/**
+ * Index of the first top-level `//` line comment within src[from..to), or -1.
+ *
+ * String- and block-comment-aware, depth-tracked: a `//` inside a nested
+ * object/array/call or inside a string does not count. Used to keep a
+ * trailing comment out of the wrapped expression.
+ */
+function findTopLevelLineComment(src, from, to) {
+  let depth = 0
+  let i = from
+  const end = Math.min(to, src.length)
+  while (i < end) {
+    const c = src[i]
+    if (c === '"' || c === "'" || c === '`') {
+      const s = skipString(src, i)
+      i = s === -1 ? i + 1 : s
+      continue
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const e = src.indexOf('*/', i + 2)
+      i = e === -1 ? end : e + 2
+      continue
+    }
+    if (c === '/' && src[i + 1] === '/') return i
+    if (c === '{' || c === '(' || c === '[') depth += 1
+    else if (c === '}' || c === ')' || c === ']') depth = Math.max(0, depth - 1)
+    i += 1
+  }
+  return -1
 }
 
 const SNIPPET =

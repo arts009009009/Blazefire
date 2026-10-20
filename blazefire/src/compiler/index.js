@@ -21,6 +21,11 @@ export function createCompiler(config) {
     config: merged,
     version: COMPILER_VERSION,
     compile: async function (code, filename) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
       const options = {
         jsc: {
           target: merged.target,

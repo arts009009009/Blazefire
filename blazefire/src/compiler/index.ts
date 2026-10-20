@@ -25,6 +25,11 @@ export function createCompiler(config: CompilerConfig = {}) {
     config: { ...defaults, ...config },
     version: COMPILER_VERSION,
     async compile(code: string, filename?: string) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
       const options = {
         jsc: {
           target: config.target,
