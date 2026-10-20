@@ -383,6 +383,32 @@ describe('shouldNotify', () => {
     setArgv(['dev'])
     expect(updates.shouldNotify()).toBe(false)
   })
+
+  test('only the subcommand counts, not any "dev" argv element', () => {
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    delete process.env.CI
+    delete process.env.BLAZEFIRE_SKIP_UPDATE_CHECK
+
+    // `next lint dev` / `next build dev` are not the dev server.
+    setArgv(['lint', 'dev'])
+    expect(updates.shouldNotify()).toBe(false)
+    setArgv(['build', 'dev'])
+    expect(updates.shouldNotify()).toBe(false)
+
+    // A flag *value* named "dev" is not the subcommand either.
+    setArgv(['--dir', 'dev', 'build'])
+    expect(updates.shouldNotify()).toBe(false)
+    setArgv(['--dir=dev', 'build'])
+    expect(updates.shouldNotify()).toBe(false)
+
+    // Flags before the subcommand must not hide it.
+    setArgv(['--turbo', 'dev'])
+    expect(updates.shouldNotify()).toBe(true)
+  })
 })
 
 describe('promptYesNo', () => {
@@ -700,6 +726,40 @@ describe('purgeCachedInstall', () => {
     expect(fs.existsSync(other)).toBe(true)
     expect(fs.existsSync(sideEntry)).toBe(false)
     expect(fs.existsSync(unrelatedSide)).toBe(true)
+  })
+
+  test('pnpm: a URL spec does not sweep other projects\' "+main" cache entries', () => {
+    // The loose repo-token heuristic used to run for direct URL specs too:
+    // `…/refs/heads/main.tar.gz` → token "main" → every store entry merely
+    // CONTAINING "+main" was deleted, including other projects' caches
+    // (the pnpm store is machine-global).
+    const store = path.join(scratch, 'store-v10')
+    const mine = path.join(
+      store,
+      'https+++github.com+arts009009009+Blazefire+archive+refs+heads+main.tar.gz'
+    )
+    const otherRepoMain = path.join(
+      store,
+      'https+++github.com+someone+else+archive+refs+heads+main.tar.gz'
+    )
+    const maintainerScoped = path.join(
+      store,
+      'https+++codeload.github.com+maintainer+thing+tar.gz+abc'
+    )
+    fs.mkdirSync(mine, { recursive: true })
+    fs.mkdirSync(otherRepoMain, { recursive: true })
+    fs.mkdirSync(maintainerScoped, { recursive: true })
+
+    updates.purgeCachedInstall(
+      scratch,
+      'pnpm',
+      'https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz',
+      { homeDir: scratch, pnpmStorePath: store }
+    )
+
+    expect(fs.existsSync(mine)).toBe(false) // mine — exact mangled name
+    expect(fs.existsSync(otherRepoMain)).toBe(true) // NOT swept by "+main"
+    expect(fs.existsSync(maintainerScoped)).toBe(true) // NOT swept by "main"
   })
 
   test('pnpm: matches codeload side entries for github: specs by repo name', () => {
