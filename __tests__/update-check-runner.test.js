@@ -260,7 +260,7 @@ describe('runUpdate', () => {
 
     expect(code).toBe(7)
     const args = fs.readFileSync(log, 'utf8').trim()
-    expect(args).toBe('install github:arts009009009/Blazefire')
+    expect(args).toBe('install blazefire@github:arts009009009/Blazefire')
   })
 
   it('runs `pnpm add <spec>` when the user agent says pnpm', async () => {
@@ -273,6 +273,6 @@ describe('runUpdate', () => {
 
     expect(code).toBe(0)
     const args = fs.readFileSync(log, 'utf8').trim()
-    expect(args).toBe('add github:arts009009009/Blazefire')
+    expect(args).toBe('add blazefire@github:arts009009009/Blazefire')
   })
 })
