@@ -847,7 +847,7 @@ function activate(projectRoot, configPath, original) {
   }
 
   const saved = backup(configPath, original, projectRoot)
-  fs.writeFileSync(configPath, result.code, 'utf8')
+  writeAtomicSync(configPath, result.code)
   noteGitignore(projectRoot)
 
   say(
@@ -856,6 +856,30 @@ function activate(projectRoot, configPath, original) {
       ' — original saved to ' +
       path.relative(projectRoot, saved).split(path.sep).join('/')
   )
+}
+
+/**
+ * Replace `file` atomically: write a sibling temp file, then rename it over
+ * the target. A plain writeFileSync can leave the user's config truncated if
+ * the process dies mid-write — and the config is the one file an interrupted
+ * `npm install` must never be allowed to corrupt.
+ */
+function writeAtomicSync(file, contents) {
+  const tmp =
+    file + '.blazefire-tmp-' + process.pid + '-' + Math.random().toString(36).slice(2)
+  fs.writeFileSync(tmp, contents, 'utf8')
+  try {
+    fs.renameSync(tmp, file)
+  } catch (err) {
+    // Windows can refuse rename-over-existing in edge cases: fall back to a
+    // direct write rather than leaving a stray temp file as the only copy.
+    try {
+      fs.unlinkSync(tmp)
+    } catch (_) {
+      /* best effort */
+    }
+    fs.writeFileSync(file, contents, 'utf8')
+  }
 }
 
 function locateCandidates() {
