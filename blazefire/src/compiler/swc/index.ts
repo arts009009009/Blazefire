@@ -1,7 +1,11 @@
-import { createRequire } from 'node:module'
-import { join } from 'node:path'
-
 declare const process: { cwd(): string }
+
+declare function require(id: 'module'): {
+  createRequire(filename: string): (specifier: string) => NextSwcBackend
+}
+declare function require(id: 'path'): {
+  join(...parts: string[]): string
+}
 
 export interface SwcOptions {
   filename?: string
@@ -31,8 +35,8 @@ interface NextSwcBackend {
 }
 
 function loadNextSwc(): NextSwcBackend {
-  const requireFromProject = createRequire(
-    join(process.cwd(), 'package.json')
+  const requireFromProject = require('module').createRequire(
+    require('path').join(process.cwd(), 'package.json')
   )
 
   try {

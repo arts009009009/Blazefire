@@ -17,10 +17,12 @@ export interface BlazefireConfig {
 
 export interface CompilerOptions {
   jsc?: {
+    target?: string
     parser?: { syntax: string; tsx?: boolean }
     transform?: { react?: { runtime: string } }
   }
   module?: { type: string }
+  [key: string]: unknown
 }
 
 export interface CompilerInstance {

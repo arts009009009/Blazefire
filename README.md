@@ -262,26 +262,30 @@ function App() {
 
 ## Compiler
 
-The Frostfast compiler provides:
-
-- SWC-based transformations
-- Turbopack bundling
-- TypeScript/JSX support
-- Hot module replacement
+The `blazefire/compiler` entry uses the SWC bindings from the Next.js
+installation in the current project to transform TypeScript and JSX. Next.js
+continues to own bundling (Webpack or Turbopack) and hot module replacement;
+Frostfast does not replace those systems. Transforms run in Node.js and do not
+perform TypeScript type-checking.
 
 ```js
 import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler'
 
-const compiler = createCompiler({
-  // Custom options
-})
+const compiler = createCompiler({ target: 'es2022' })
+const result = await compiler.compile(
+  'export const Page = () => <main>Hello</main>',
+  'src/page.tsx'
+)
 
 console.log(`Compiler v${COMPILER_VERSION}`)
+console.log(result.code)
 ```
 
 Note: the compiler entry (`blazefire/compiler`) is separate from the root
-`createCompiler()` export — the root version is a lightweight options
-container, while the compiler entry exposes the full transform pipeline.
+`createCompiler()` export. The root helper accepts SWC options and exposes an
+async `transform()` method; invoking either transform API requires Next.js to
+be installed in the current project. The root module itself remains safe to
+import in client bundles, but calling `transform()` in a browser is unsupported.
 
 ## Components
 

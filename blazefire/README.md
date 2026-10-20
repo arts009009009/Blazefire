@@ -56,3 +56,19 @@ import 'blazefire/styles'
 import { BlazefireLogo } from 'blazefire/components/BlazefireLogo'
 import translations from 'blazefire/data/navbar-translate.json'
 ```
+
+## Compiler
+
+The `blazefire/compiler` entry transforms TypeScript and JSX using the SWC
+bindings from the Next.js installation in the current project. It runs in
+Node.js, requires Next.js to be installed, and does not perform TypeScript
+type-checking. Next.js remains responsible for bundling and hot module
+replacement.
+
+```js
+import { createCompiler } from 'blazefire/compiler'
+
+const compiler = createCompiler({ target: 'es2022' })
+const result = await compiler.compile('export const value: number = 1')
+console.log(result.code)
+```

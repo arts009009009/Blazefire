@@ -7,6 +7,12 @@
 
 'use strict'
 
+const mockSwcTransform = jest.fn()
+
+jest.mock('../blazefire/src/compiler/swc/index.js', () => ({
+  transform: (...args) => mockSwcTransform(...args),
+}))
+
 // The package's ESM sources are loaded through the same babel transform Jest
 // applies to test files; import them at the top so failures surface as suite
 // failures with a clear stack.
@@ -193,9 +199,21 @@ describe('createCompiler', () => {
     expect(c.options.module.type).toBe('es6')
   })
 
-  it('transform() resolves with the code unchanged (documented passthrough)', async () => {
+  it('transform() delegates to SWC and returns the transformed code', async () => {
+    mockSwcTransform.mockResolvedValue({ code: 'const x = 1;' })
     const c = createCompiler()
     const code = 'const x: number = 1'
-    await expect(c.transform(code, 'file.tsx')).resolves.toEqual({ code })
+    await expect(c.transform(code, 'file.tsx')).resolves.toEqual({
+      code: 'const x = 1;',
+    })
+    expect(mockSwcTransform).toHaveBeenCalledWith(
+      code,
+      expect.objectContaining({
+        filename: 'file.tsx',
+        jsc: expect.objectContaining({
+          parser: { syntax: 'typescript', tsx: true },
+        }),
+      })
+    )
   })
 })

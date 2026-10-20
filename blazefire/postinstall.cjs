@@ -343,32 +343,85 @@ function findTopLevel(src, targets) {
   return null
 }
 
-/** Index just past the statement starting at `start` (its terminating `;`, else EOF). */
+/**
+ * Index just past the statement starting at `start`.
+ *
+ * Two ways to stop, in order of precedence:
+ *   1. a depth-0 `;`
+ *   2. a newline (at depth 0) followed by a new top-level statement keyword —
+ *      automatic-semicolon-insertion ends the statement there. Without this,
+ *      a semicolon-less config like
+ *          module.exports = cfg
+ *          module.exports.env = { FOO: 'bar' }
+ *      scanned to EOF and the wrap glued BOTH statements into one call:
+ *          blazefire(cfg\nmodule.exports.env = …)   ← syntax error
+ */
 function statementEnd(src, start) {
   let i = start
   let depth = 0
+  // A new statement can only begin where depth is 0 and we are at a line start.
+  let atLineStart = true
   while (i < src.length) {
     const c = src[i]
     if (c === '"' || c === "'" || c === '`') {
       i = skipString(src, i)
+      atLineStart = false
       continue
     }
     if (c === '/' && src[i + 1] === '/') {
       const e = src.indexOf('\n', i)
       i = e === -1 ? src.length : e + 1
+      atLineStart = true
       continue
     }
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2)
       i = e === -1 ? src.length : e + 2
+      atLineStart = false
       continue
     }
-    if (c === '{' || c === '(' || c === '[') depth += 1
-    else if (c === '}' || c === ')' || c === ']') depth -= 1
-    else if (c === ';' && depth <= 0) return i + 1
+    if (c === '{' || c === '(' || c === '[') {
+      depth += 1
+      atLineStart = false
+    } else if (c === '}' || c === ')' || c === ']') {
+      depth -= 1
+      atLineStart = false
+    } else if (c === ';' && depth <= 0) {
+      return i + 1
+    } else if (c === '\n') {
+      atLineStart = depth <= 0
+    } else if (!/\s/.test(c)) {
+      // First significant character of a line at depth 0: does a new
+      // statement begin here? Only top-level statement starters count —
+      // nothing that can legally continue an expression after ASI.
+      if (atLineStart && depth <= 0 && startsNewStatement(src, i)) {
+        // Return the end of the *previous* line (just past its newline),
+        // excluding trailing whitespace.
+        let j = i
+        while (j > start && /[ \t\r]/.test(src[j - 1])) j -= 1
+        return j
+      }
+      atLineStart = false
+    }
     i += 1
   }
   return src.length
+}
+
+/**
+ * Does the token at `i` begin a new top-level statement?
+ *
+ * Restricted to unambiguous statement starters — a token that can never
+ * continue an expression (`const`, `module.exports`, `export`, `import`, …).
+ * Operators that *do* continue an expression (`.`, `?`, `:`, `&&`, `+`, …)
+ * are deliberately absent, so a multi-line object/array/chain keeps scanning.
+ */
+function startsNewStatement(src, i) {
+  return (
+    /^(module\s*\.|exports\s*\.|export\s|import\s|const\s|let\s|var\s|function\s|class\s|require\s*\(|module\s*\(\)/.test(
+      src.slice(i, i + 40)
+    )
+  )
 }
 
 const SNIPPET =
@@ -458,10 +511,31 @@ function plan(src) {
     exprEnd = endOfStatement // the `;` is re-emitted by the replacement
   } else {
     const raw = src.slice(exprStart, endOfStatement)
-    const trimmed = raw.trimEnd()
-    expression = trimmed.trim()
+    let trimmed = raw.trimEnd()
+    // A trailing `//` comment must not swallow the closing `)` of the wrap
+    // (`module.exports = nextConfig // note` → `blazefire(nextConfig // note)`
+    // is a hard syntax error). Cut the expression before the comment; the
+    // comment stays in the tail after the call. If real code follows the
+    // comment's line the shape is too uncertain to rewrite — refuse instead.
+    const commentAt = findTopLevelLineComment(
+      src,
+      exprStart,
+      exprStart + trimmed.length
+    )
+    if (commentAt !== -1) {
+      const afterCut = src.slice(commentAt, exprStart + trimmed.length)
+      const eolIdx = afterCut.indexOf('\n')
+      if (eolIdx !== -1 && afterCut.slice(eolIdx).trim() !== '') {
+        return {
+          ok: false,
+          reason: 'trailing line comment is followed by more code',
+        }
+      }
+      trimmed = src.slice(exprStart, commentAt).trimEnd()
+    }
     // Stop before trailing whitespace so blank lines / final newline stay in
     // the tail instead of being swallowed by the wrapped call.
+    expression = trimmed.trim()
     exprEnd = exprStart + trimmed.length
   }
 
