@@ -265,6 +265,17 @@ describe('prependRuntimeToEntries', () => {
     })
   })
 
+  it('handles a descriptor with a single-string import', () => {
+    expect(
+      prependRuntimeToEntries(
+        { a: { import: './a.js', dependOn: 'b' } },
+        '/rt'
+      )
+    ).toEqual({
+      a: { import: ['/rt', './a.js'], dependOn: 'b' },
+    })
+  })
+
   it('leaves unknown shapes and missing entries untouched', () => {
     expect(prependRuntimeToEntries(undefined, '/rt')).toBeUndefined()
     expect(prependRuntimeToEntries(null, '/rt')).toBeNull()
@@ -276,6 +287,9 @@ describe('prependRuntimeToEntries', () => {
       a: ['/rt', './a.js'],
     })
     expect(prependRuntimeToEntries({ a: '/rt' }, '/rt')).toEqual({ a: ['/rt'] })
+    expect(
+      prependRuntimeToEntries({ a: { import: '/rt' } }, '/rt')
+    ).toEqual({ a: { import: '/rt' } })
   })
 })
 

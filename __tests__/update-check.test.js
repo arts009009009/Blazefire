@@ -235,25 +235,27 @@ describe('updateCommand', () => {
     })
   })
 
-  test('uses each manager add/install form', () => {
+  test('uses each manager add/install form with the name prefixed', () => {
     const spec = 'github:arts009009009/Blazefire'
 
+    // A bare spec is not self-describing for registry-style installs
+    // (`npm install ^1.1.2` → ETARGET "undefined@^1.1.2"), so every
+    // manager gets `name@spec`.
     expect(updates.updateCommand(scratch, 'npm')).toEqual({
       command: 'npm',
-      args: ['install', spec],
+      args: ['install', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'yarn')).toEqual({
       command: 'yarn',
-      // Yarn 4 refuses a bare URL (or any other spec) without the name.
       args: ['add', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'pnpm')).toEqual({
       command: 'pnpm',
-      args: ['add', spec],
+      args: ['add', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'bun')).toEqual({
       command: 'bun',
-      args: ['add', spec],
+      args: ['add', 'blazefire@' + spec],
     })
   })
 
@@ -264,7 +266,7 @@ describe('updateCommand', () => {
     const cmd = updates.updateCommand(scratch, 'npm')
     expect(cmd.args).toEqual([
       'install',
-      'github:arts009009009/Blazefire#release',
+      'blazefire@github:arts009009009/Blazefire#release',
     ])
   })
 })

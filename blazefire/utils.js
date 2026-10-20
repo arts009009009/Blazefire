@@ -111,7 +111,12 @@ export function createBlazefireLogo(size) {
   // The size is interpolated into an attribute list, so it must be a number —
   // an unvalidated string like `40" onerror="…` would close the attribute and
   // inject markup. Anything non-numeric falls back to the default.
-  var n = Number(size)
+  var n
+  try {
+    n = Number(size)
+  } catch (_) {
+    n = NaN
+  }
   if (!Number.isFinite(n) || n <= 0) n = 40
   return (
     '<img src="' +

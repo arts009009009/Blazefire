@@ -109,7 +109,21 @@ describe('createBlazefireLogo', () => {
   })
 
   it('falls back to the default for non-numeric input', () => {
-    for (const bad of [undefined, null, NaN, -5, 'huge', {}]) {
+    for (const bad of [
+      undefined,
+      null,
+      NaN,
+      -5,
+      'huge',
+      {},
+      Symbol('size'),
+      Object.create(null),
+      {
+        valueOf() {
+          throw new Error('cannot convert')
+        },
+      },
+    ]) {
       expect(createBlazefireLogo(bad)).toContain('width="40"')
     }
   })

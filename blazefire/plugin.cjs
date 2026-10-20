@@ -381,12 +381,17 @@ function prependRuntimeToValue(value, runtime) {
   if (
     value &&
     typeof value === 'object' &&
-    Array.isArray(/** @type {any} */ (value).import)
+    (typeof /** @type {any} */ (value).import === 'string' ||
+      Array.isArray(/** @type {any} */ (value).import))
   ) {
-    const descriptor = /** @type {{import: string[]}} */ (value)
-    return descriptor.import.includes(runtime)
+    const descriptor = /** @type {{import: string | string[]}} */ (value)
+    const imports =
+      typeof descriptor.import === 'string'
+        ? [descriptor.import]
+        : descriptor.import
+    return imports.includes(runtime)
       ? value
-      : { ...descriptor, import: [runtime, ...descriptor.import] }
+      : { ...descriptor, import: [runtime, ...imports] }
   }
   return value
 }

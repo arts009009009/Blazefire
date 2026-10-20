@@ -120,7 +120,12 @@ export function createBlazefireLogo(size?: number): string {
   // The size is interpolated into an attribute list, so it must be a number —
   // an unvalidated string like `40" onerror="…` would close the attribute and
   // inject markup. Anything non-numeric falls back to the default.
-  const n = Number(size)
+  let n: number
+  try {
+    n = Number(size)
+  } catch {
+    n = NaN
+  }
   const safe = Number.isFinite(n) && n > 0 ? n : 40
   return `<img src="${BLAZEFIRE_LOGO_URL}" width="${safe}" height="${safe}" alt="Blazefire" style="object-fit:contain" draggable="false">`
 }
