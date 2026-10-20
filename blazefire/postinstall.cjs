@@ -625,6 +625,9 @@ function backup(originalFile, contents, projectRoot) {
   return saved
 }
 
+const GITIGNORE_NOTE_HEADER =
+  '# Blazefire keeps a copy of the config it edits'
+
 function noteGitignore(projectRoot) {
   const file = path.join(projectRoot, '.gitignore')
   try {
@@ -635,13 +638,40 @@ function noteGitignore(projectRoot) {
       current = '' // none yet — creating it is the entire point of this
     }
     if (current.includes(BACKUP_DIR)) return
-    const note =
-      '# Blazefire keeps a copy of the config it edits\n' + BACKUP_DIR + '/\n'
+    const note = GITIGNORE_NOTE_HEADER + '\n' + BACKUP_DIR + '/\n'
     const body =
       current === ''
         ? note
         : (current.endsWith('\n') ? current : current + '\n') + '\n' + note
     fs.writeFileSync(file, body, 'utf8')
+  } catch (_) {
+    /* cosmetic only */
+  }
+}
+
+/**
+ * Remove the two-line note noteGitignore() appends — and the blank-line
+ * separator that preceded it. Without this, `restore` put the config back
+ * but left `.gitignore` permanently edited. Only the exact block we write is
+ * touched, and a `.gitignore` that ends up empty is left in place (we cannot
+ * prove we created it).
+ */
+function stripGitignoreNote(projectRoot) {
+  const file = path.join(projectRoot, '.gitignore')
+  let current
+  try {
+    current = fs.readFileSync(file, 'utf8')
+  } catch (_) {
+    return
+  }
+  if (!current.includes(GITIGNORE_NOTE_HEADER)) return
+  const block = GITIGNORE_NOTE_HEADER + '\n' + BACKUP_DIR + '/\n'
+  let next = current.replace(block, '')
+  if (next === current) return
+  // Undo exactly the one separator newline noteGitignore inserted.
+  if (next.endsWith('\n\n')) next = next.slice(0, -2) + '\n'
+  try {
+    fs.writeFileSync(file, next, 'utf8')
   } catch (_) {
     /* cosmetic only */
   }
@@ -1017,6 +1047,25 @@ function restore() {
       // even though its backup lives in the child, so undo it regardless of
       // whether this particular root holds a backup directory.
       if (undoHook(root)) restored += 1
+
+      // The .gitignore note rode along with activation — take it back too.
+      const giFile = path.join(root, '.gitignore')
+      let giBefore = null
+      try {
+        giBefore = fs.readFileSync(giFile, 'utf8')
+      } catch (_) {
+        /* absent — nothing to strip */
+      }
+      if (giBefore !== null) {
+        stripGitignoreNote(root)
+        let giAfter = giBefore
+        try {
+          giAfter = fs.readFileSync(giFile, 'utf8')
+        } catch (_) {
+          /* unchanged */
+        }
+        if (giAfter !== giBefore) restored += 1
+      }
 
       // Drop the backup directory once it is empty, so a second `restore`
       // correctly reports "nothing to restore" instead of a phantom success.
