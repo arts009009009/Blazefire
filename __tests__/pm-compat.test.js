@@ -135,10 +135,10 @@ describe('updateCommand — per package manager', () => {
     }
   })
 
-  it('an unknown manager name falls back to npm', () => {
+  it('an unknown manager name falls back to npm (name still prefixed)', () => {
     expect(upd.updateCommand(scratch, 'carrier-pigeon')).toEqual({
       command: 'npm',
-      args: ['install', SPEC],
+      args: ['install', 'blazefire@' + SPEC],
     })
   })
 
