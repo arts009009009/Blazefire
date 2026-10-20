@@ -903,7 +903,10 @@ function run(opts) {
       if (!configPath) continue
 
       const original = fs.readFileSync(configPath, 'utf8')
-      if (original.includes(MARKER)) {
+      // The marker alone is not proof of wiring: a comment or dead code can
+      // mention `blazefire/plugin` without ever calling it. Require both the
+      // marker and an actual call, matching the shape rewrite() emits.
+      if (original.includes(MARKER) && /(?:^|[^\w$.])blazefire\s*\(/.test(original)) {
         // Already wired, but the hook may not be: the config could have been
         // activated by our own postinstall on an earlier npm/yarn install.
         hookBoth(root, projectRoot)
