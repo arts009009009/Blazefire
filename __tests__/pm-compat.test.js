@@ -214,7 +214,7 @@ describe('runUpdate — yarn and bun child processes', () => {
     process.env.npm_config_user_agent = 'bun/1.4.2'
 
     expect(await runUpdate(fixture())).toBe(0)
-    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add ' + SPEC)
+    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add blazefire@' + SPEC)
   })
 
   it('a missing package manager reports exit 1 instead of throwing', async () => {

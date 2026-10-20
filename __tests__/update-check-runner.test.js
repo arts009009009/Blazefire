@@ -250,7 +250,7 @@ describe('runUpdate', () => {
     }
   })
 
-  it('runs `npm install <spec>` and propagates a non-zero exit code', async () => {
+  it('runs `npm install blazefire@<spec>` and propagates a non-zero exit code', async () => {
     const { bin, log } = fakePackageManager('npm', 7)
     process.env.PATH = bin + path.delimiter + originalPath
     delete process.env.npm_config_user_agent
