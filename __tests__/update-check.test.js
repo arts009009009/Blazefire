@@ -65,6 +65,19 @@ describe('compareVersions', () => {
     expect(compareVersions('v1.0.1-blazefire-pnpm', '1.0.0')).toBe(1)
   })
 
+  test('compares prerelease identifiers using SemVer precedence', () => {
+    expect(compareVersions('1.0.0-rc.10', '1.0.0-rc.2')).toBe(1)
+    expect(compareVersions('1.0.0-rc.2', '1.0.0-rc.10')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha', '1.0.0-alpha.1')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha.1', '1.0.0-alpha.beta')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha.beta', '1.0.0-beta')).toBe(-1)
+  })
+
+  test('ignores build metadata when comparing precedence', () => {
+    expect(compareVersions('1.0.0+build.2', '1.0.0+build.10')).toBe(0)
+    expect(compareVersions('1.0.0-rc.2+build.3', '1.0.0-rc.2')).toBe(0)
+  })
+
   test('garbage compares equal rather than throwing', () => {
     expect(compareVersions('not-a-version', '1.0.0')).toBe(0)
     expect(compareVersions(null, undefined)).toBe(0)

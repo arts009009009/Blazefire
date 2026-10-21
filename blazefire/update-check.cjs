@@ -68,25 +68,26 @@ function getRepoSlug() {
 }
 
 /**
- * Loose semver compare: -1 when a < b, 0 when equal, 1 when a > b.
+ * SemVer compare: -1 when a < b, 0 when equal, 1 when a > b.
  *
- * Only the numeric triple matters here — GitHub's "latest" release is always
- * a stable tag, and prerelease suffixes (the repo has `v1.0.1-blazefire-pnpm`)
- * rank below the release of the same number so a stray prerelease tag can
- * never look newer than the real thing.
+ * Build metadata does not affect precedence. Prerelease identifiers follow
+ * SemVer ordering, so (for example) rc.10 ranks above rc.2 while every
+ * prerelease still ranks below the release of the same numeric version.
  */
 function compareVersions(a, b) {
   const parse = (v) => {
     const m = String(v || '')
       .trim()
       .replace(/^[vV]/, '')
-      .match(/^(\d+)\.(\d+)\.(\d+)(.*)$/)
+      .match(
+        /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+      )
     if (!m) return null
     return {
-      major: Number(m[1]),
-      minor: Number(m[2]),
-      patch: Number(m[3]),
-      pre: m[4] || '',
+      major: m[1],
+      minor: m[2],
+      patch: m[3],
+      pre: m[4] ? m[4].split('.') : null,
     }
   }
 
@@ -94,17 +95,44 @@ function compareVersions(a, b) {
   const y = parse(b)
   if (!x || !y) return 0
 
+  const compareNumeric = (left, right) => {
+    const normalizedLeft = left.replace(/^0+(?=\d)/, '')
+    const normalizedRight = right.replace(/^0+(?=\d)/, '')
+    if (normalizedLeft.length !== normalizedRight.length) {
+      return normalizedLeft.length < normalizedRight.length ? -1 : 1
+    }
+    if (normalizedLeft === normalizedRight) return 0
+    return normalizedLeft < normalizedRight ? -1 : 1
+  }
+
   const keys = ['major', 'minor', 'patch']
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
-    if (x[key] !== y[key]) return x[key] < y[key] ? -1 : 1
+    const comparison = compareNumeric(x[key], y[key])
+    if (comparison !== 0) return comparison
   }
 
   // Same number: a release outranks a prerelease of that number.
-  if (x.pre === y.pre) return 0
-  if (x.pre === '') return 1
-  if (y.pre === '') return -1
-  return x.pre < y.pre ? -1 : 1
+  if (!x.pre && !y.pre) return 0
+  if (!x.pre) return 1
+  if (!y.pre) return -1
+
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const left = x.pre[i]
+    const right = y.pre[i]
+    if (left === undefined) return -1
+    if (right === undefined) return 1
+    if (left === right) continue
+
+    const leftIsNumeric = /^\d+$/.test(left)
+    const rightIsNumeric = /^\d+$/.test(right)
+    if (leftIsNumeric && rightIsNumeric) {
+      return compareNumeric(left, right)
+    }
+    if (leftIsNumeric !== rightIsNumeric) return leftIsNumeric ? -1 : 1
+    return left < right ? -1 : 1
+  }
+  return 0
 }
 
 /**
