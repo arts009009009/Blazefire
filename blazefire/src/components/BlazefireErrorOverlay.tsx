@@ -106,7 +106,9 @@ export function BlazefireErrorOverlay({
         </div>
         {onClose && (
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close error overlay"
             style={{
               position: 'absolute',
               top: 12,

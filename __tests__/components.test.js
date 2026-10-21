@@ -188,20 +188,26 @@ describe('BlazefireErrorOverlay (client)', () => {
 
   it('calls onClose when the close button is clicked', async () => {
     const onClose = jest.fn()
+    const onSubmit = jest.fn((event) => event.preventDefault())
     const { container, unmount } = await render(
-      <BlazefireErrorOverlay
-        errorType="Error"
-        errorMessage="boom"
-        onClose={onClose}
-      />
+      <form onSubmit={onSubmit}>
+        <BlazefireErrorOverlay
+          errorType="Error"
+          errorMessage="boom"
+          onClose={onClose}
+        />
+      </form>
     )
     const buttons = [...container.querySelectorAll('button')]
     const close = buttons.find((b) => b.textContent === '×')
     expect(close).toBeDefined()
+    expect(close.type).toBe('button')
+    expect(close.getAttribute('aria-label')).toBe('Close error overlay')
     await act(async () => {
       close.click()
     })
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onSubmit).not.toHaveBeenCalled()
     await unmount()
   })
 

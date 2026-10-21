@@ -114,7 +114,9 @@ export function BlazefireErrorOverlay(props) {
         React.createElement(
           'button',
           {
+            type: 'button',
             onClick: onClose,
+            'aria-label': 'Close error overlay',
             style: {
               position: 'absolute',
               top: 12,
