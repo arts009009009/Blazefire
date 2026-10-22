@@ -30,6 +30,21 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 - DevTools indicator
 - Frostfast compiler (SWC-powered TypeScript + JSX transforms)
 
+## Compatibility
+
+Blazefire is a layer over Next.js, not a fork — it only uses Next's stable
+public config surface (`headers()`, `poweredByHeader`, `turbopack.root`, the
+webpack `entry` hook, and the `next/dist/build/swc` bindings), so it tracks
+new Next.js releases without needing internal changes.
+
+Verified against **Next.js 16.4.2** (latest stable) across the full matrix:
+`next dev` and `next build`+`next start`, each with both Turbopack and
+Webpack. The peer range is `next: ">=13.0.0"`; older 13–15 releases should
+work via the same public APIs but are not part of the automated matrix.
+
+Note: the experimental `packages/next` source fork in this repository is
+separate, is not built or published, and is not what installs from npm.
+
 ## Quick start
 
 The full loop, end to end, with Bun (swap the first command for your package
