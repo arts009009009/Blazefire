@@ -241,6 +241,10 @@ describe('runUpdate', () => {
     })
   }
 
+  beforeEach(() => {
+    process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS = '0'
+  })
+
   afterEach(() => {
     process.env.PATH = originalPath
     if (originalUserAgent === undefined)
