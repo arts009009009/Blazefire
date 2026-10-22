@@ -445,6 +445,175 @@ describe('promptYesNo', () => {
     })
     expect(answered).toBe(false)
   })
+
+  function mockInteractiveTerminal() {
+    const stdin = process.stdin
+    const stdout = process.stdout
+    const stdinNames = [
+      'isTTY',
+      'setRawMode',
+      'resume',
+      'pause',
+      'addListener',
+      'removeListener',
+    ]
+    const originals = new Map(
+      stdinNames.map((name) => [name, Object.getOwnPropertyDescriptor(stdin, name)])
+    )
+    const stdoutWrite = Object.getOwnPropertyDescriptor(stdout, 'write')
+    const stdoutTTY = Object.getOwnPropertyDescriptor(stdout, 'isTTY')
+    let onData
+    const setRawMode = jest.fn()
+    const resume = jest.fn()
+    const pause = jest.fn()
+    const removeListener = jest.fn()
+
+    Object.defineProperties(stdin, {
+      isTTY: { configurable: true, value: true },
+      setRawMode: { configurable: true, value: setRawMode },
+      resume: { configurable: true, value: resume },
+      pause: { configurable: true, value: pause },
+      addListener: {
+        configurable: true,
+        value: jest.fn((event, listener) => {
+          if (event === 'data') onData = listener
+          return stdin
+        }),
+      },
+      removeListener: {
+        configurable: true,
+        value: removeListener,
+      },
+    })
+    Object.defineProperty(stdout, 'write', {
+      configurable: true,
+      writable: true,
+      value: jest.fn(() => true),
+    })
+    Object.defineProperty(stdout, 'isTTY', { configurable: true, value: true })
+
+    return {
+      answer: (key) => onData(Buffer.from(key)),
+      setRawMode,
+      resume,
+      pause,
+      removeListener,
+      restore() {
+        for (const [name, descriptor] of originals) {
+          if (descriptor) Object.defineProperty(stdin, name, descriptor)
+          else delete stdin[name]
+        }
+        if (stdoutWrite) Object.defineProperty(stdout, 'write', stdoutWrite)
+        else delete stdout.write
+        if (stdoutTTY) Object.defineProperty(stdout, 'isTTY', stdoutTTY)
+        else delete stdout.isTTY
+      },
+    }
+  }
+
+  test.each([
+    ['y', true],
+    ['n', false],
+    ['\r', true],
+    ['\u0003', false],
+    ['\u0004', false],
+  ])('answers %j and restores terminal state', (key, expected) => {
+    jest.useFakeTimers()
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      terminal.answer(key)
+
+      expect(answered).toHaveBeenCalledWith(expected)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.removeListener).toHaveBeenCalledWith(
+        'data',
+        expect.any(Function)
+      )
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      terminal.restore()
+      jest.useRealTimers()
+    }
+  })
+
+  test('declines after the prompt timeout and cleans up', () => {
+    jest.useFakeTimers()
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      jest.advanceTimersByTime(30_000)
+
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      terminal.restore()
+      jest.useRealTimers()
+    }
+  })
+
+  test('restores cooked mode if stdin setup fails after raw mode is enabled', () => {
+    const terminal = mockInteractiveTerminal()
+    terminal.resume.mockImplementation(() => {
+      throw new Error('stdin unavailable')
+    })
+    const answered = jest.fn()
+
+    try {
+      expect(() => updates.promptYesNo('Update? ', answered)).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
+  })
+
+  test('does not strand the callback if stdout fails while printing the answer', () => {
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+    process.stdout.write.mockImplementation((text) => {
+      if (text === '\n') throw new Error('stdout closed')
+      return true
+    })
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      expect(() => terminal.answer('n')).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
+  })
+
+  test('restores terminal state if stdout fails while printing the question', () => {
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+    process.stdout.write.mockImplementation(() => {
+      throw new Error('stdout closed')
+    })
+
+    try {
+      expect(() => updates.promptYesNo('Update? ', answered)).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.removeListener).toHaveBeenCalledWith(
+        'data',
+        expect.any(Function)
+      )
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
+  })
 })
 
 describe('checkForUpdate', () => {

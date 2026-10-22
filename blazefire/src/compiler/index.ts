@@ -20,9 +20,10 @@ export function createCompiler(config: CompilerConfig = {}) {
     jsx: 'react-jsx',
     strict: true,
   }
+  const merged = { ...defaults, ...config }
 
   return {
-    config: { ...defaults, ...config },
+    config: merged,
     version: COMPILER_VERSION,
     async compile(code: string, filename?: string) {
       if (typeof window !== 'undefined') {
@@ -32,13 +33,15 @@ export function createCompiler(config: CompilerConfig = {}) {
       }
       const options = {
         jsc: {
-          target: config.target,
+          target: merged.target,
           parser: { syntax: 'typescript', tsx: true },
           transform: {
-            react: { runtime: config.jsx === 'react' ? 'classic' : 'automatic' },
+            react: {
+              runtime: merged.jsx === 'react' ? 'classic' : 'automatic',
+            },
           },
         },
-        module: { type: config.module },
+        module: { type: merged.module },
         ...(filename ? { filename } : {}),
       }
       const result = await transform(code, options)

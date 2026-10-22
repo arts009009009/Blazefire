@@ -68,6 +68,27 @@ describe('document theme injection', () => {
     expect(document.querySelectorAll('#blazefire-styles')).toHaveLength(1)
   })
 
+  it('does not throw if document.head is still missing at DOM ready', () => {
+    const originalHead = document.head
+    let domReady
+    const addEventListener = jest
+      .spyOn(document, 'addEventListener')
+      .mockImplementation((event, handler) => {
+        if (event === 'DOMContentLoaded') domReady = handler
+      })
+    process.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY = 'false'
+    document.documentElement.removeChild(originalHead)
+
+    try {
+      loadRuntime()
+      expect(typeof domReady).toBe('function')
+      expect(() => domReady()).not.toThrow()
+    } finally {
+      document.documentElement.insertBefore(originalHead, document.body)
+      addEventListener.mockRestore()
+    }
+  })
+
   it('is a no-op when NEXT_PUBLIC_BLAZEFIRE_THEME=false', () => {
     process.env.NEXT_PUBLIC_BLAZEFIRE_THEME = 'false'
     process.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY = 'true'

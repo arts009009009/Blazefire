@@ -1,5 +1,9 @@
 'use strict'
 
+const fs = require('fs')
+const path = require('path')
+const ts = require('typescript')
+
 const mockTransform = jest.fn()
 
 jest.mock('../blazefire/src/compiler/swc/index.js', () => ({
@@ -10,6 +14,32 @@ import {
   COMPILER_VERSION,
   createCompiler,
 } from '../blazefire/src/compiler/index.js'
+
+function loadTypeScriptCompiler(transform) {
+  const source = fs.readFileSync(
+    path.join(__dirname, '../blazefire/src/compiler/index.ts'),
+    'utf8'
+  )
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2020,
+    },
+  })
+  const compilerModule = { exports: {} }
+  const requireDependency = (specifier) => {
+    if (specifier === './swc/index.js') return { transform }
+    throw new Error(`Unexpected compiler dependency: ${specifier}`)
+  }
+
+  new Function('require', 'module', 'exports', outputText)(
+    requireDependency,
+    compilerModule,
+    compilerModule.exports
+  )
+
+  return compilerModule.exports
+}
 
 describe('Frostfast compiler', () => {
   beforeEach(() => {
@@ -58,6 +88,24 @@ describe('Frostfast compiler', () => {
 
     await expect(compiler.compile('const =')).rejects.toBe(failure)
     expect(mockTransform).toHaveBeenCalledWith('const =', {
+      jsc: {
+        target: 'es2020',
+        parser: { syntax: 'typescript', tsx: true },
+        transform: { react: { runtime: 'automatic' } },
+      },
+      module: { type: 'es6' },
+    })
+  })
+
+  it('applies the configured defaults in the TypeScript source', async () => {
+    const transform = jest.fn().mockResolvedValue({ code: 'const value = 1;' })
+    const { createCompiler: createTypeScriptCompiler } =
+      loadTypeScriptCompiler(transform)
+    const compiler = createTypeScriptCompiler()
+
+    await compiler.compile('const value: number = 1')
+
+    expect(transform).toHaveBeenCalledWith('const value: number = 1', {
       jsc: {
         target: 'es2020',
         parser: { syntax: 'typescript', tsx: true },

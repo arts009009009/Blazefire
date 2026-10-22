@@ -56,7 +56,7 @@ function inject() {
   } else {
     // document.head can be missing very early; retry on DOM ready
     document.addEventListener('DOMContentLoaded', function () {
-      if (!document.getElementById('blazefire-styles')) {
+      if (!document.getElementById('blazefire-styles') && document.head) {
         document.head.appendChild(style)
       }
     })

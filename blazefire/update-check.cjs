@@ -1137,7 +1137,11 @@ function promptYesNo(question, callback) {
     if (settled) return
     settled = true
     cleanup()
-    process.stdout.write('\n')
+    try {
+      process.stdout.write('\n')
+    } catch (_) {
+      /* a closed stdout must not strand the caller */
+    }
     callback(answer)
   }
 
@@ -1160,10 +1164,15 @@ function promptYesNo(question, callback) {
     stdin.addListener('data', onData)
   } catch (_) {
     settled = true
+    cleanup()
     return callback(false)
   }
 
-  process.stdout.write(question)
+  try {
+    process.stdout.write(question)
+  } catch (_) {
+    return finish(false)
+  }
   timer = setTimeout(function () {
     finish(false)
   }, PROMPT_TIMEOUT_MS)

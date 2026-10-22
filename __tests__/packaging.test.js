@@ -181,6 +181,17 @@ describe('relative imports in shipped files resolve', () => {
     expect(broken).toEqual([])
   })
 
+  it('TypeScript DevTools imports the hook from the runtime entry', () => {
+    const source = fs.readFileSync(
+      path.join(PKG_DIR, 'src', 'components', 'BlazefireDevTools.tsx'),
+      'utf8'
+    )
+
+    expect(source).toMatch(
+      /import\s*\{\s*useBlazefire\s*\}\s*from\s*['"]\.\.\/\.\.\/index\.js['"]/
+    )
+  })
+
   it('components resolve as a consumer would import them', async () => {
     // Self-reference resolution: import through the package name, exactly as
     // a user's `import { BlazefireDevTools } from 'blazefire/components/…'`.
