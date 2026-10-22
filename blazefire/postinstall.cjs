@@ -303,6 +303,61 @@ function skipString(src, i) {
   return i
 }
 
+const REGEX_PREFIX_KEYWORDS = new Set([
+  'await',
+  'case',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'in',
+  'instanceof',
+  'of',
+  'return',
+  'throw',
+  'typeof',
+  'void',
+  'yield',
+])
+
+/** Does a slash at `i` start a regex literal rather than division? */
+function startsRegexLiteral(src, i) {
+  let previous = i - 1
+  while (previous >= 0 && /\s/.test(src[previous])) previous -= 1
+  if (previous < 0) return true
+
+  const char = src[previous]
+  if ('([{,:;=!?&|+-*%^~<>'.includes(char)) return true
+  if (!/[A-Za-z0-9_$]/.test(char)) return false
+
+  let start = previous
+  while (start > 0 && /[A-Za-z0-9_$]/.test(src[start - 1])) start -= 1
+  return REGEX_PREFIX_KEYWORDS.has(src.slice(start, previous + 1))
+}
+
+/** Return the index just past a regex literal opened at `i`. */
+function skipRegexLiteral(src, i) {
+  i += 1
+  let inCharacterClass = false
+  while (i < src.length) {
+    const char = src[i]
+    if (char === '\\') {
+      i += 2
+      continue
+    }
+    if (char === '\n' || char === '\r') return i
+    if (char === '[') inCharacterClass = true
+    else if (char === ']') inCharacterClass = false
+    else if (char === '/' && !inCharacterClass) {
+      i += 1
+      while (/[A-Za-z]/.test(src[i] || '')) i += 1
+      return i
+    }
+    i += 1
+  }
+  return i
+}
+
 /** Find the first top-level occurrence of any target string. */
 function findTopLevel(src, targets) {
   let i = 0
@@ -317,6 +372,10 @@ function findTopLevel(src, targets) {
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2)
       i = e === -1 ? src.length : e + 2
+      continue
+    }
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
       continue
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -377,6 +436,11 @@ function statementEnd(src, start) {
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2)
       i = e === -1 ? src.length : e + 2
+      atLineStart = false
+      continue
+    }
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
       atLineStart = false
       continue
     }
@@ -447,7 +511,16 @@ function findTopLevelLineComment(src, from, to) {
       i = e === -1 ? end : e + 2
       continue
     }
-    if (c === '/' && src[i + 1] === '/') return i
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
+      continue
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      if (depth === 0) return i
+      const e = src.indexOf('\n', i)
+      i = e === -1 ? end : e + 1
+      continue
+    }
     if (c === '{' || c === '(' || c === '[') depth += 1
     else if (c === '}' || c === ')' || c === ']') depth = Math.max(0, depth - 1)
     i += 1
