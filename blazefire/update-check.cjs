@@ -1087,9 +1087,13 @@ function runUpdate(projectRoot, callback) {
       })
 
   let settled = false
+  let timer = null
+  let killTimer = null
   const done = function (code) {
     if (settled) return
     settled = true
+    if (timer) clearTimeout(timer)
+    if (killTimer) clearTimeout(killTimer)
     if (typeof callback === 'function') callback(code)
   }
 
@@ -1100,6 +1104,41 @@ function runUpdate(projectRoot, callback) {
   child.on('close', function (code) {
     done(code == null ? 1 : code)
   })
+
+  // A hung package manager (network stall, an unanswered prompt the child is
+  // waiting on) must not hang `blazefire update` forever. 5 minutes is far
+  // longer than any healthy install but finite. Override with
+  // BLAZEFIRE_UPDATE_TIMEOUT_MS (milliseconds); 0 disables the guard.
+  const raw = Number(process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS)
+  const timeoutMs =
+    Number.isFinite(raw) && raw >= 0 ? raw : 5 * 60 * 1000
+  if (timeoutMs > 0) {
+    timer = setTimeout(function () {
+      try {
+        console.error(
+          'blazefire: the update is taking too long — cancelling. ' +
+            'Re-run it with your package manager if it is still needed.'
+        )
+      } catch (_) {
+        /* stderr gone — the exit code still reports the failure */
+      }
+      try {
+        child.kill('SIGTERM')
+      } catch (_) {
+        /* already gone */
+      }
+      killTimer = setTimeout(function () {
+        try {
+          child.kill('SIGKILL')
+        } catch (_) {
+          /* already gone */
+        }
+        done(1)
+      }, 5000)
+      if (killTimer.unref) killTimer.unref()
+    }, timeoutMs)
+    if (timer.unref) timer.unref()
+  }
 }
 
 /* ------------------------------------------------------------------ *
