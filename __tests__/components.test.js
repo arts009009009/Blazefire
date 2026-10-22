@@ -73,9 +73,10 @@ describe('server rendering (SSR)', () => {
       </BlazefireProvider>
     )
     expect(html).toContain('<p>hello</p>')
-    // no hydration-breaking markup: styles are injected in an effect, the
-    // dev-tools marker only exists in development…
-    expect(html).not.toContain('data-blazefire-devtools')
+    // no hydration-breaking markup: styles are injected in an effect, and the
+    // DevTools indicator is dev-only and mounted-gated, so nothing of it is
+    // server-rendered…
+    expect(html).not.toContain('Blazefire Dev Tools')
   })
 
   it('mounted-gated components render null on the server', () => {
