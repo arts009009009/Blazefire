@@ -77,15 +77,15 @@ describe('rewrite — ESM configs', () => {
   })
 
   it('preserves regex literals containing escaped URL delimiters', () => {
-    const source = String.raw`export default {
-  matcher: /https?:\/\//,
-}
+    const source = String.raw`export default { matcher: /https?:\/\// }
+const afterConfig = true
 `
     const out = rewrite(source)
 
     expect(out.ok).toBe(true)
     expect(out.code).toContain('matcher: /https?:\\/\\//')
     expect(out.code).toContain('export default blazefire({')
+    expect(out.code).toContain('const afterConfig = true')
     expect(
       ts.createSourceFile('next.config.ts', out.code, ts.ScriptTarget.Latest)
         .parseDiagnostics
