@@ -1017,6 +1017,29 @@ describe('purgeCachedInstall', () => {
     expect(fs.existsSync(maintainerScoped)).toBe(true) // NOT swept by "main"
   })
 
+  test('pnpm store path is resolved only once per project', () => {
+    const bin = path.join(scratch, 'bin')
+    const store = path.join(scratch, 'store')
+    const calls = path.join(scratch, 'pnpm-calls.log')
+    fs.mkdirSync(bin)
+    fs.mkdirSync(store)
+    fs.writeFileSync(
+      path.join(bin, 'pnpm'),
+      '#!/bin/sh\necho called >> "' + calls + '"\necho "' + store + '"\n',
+      { mode: 0o755 }
+    )
+
+    const originalPath = process.env.PATH
+    try {
+      process.env.PATH = bin + path.delimiter + originalPath
+      updates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      updates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      expect(fs.readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1)
+    } finally {
+      process.env.PATH = originalPath
+    }
+  })
+
   test('pnpm: matches codeload side entries for github: specs by repo name', () => {
     const store = path.join(scratch, 'store-v10')
     const mine = path.join(
