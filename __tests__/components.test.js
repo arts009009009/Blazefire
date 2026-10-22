@@ -121,7 +121,7 @@ describe('BlazefireProvider (client)', () => {
     await unmount()
   })
 
-  it('renders the dev-tools marker only under NODE_ENV=development', async () => {
+  it('renders the real DevTools indicator only under NODE_ENV=development', async () => {
     const original = process.env.NODE_ENV
     try {
       process.env.NODE_ENV = 'development'
@@ -130,14 +130,13 @@ describe('BlazefireProvider (client)', () => {
           <span />
         </BlazefireProvider>
       )
-      expect(
-        dev.container.querySelector('[data-blazefire-devtools]')
-      ).not.toBeNull()
-      expect(
-        dev.container
-          .querySelector('[data-blazefire-devtools]')
-          .getAttribute('aria-label')
-      ).toBe('Blazefire Dev Tools')
+      // The provider mounts the actual BlazefireDevTools toggle (a button),
+      // not the old inert placeholder div.
+      const toggle = dev.container.querySelector(
+        'button[aria-label="Open Blazefire Dev Tools"]'
+      )
+      expect(toggle).not.toBeNull()
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
       await dev.unmount()
 
       process.env.NODE_ENV = 'production'
@@ -147,7 +146,7 @@ describe('BlazefireProvider (client)', () => {
         </BlazefireProvider>
       )
       expect(
-        prod.container.querySelector('[data-blazefire-devtools]')
+        prod.container.querySelector('[aria-label="Open Blazefire Dev Tools"]')
       ).toBeNull()
       await prod.unmount()
     } finally {

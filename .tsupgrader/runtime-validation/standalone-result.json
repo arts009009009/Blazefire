@@ -1,16 +1,123 @@
 {
   "planHash": "bfb6185dd8c8a8c0918c468d886599a03d97e7efb3da7f148986250c287beb18",
   "phase": "standalone",
-  "recordedAtUtc": "2026-10-22T16:04:05.0616377Z",
+  "recordedAtUtc": "2026-10-22T16:05:07.8992162Z",
   "retryCount": 0,
   "resetBaseline": false,
-  "complete": false,
-  "runningStep": "initializing",
+  "complete": true,
   "result": {
-    "setupSucceeded": false,
+    "setupSucceeded": true,
     "setupDurationMs": 0,
     "setupFailureOutput": null,
-    "assertions": [],
-    "executions": []
+    "assertions": [
+      {
+        "name": "production-build",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\n\u003E blazefire@1.1.2 build\n\u003E node blazefire/build-logo-data.cjs \u0026\u0026 tsc\n\n[blazefire] wrote /home/adam/Blazefire/blazefire/logo-data.cjs (232332 base64 chars)\n",
+        "durationMs": 3192
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": false,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 1,
+        "outputSample": "\n\u003E blazefire@1.1.2 test\n\u003E jest --runInBand\n\nPASS __tests__/pm-matrix.test.js (45.473 s)\nPASS __tests__/cli.test.js\nPASS __tests__/update-check-runner.test.js\nPASS __tests__/types.test.js\nPASS __tests__/packaging.test.js\n(node:98543) [DEP0040] DeprecationWarning: The \u0060punycode\u0060 module is deprecated. Please use a userland alternative instead.\n(Use \u0060node --trace-deprecation ...\u0060 to show where the warning was created)\nFAIL __tests__/components.test.js\n  \u25CF BlazefireProvider (client) \u203A renders the dev-tools marker only under NODE_ENV=development\n\n    expect(received).not.toBeNull()\n\n    Received: null\n\n      133 |       expect(\n      134 |         dev.container.querySelector(\u0027[data-blazefire-devtools]\u0027)\n    \u003E 135 |       ).not.toBeNull()\n          |             ^\n      136 |       expect(\n      137 |         dev.container\n      138 |           .querySelector(\u0027[data-blazefire-devtools]\u0027)\n\n      at Object.toBeNull (__tests__/components.test.js:135:13)\n\nPASS __tests__/runtime-inject.test.js\nPASS __tests__/update-check.test.js\n  \u25CF Console\n\n    console.error\n      blazefire: refusing to run the update \u2014 the \u0022blazefire\u0022 entry in package.json is not a plausible package specifier. Reinstall manually with your package manager.\n\n      1087 |   if (!isSafeSpec(spec)) {\n      1088 |     try {\n    \u003E 1089 |       console.error(\n           |               ^\n      1090 |         \u0027blazefire: refusing to run the update \u2014 the \u0022blazefire\u0022 entry in \u0027 \u002B\n      1091 |           \u0027package.json is not a plausible package specifier. Reinstall \u0027 \u002B\n      1092 |           \u0027manually with your package manager.\u0027\n\n      at Object.runUpdate (blazefire/update-check.cjs:1089:15)\n      at Object.runUpdate (__tests__/update-check.test.js:1284:13)\n\nPASS __tests__/compiler.test.js\nPASS __tests__/postinstall-lifecycle.test.js\nPASS __tests__/pm-compat.test.js\nPASS __tests__/plugin.test.js\nPASS __tests__/postinstall.test.js\nPASS __tests__/compiler-swc.test.js\nPASS __tests__/utils.test.js\nPASS __tests__/branding.test.js\nPASS __tests__/entry.test.js\nPASS __tests__/version-sync.test.js\nPASS __tests__/runtime-loader.test.js\n\nTest Suites: 1 failed, 18 passed, 19 total\nTests:       1 failed, 1 skipped, 308 passed, 310 total\nSnapshots:   0 total\nTime:        57.827 s, estimated 62 s\nRan all test suites.\n",
+        "durationMs": 59241,
+        "testResults": {
+          "testFramework": "jest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 310,
+          "testsPassed": 308,
+          "testsFailed": 1,
+          "testsSkipped": 1,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "cli-help-exits-zero",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "Blazefire\n\n  npx blazefire init      wire Blazefire into this project\u0027s next.config.*\n  npx blazefire restore   put the original back from \u0022Blazefire Backup/\u0022\n  npx blazefire update    re-install the latest Blazefire release\n  npx blazefire check     report the installed and latest version\n  npx blazefire --version print the installed version\n\n  Init backs the original up first and never runs twice on the same file.\n  If the config shape is not recognised it prints exactly what to paste\n  instead of guessing.\n\n  It also writes a \u0022postinstall\u0022 hook into your package.json (chaining onto\n  any you already have), so pnpm and bun \u2014 which refuse to run a dependency\u0027s\n  own postinstall \u2014 still self-activate on every install. \u0022restore\u0022 removes\n  that hook again.\n\n  Update clears your package manager\u0027s cached copy of Blazefire, then re-adds\n  the specifier you installed with, so a branch re-resolves to its tip while a\n  commit-pinned URL stays put. On \u0060next dev\u0060 Blazefire offers this same\n  update at most once per 24 hours; answering no just continues your dev\n  server.\n\n  Opt out of auto-activation on install with BLAZEFIRE_SKIP_AUTO=1.\n  Opt out of the update check with BLAZEFIRE_SKIP_UPDATE_CHECK=1.\n",
+        "durationMs": 154
+      },
+      {
+        "name": "cli-version-exits-zero",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "blazefire v1.1.2\n",
+        "durationMs": 189
+      }
+    ],
+    "executions": [
+      {
+        "source": "production-build",
+        "resolvedExecutable": "/usr/bin/npm",
+        "args": [
+          "run",
+          "build"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "/usr/bin/npm",
+        "args": [
+          "test",
+          "--",
+          "--runInBand"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "cli-help-exits-zero",
+        "resolvedExecutable": "/usr/bin/node",
+        "args": [
+          "blazefire/cli.cjs",
+          "--help"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "cli-version-exits-zero",
+        "resolvedExecutable": "/usr/bin/node",
+        "args": [
+          "blazefire/cli.cjs",
+          "--version"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      }
+    ]
   }
 }
