@@ -181,6 +181,37 @@ async function fetchLatestVersion() {
  * since the last attempt. That is what makes "once a day" true everywhere.
  * ------------------------------------------------------------------ */
 
+/**
+ * The project root the update machinery should act on.
+ *
+ * `process.cwd()` is wrong whenever the tool runs from a subdirectory or a
+ * monorepo (state keys, lockfile edits, and the spawned install's cwd would
+ * all follow the stray cwd). Prefer the roots package managers already set,
+ * then the nearest `package.json`, then cwd.
+ */
+function resolveProjectRoot() {
+  const candidates = [
+    process.env.npm_config_local_prefix,
+    process.env.INIT_CWD,
+  ]
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(path.join(candidate, 'package.json'))) {
+      return candidate
+    }
+  }
+
+  // Nearest `package.json` walking up from cwd — covers `next dev` started in
+  // a workspace child where the manager did not set the env roots.
+  let dir = process.cwd()
+  for (let i = 0; i < 16; i++) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return process.cwd()
+}
+
 function stateFile(projectRoot) {
   const key = crypto
     .createHash('sha1')
@@ -580,9 +611,17 @@ function purgeYarnInstall(root, options) {
   return removed
 }
 
+// `pnpm store path` spawns a real pnpm and can block the event loop for up to
+// 15s (spawnSync + timeout). A purge can ask for the store more than once, so
+// memoize per root: at most one blocking call per process per project.
+const pnpmStoreCache = new Map()
+
 /** Where pnpm keeps its store for *this* project (the location varies). */
 function pnpmStoreDir(root, options) {
   if (options && options.pnpmStorePath) return options.pnpmStorePath
+  const cacheKey = String(root)
+  if (pnpmStoreCache.has(cacheKey)) return pnpmStoreCache.get(cacheKey)
+  let result = null
   try {
     const res = spawnSync('pnpm', ['store', 'path'], {
       cwd: root,
@@ -597,12 +636,13 @@ function pnpmStoreDir(root, options) {
           return line.trim()
         })
         .filter(Boolean)
-      if (out.length) return out[out.length - 1]
+      if (out.length) result = out[out.length - 1]
     }
   } catch (_) {
     /* pnpm missing or not runnable — nothing to clear */
   }
-  return null
+  pnpmStoreCache.set(cacheKey, result)
+  return result
 }
 
 /** How pnpm mangles a spec into a side-store directory name. */
@@ -999,12 +1039,6 @@ function purgeCachedInstall(projectRoot, manager, spec, options) {
 }
 
 /**
- * Re-install blazefire in `projectRoot`, streaming the PM's own output.
- *
- * Calls back with the child's exit code (never rejects) so callers can report
- * without a try/catch of their own.
- */
-/**
  * Is this package specifier safe to put on a package-manager command line?
  *
  * The specifier comes from this project's own package.json — a file that may
@@ -1032,8 +1066,15 @@ function quoteForCmd(value) {
   return '"' + String(value).replace(/"/g, '""') + '"'
 }
 
+/**
+ * Re-install blazefire in `projectRoot`, streaming the PM's own output.
+ *
+ * Calls back with the child's exit code (never rejects) so callers can report
+ * without a try/catch of their own. A hung package manager is cancelled after
+ * a bounded timeout (see the guard below the spawn).
+ */
 function runUpdate(projectRoot, callback) {
-  const root = projectRoot || process.cwd()
+  const root = projectRoot || resolveProjectRoot()
   const manager = detectPackageManager(root)
   const cmd = updateCommand(root, manager)
   const command = cmd.command
@@ -1275,7 +1316,7 @@ function maybeNotify() {
   try {
     if (!shouldNotify()) return
 
-    const projectRoot = process.cwd()
+    const projectRoot = resolveProjectRoot()
     const now = Date.now()
     if (recentlyChecked(projectRoot, now)) return
 
@@ -1377,6 +1418,7 @@ module.exports = {
   readInstalledSpec,
   readState,
   recentlyChecked,
+  resolveProjectRoot,
   runUpdate,
   shouldNotify,
   stateFile,

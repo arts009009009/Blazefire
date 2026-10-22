@@ -30,6 +30,7 @@ afterEach(() => {
 })
 
 function writePackageJson(dir, pkg) {
+  fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg))
   return dir
 }
@@ -184,6 +185,78 @@ describe('throttle state', () => {
     const now = 1_000_000_000_000
     updates.writeState(scratch, { lastCheck: now + 999_999_999 })
     expect(updates.recentlyChecked(scratch, now)).toBe(false)
+  })
+
+  test('writes state atomically (no stray temp file, valid JSON)', () => {
+    // A crash mid-write used to leave a truncated file that read as `{}`,
+    // silently re-enabling the daily notifier.
+    expect(updates.writeState(scratch, { lastCheck: 123 })).toBe(true)
+    const file = updates.stateFile(scratch)
+    const dir = path.dirname(file)
+    const base = path.basename(file)
+    const strays = fs
+      .readdirSync(dir)
+      .filter((name) => name.startsWith(base + '.tmp-'))
+    expect(strays).toHaveLength(0)
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    expect(parsed.lastCheck).toBe(123)
+  })
+})
+
+describe('resolveProjectRoot', () => {
+  const ORIGINAL_CWD = process.cwd()
+  const ORIGINAL_ENV = {
+    npm_config_local_prefix: process.env.npm_config_local_prefix,
+    INIT_CWD: process.env.INIT_CWD,
+  }
+
+  afterEach(() => {
+    process.chdir(ORIGINAL_CWD)
+    for (const key of Object.keys(ORIGINAL_ENV)) {
+      if (ORIGINAL_ENV[key] === undefined) delete process.env[key]
+      else process.env[key] = ORIGINAL_ENV[key]
+    }
+  })
+
+  function clearEnv() {
+    delete process.env.npm_config_local_prefix
+    delete process.env.INIT_CWD
+  }
+
+  test('prefers npm_config_local_prefix when it is a real project', () => {
+    clearEnv()
+    const project = writePackageJson(path.join(scratch, 'app'), { name: 'a' })
+    process.env.npm_config_local_prefix = project
+    process.env.INIT_CWD = scratch // must lose to local_prefix
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('falls back to INIT_CWD', () => {
+    clearEnv()
+    const project = writePackageJson(path.join(scratch, 'app'), { name: 'a' })
+    process.env.INIT_CWD = project
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('ignores an env root with no package.json', () => {
+    clearEnv()
+    const bogus = path.join(scratch, 'not-a-project')
+    fs.mkdirSync(bogus, { recursive: true })
+    process.env.npm_config_local_prefix = bogus
+    const project = writePackageJson(path.join(scratch, 'real'), { name: 'r' })
+    const deep = path.join(project, 'deep', 'deeper')
+    fs.mkdirSync(deep, { recursive: true })
+    process.chdir(deep)
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('walks up from cwd to the nearest package.json in a monorepo child', () => {
+    clearEnv()
+    const root = writePackageJson(path.join(scratch, 'mono'), { name: 'mono' })
+    const child = path.join(root, 'apps', 'web')
+    fs.mkdirSync(child, { recursive: true })
+    process.chdir(child)
+    expect(updates.resolveProjectRoot()).toBe(root)
   })
 })
 

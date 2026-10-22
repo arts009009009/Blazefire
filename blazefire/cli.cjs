@@ -100,6 +100,9 @@ try {
         console.log(
           '  blazefire: could not reach the update feed (offline, or no releases published).'
         )
+        // A failed check is indeterminate — exit non-zero so scripts can tell
+        // "could not check" apart from "checked, up to date".
+        process.exitCode = 1
         return
       }
       console.log(
@@ -122,6 +125,7 @@ try {
           (error && error.message ? error.message : String(error)) +
           ').'
       )
+      process.exitCode = 1
     })
   } else if (command === '--help' || command === '-h' || command === 'help') {
     console.log(HELP.trim())
