@@ -208,7 +208,17 @@ function readState(projectRoot) {
 function writeState(projectRoot, patch) {
   try {
     const next = Object.assign(readState(projectRoot), patch)
-    fs.writeFileSync(stateFile(projectRoot), JSON.stringify(next))
+    const file = stateFile(projectRoot)
+    // Atomic: a crash mid-write must not leave a truncated JSON file, which
+    // would read as `{}` and silently re-enable the daily notifier.
+    const tmp =
+      file +
+      '.tmp-' +
+      process.pid +
+      '-' +
+      Math.random().toString(36).slice(2)
+    fs.writeFileSync(tmp, JSON.stringify(next))
+    fs.renameSync(tmp, file)
     return true
   } catch (_) {
     // Read-only temp dir, sandboxed CI, whatever — the cost is one extra
