@@ -114,6 +114,7 @@ function cleanEnv(patch = {}) {
   delete env.npm_config_local_prefix
   delete env.npm_lifecycle_event
   delete env.BLAZEFIRE_SKIP_AUTO
+  delete env.BLAZEFIRE_UPDATE_TIMEOUT_MS
   Object.assign(env, patch)
   env.npm_config_update_notifier = 'false'
   env.YARN_DISABLE_UPDATE_NOTIFIER = '1'
