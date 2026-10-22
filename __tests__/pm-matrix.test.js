@@ -283,7 +283,8 @@ describe('blazefire check (live update feed)', () => {
       [path.join(REPO, 'blazefire', 'cli.cjs'), 'check'],
       { cwd: workdir, env: cleanEnv(), encoding: 'utf8', timeout: 30000 }
     )
-    expect(res.status).toBe(0)
+    const offline = res.stdout.includes('could not reach the update feed')
+    expect(res.status).toBe(offline ? 1 : 0)
     expect(res.stdout).toMatch(
       /blazefire: installed v\d+\.\d+\.\d+, latest v|could not reach the update feed/
     )
@@ -295,7 +296,8 @@ describe('blazefire check (live update feed)', () => {
       [path.join(REPO, 'blazefire', 'cli.cjs'), 'outdated'],
       { cwd: workdir, env: cleanEnv(), encoding: 'utf8', timeout: 30000 }
     )
-    expect(res.status).toBe(0)
+    const offline = res.stdout.includes('could not reach the update feed')
+    expect(res.status).toBe(offline ? 1 : 0)
     expect(res.stdout).toMatch(
       /blazefire: installed v\d+\.\d+\.\d+, latest v|could not reach the update feed/
     )
