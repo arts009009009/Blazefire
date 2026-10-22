@@ -77,17 +77,19 @@ describe('rewrite — ESM configs', () => {
   })
 
   it('preserves regex literals containing escaped URL delimiters', () => {
-    const source = String.raw`const nextConfig = {
+    const source = String.raw`export default {
   matcher: /https?:\/\//,
 }
-export default nextConfig
 `
     const out = rewrite(source)
 
     expect(out.ok).toBe(true)
     expect(out.code).toContain('matcher: /https?:\\/\\//')
-    expect(out.code).toContain('export default blazefire(nextConfig)')
-    expect(ts.createSourceFile('next.config.ts', out.code, ts.ScriptTarget.Latest).parseDiagnostics).toHaveLength(0)
+    expect(out.code).toContain('export default blazefire({')
+    expect(
+      ts.createSourceFile('next.config.ts', out.code, ts.ScriptTarget.Latest)
+        .parseDiagnostics
+    ).toHaveLength(0)
   })
 
   it('preserves CRLF line endings', () => {

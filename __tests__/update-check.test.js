@@ -1018,25 +1018,21 @@ describe('purgeCachedInstall', () => {
   })
 
   test('pnpm store path is resolved only once per project', () => {
-    const bin = path.join(scratch, 'bin')
     const store = path.join(scratch, 'store')
-    const calls = path.join(scratch, 'pnpm-calls.log')
-    fs.mkdirSync(bin)
     fs.mkdirSync(store)
-    fs.writeFileSync(
-      path.join(bin, 'pnpm'),
-      '#!/bin/sh\necho called >> "' + calls + '"\necho "' + store + '"\n',
-      { mode: 0o755 }
-    )
-
-    const originalPath = process.env.PATH
+    const spawnSync = jest.fn(() => ({ status: 0, stdout: store + '\n' }))
     try {
-      process.env.PATH = bin + path.delimiter + originalPath
-      updates.purgeCachedInstall(scratch, 'pnpm', SPEC)
-      updates.purgeCachedInstall(scratch, 'pnpm', SPEC)
-      expect(fs.readFileSync(calls, 'utf8').trim().split('\n')).toHaveLength(1)
+      jest.doMock('child_process', () => ({ spawn: jest.fn(), spawnSync }))
+      let isolatedUpdates
+      jest.isolateModules(() => {
+        isolatedUpdates = require('../blazefire/update-check.cjs')
+      })
+
+      isolatedUpdates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      isolatedUpdates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      expect(spawnSync).toHaveBeenCalledTimes(1)
     } finally {
-      process.env.PATH = originalPath
+      jest.dontMock('child_process')
     }
   })
 

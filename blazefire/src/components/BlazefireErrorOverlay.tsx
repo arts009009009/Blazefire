@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { BlazefireLogo } from './BlazefireLogo.js'
 
 export interface BlazefireErrorOverlayProps {
@@ -17,15 +17,41 @@ export function BlazefireErrorOverlay({
   children,
 }: BlazefireErrorOverlayProps) {
   const [mounted, setMounted] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
+  // Accessibility: once visible, move focus into the dialog so keyboard and
+  // screen-reader users land on it, allow Escape to close (when closable), and
+  // restore focus on unmount. Runs only after the mounted gate opens, so it
+  // never touches the DOM during SSR.
+  useEffect(() => {
+    if (!mounted) return
+    const previous = document.activeElement as HTMLElement | null
+    panelRef.current?.focus()
+
+    if (!onClose) {
+      return () => {
+        previous?.focus()
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus()
+    }
+  }, [mounted, onClose])
+
   if (!mounted) return null
 
   return (
     <div
+      role="presentation"
       style={{
         position: 'fixed',
         top: 0,
@@ -40,6 +66,11 @@ export function BlazefireErrorOverlay({
       }}
     >
       <div
+        ref={panelRef}
+        role="alertdialog"
+        aria-modal={true}
+        aria-label="Blazefire error overlay"
+        tabIndex={-1}
         style={{
           position: 'relative',
           background: '#000',
@@ -49,6 +80,7 @@ export function BlazefireErrorOverlay({
           maxHeight: '80vh',
           overflow: 'auto',
           boxShadow: '0 0 30px rgba(0,255,255,0.15)',
+          outline: 'none',
         }}
       >
         <div

@@ -218,6 +218,55 @@ describe('BlazefireErrorOverlay (client)', () => {
     expect(container.querySelectorAll('button')).toHaveLength(0)
     await unmount()
   })
+
+  it('is an accessible modal dialog: role, focus and Escape', async () => {
+    const onClose = jest.fn()
+    const { container, unmount } = await render(
+      <BlazefireErrorOverlay
+        errorType="Error"
+        errorMessage="boom"
+        onClose={onClose}
+      />
+    )
+    const dialog = container.querySelector('[role="alertdialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    // focus moved into the dialog
+    expect(document.activeElement).toBe(dialog)
+    // Escape closes
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await unmount()
+    // listener removed on unmount — no further calls
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('BlazefireLogo (client)', () => {
+  it('gives each instance unique gradient/filter ids', async () => {
+    const { container, unmount } = await render(
+      <div>
+        <BlazefireLogo />
+        <BlazefireLogo />
+      </div>
+    )
+    const ids = [...container.querySelectorAll('[id]')].map((el) => el.id)
+    expect(ids.length).toBeGreaterThan(0)
+    expect(new Set(ids).size).toBe(ids.length) // no duplicates
+    // every url(#…) reference points at an id that exists
+    for (const url of container.querySelectorAll('[fill^="url(#"], [filter^="url(#)"]')) {
+      const ref = /url\(#([^)]+)\)/.exec(
+        url.getAttribute('fill') || url.getAttribute('filter')
+      )[1]
+      expect(ids).toContain(ref)
+    }
+    await unmount()
+  })
 })
 
 describe('BlazefireDevTools (client)', () => {
