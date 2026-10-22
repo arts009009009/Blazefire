@@ -18,7 +18,7 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 ## Acknowledgements
 
 - [Next.js](https://nextjs.org/) — for pioneering the meta‑framework model and inspiring routing + SSR concepts.
-- Frostfast Compiler — powering Blazefire’s runtime speed.
+- Frostfast Compiler — Blazefire's SWC-powered TypeScript + JSX transform layer.
 - Community devs who shaped the ecosystem we build on.
 
 ## Features
@@ -28,7 +28,7 @@ It’s inspired by modern meta‑frameworks like Next.js, but built with its own
 - Flame logo with gradient
 - Error overlay with custom branding
 - DevTools indicator
-- Frostfast compiler (SWC + Turbopack)
+- Frostfast compiler (SWC-powered TypeScript + JSX transforms)
 
 ## Quick start
 

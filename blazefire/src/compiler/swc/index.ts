@@ -1,3 +1,8 @@
+// Type source for the SWC adapter. Only `swc/index.js` is executed at runtime
+// (package.json maps `./compiler` types here); this file mirrors that logic so
+// the shipped types and behaviour stay in sync. Node built-ins are declared
+// locally rather than imported because the package does not ship `@types/node`.
+
 declare const process: { cwd(): string }
 
 declare function require(id: 'module'): {

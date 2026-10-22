@@ -2,6 +2,9 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 
 function loadNextSwc() {
+  // `createRequire` from the current project walks up through every parent
+  // `node_modules`, so this finds a hoisted or nested `next` in both single
+  // projects and monorepos.
   const requireFromProject = createRequire(
     path.join(process.cwd(), 'package.json')
   )

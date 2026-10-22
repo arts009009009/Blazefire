@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { BlazefireLogo } from './BlazefireLogo.js'
-import { useBlazefire } from '../../index.js'
+import { useBlazefire } from '../index.js'
 
 export interface BlazefireDevToolsProps {
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
