@@ -133,6 +133,21 @@ describe('rewrite — CommonJS configs', () => {
     expect(out.reason).toMatch(/more than once/)
   })
 
+  it('preserves regex literals in a CommonJS config', () => {
+    const source = String.raw`module.exports = { matcher: /https?:\/\// }
+const afterConfig = true
+`
+    const out = rewrite(source)
+
+    expect(out.ok).toBe(true)
+    expect(out.code).toContain('matcher: /https?:\\/\\//')
+    expect(out.code).toContain('module.exports = blazefire({')
+    expect(
+      ts.createSourceFile('next.config.js', out.code, ts.ScriptTarget.Latest)
+        .parseDiagnostics
+    ).toHaveLength(0)
+  })
+
   it('reports configs with no export at all', () => {
     expect(plan('const a = 1;\n').ok).toBe(false)
   })
