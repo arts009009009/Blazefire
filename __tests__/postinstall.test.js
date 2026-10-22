@@ -8,6 +8,7 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const ts = require('typescript')
 const {
   rewrite,
   plan,
@@ -73,6 +74,20 @@ describe('rewrite — ESM configs', () => {
     )
     expect(out.ok).toBe(true)
     expect(out.code).toContain('blazefire(nextConfig satisfies NextConfig);')
+  })
+
+  it('preserves regex literals containing escaped URL delimiters', () => {
+    const source = String.raw`const nextConfig = {
+  matcher: /https?:\/\//,
+}
+export default nextConfig
+`
+    const out = rewrite(source)
+
+    expect(out.ok).toBe(true)
+    expect(out.code).toContain('matcher: /https?:\\/\\//')
+    expect(out.code).toContain('export default blazefire(nextConfig)')
+    expect(ts.createSourceFile('next.config.ts', out.code, ts.ScriptTarget.Latest).parseDiagnostics).toHaveLength(0)
   })
 
   it('preserves CRLF line endings', () => {
