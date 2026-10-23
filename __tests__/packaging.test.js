@@ -181,6 +181,17 @@ describe('relative imports in shipped files resolve', () => {
     expect(broken).toEqual([])
   })
 
+  it('TypeScript DevTools imports the hook from the source entry', () => {
+    const source = fs.readFileSync(
+      path.join(PKG_DIR, 'src', 'components', 'BlazefireDevTools.tsx'),
+      'utf8'
+    )
+
+    expect(source).toMatch(
+      /import\s*\{\s*useBlazefire\s*\}\s*from\s*['"]\.\.\/index\.js['"]/
+    )
+  })
+
   it('components resolve as a consumer would import them', async () => {
     // Self-reference resolution: import through the package name, exactly as
     // a user's `import { BlazefireDevTools } from 'blazefire/components/…'`.
@@ -192,6 +203,13 @@ describe('relative imports in shipped files resolve', () => {
 
     const overlay = await import('blazefire/components/BlazefireErrorOverlay')
     expect(typeof overlay.BlazefireErrorOverlay).toBe('function')
+  })
+
+  it('the compiler subpath resolves and exposes its documented runtime API', async () => {
+    const compiler = await import('blazefire/compiler')
+
+    expect(compiler.COMPILER_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
+    expect(typeof compiler.createCompiler).toBe('function')
   })
 })
 

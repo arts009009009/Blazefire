@@ -15,6 +15,14 @@ export function BlazefireLogo(props) {
   var size = (props && props.size) || 40
   var className = (props && props.className) || ''
   var style = (props && props.style) || undefined
+  // Unique per instance: rendering two Logos (e.g. the overlay and the
+  // DevTools button) must not produce duplicate `blazefire-flame`/`blazefire-glow`
+  // DOM ids, which browsers resolve to the first match. `useId` is stable
+  // across server and client, so this stays hydration-safe; strip non-word
+  // chars so the id is safe inside `url(#…)`.
+  var uid = React.useId().replace(/[^a-zA-Z0-9]/g, '')
+  var flameId = 'blazefire-flame-' + uid
+  var glowId = 'blazefire-glow-' + uid
 
   return React.createElement(
     'svg',
@@ -38,7 +46,7 @@ export function BlazefireLogo(props) {
       React.createElement(
         'linearGradient',
         {
-          id: 'blazefire-flame',
+          id: flameId,
           x1: 20,
           y1: 5,
           x2: 20,
@@ -53,7 +61,7 @@ export function BlazefireLogo(props) {
       React.createElement(
         'filter',
         {
-          id: 'blazefire-glow',
+          id: glowId,
           x: '-50%',
           y: '-50%',
           width: '200%',
@@ -73,14 +81,14 @@ export function BlazefireLogo(props) {
     ),
     React.createElement(
       'g',
-      { filter: 'url(#blazefire-glow)' },
+      { filter: 'url(#' + glowId + ')' },
       React.createElement('path', {
         d: 'M20 3C20 3 30 14 30 23C30 28 25.5 32 20 32C14.5 32 10 28 10 23C10 14 20 3 20 3Z',
-        fill: 'url(#blazefire-flame)',
+        fill: 'url(#' + flameId + ')',
       }),
       React.createElement('path', {
         d: 'M20 11C20 11 25 18 25 23C25 25.8 22.8 28 20 28C17.2 28 15 25.8 15 23C15 18 20 11 20 11Z',
-        fill: 'url(#blazefire-flame)',
+        fill: 'url(#' + flameId + ')',
         opacity: '0.6',
       }),
       React.createElement('path', {

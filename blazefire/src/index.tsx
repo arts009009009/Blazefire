@@ -17,10 +17,12 @@ export interface BlazefireConfig {
 
 export interface CompilerOptions {
   jsc?: {
+    target?: string
     parser?: { syntax: string; tsx?: boolean }
     transform?: { react?: { runtime: string } }
   }
   module?: { type: string }
+  [key: string]: unknown
 }
 
 export interface CompilerInstance {
@@ -120,7 +122,12 @@ export function createBlazefireLogo(size?: number): string {
   // The size is interpolated into an attribute list, so it must be a number —
   // an unvalidated string like `40" onerror="…` would close the attribute and
   // inject markup. Anything non-numeric falls back to the default.
-  const n = Number(size)
+  let n: number
+  try {
+    n = Number(size)
+  } catch {
+    n = NaN
+  }
   const safe = Number.isFinite(n) && n > 0 ? n : 40
   return `<img src="${BLAZEFIRE_LOGO_URL}" width="${safe}" height="${safe}" alt="Blazefire" style="object-fit:contain" draggable="false">`
 }
@@ -152,8 +159,22 @@ export function createCompiler(
   return {
     options: merged,
     version: FROSTFAST_VERSION,
-    async transform(code: string, _filename?: string) {
-      return { code }
+    async transform(code: string, filename?: string) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
+      const swc = await import(
+        /* webpackIgnore: true */
+        /* turbopackIgnore: true */
+        './compiler/swc/index.js'
+      )
+      const transformOptions = filename
+        ? { ...merged, filename }
+        : merged
+      const result = await swc.transform(code, transformOptions)
+      return { code: result.code }
     },
   }
 }

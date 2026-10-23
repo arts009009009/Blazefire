@@ -30,6 +30,7 @@ afterEach(() => {
 })
 
 function writePackageJson(dir, pkg) {
+  fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(pkg))
   return dir
 }
@@ -63,6 +64,19 @@ describe('compareVersions', () => {
 
   test('a prerelease still beats the older release', () => {
     expect(compareVersions('v1.0.1-blazefire-pnpm', '1.0.0')).toBe(1)
+  })
+
+  test('compares prerelease identifiers using SemVer precedence', () => {
+    expect(compareVersions('1.0.0-rc.10', '1.0.0-rc.2')).toBe(1)
+    expect(compareVersions('1.0.0-rc.2', '1.0.0-rc.10')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha', '1.0.0-alpha.1')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha.1', '1.0.0-alpha.beta')).toBe(-1)
+    expect(compareVersions('1.0.0-alpha.beta', '1.0.0-beta')).toBe(-1)
+  })
+
+  test('ignores build metadata when comparing precedence', () => {
+    expect(compareVersions('1.0.0+build.2', '1.0.0+build.10')).toBe(0)
+    expect(compareVersions('1.0.0-rc.2+build.3', '1.0.0-rc.2')).toBe(0)
   })
 
   test('garbage compares equal rather than throwing', () => {
@@ -148,6 +162,101 @@ describe('throttle state', () => {
     fs.writeFileSync(updates.stateFile(scratch), '{not json')
     expect(updates.readState(scratch)).toEqual({})
     expect(updates.recentlyChecked(scratch, Date.now())).toBe(false)
+  })
+
+  test('a non-object state file is normalised, not thrown on', () => {
+    // `null` used to make recentlyChecked throw on `state.lastCheck` and
+    // writeState throw on Object.assign — disabling the notifier entirely.
+    fs.writeFileSync(updates.stateFile(scratch), 'null')
+    expect(updates.readState(scratch)).toEqual({})
+    expect(updates.recentlyChecked(scratch, Date.now())).toBe(false)
+    expect(updates.writeState(scratch, { lastCheck: 456 })).toBe(true)
+    expect(updates.readState(scratch).lastCheck).toBe(456)
+
+    fs.writeFileSync(updates.stateFile(scratch), '"a string"')
+    expect(updates.readState(scratch)).toEqual({})
+    fs.writeFileSync(updates.stateFile(scratch), '[1,2,3]')
+    expect(updates.readState(scratch)).toEqual({})
+  })
+
+  test('a future-dated stamp does not pin the throttle open', () => {
+    // A clock corrected backwards (or a tampered file) used to suppress
+    // every check until now caught up with lastCheck + 24h.
+    const now = 1_000_000_000_000
+    updates.writeState(scratch, { lastCheck: now + 999_999_999 })
+    expect(updates.recentlyChecked(scratch, now)).toBe(false)
+  })
+
+  test('writes state atomically (no stray temp file, valid JSON)', () => {
+    // A crash mid-write used to leave a truncated file that read as `{}`,
+    // silently re-enabling the daily notifier.
+    expect(updates.writeState(scratch, { lastCheck: 123 })).toBe(true)
+    const file = updates.stateFile(scratch)
+    const dir = path.dirname(file)
+    const base = path.basename(file)
+    const strays = fs
+      .readdirSync(dir)
+      .filter((name) => name.startsWith(base + '.tmp-'))
+    expect(strays).toHaveLength(0)
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'))
+    expect(parsed.lastCheck).toBe(123)
+  })
+})
+
+describe('resolveProjectRoot', () => {
+  const ORIGINAL_CWD = process.cwd()
+  const ORIGINAL_ENV = {
+    npm_config_local_prefix: process.env.npm_config_local_prefix,
+    INIT_CWD: process.env.INIT_CWD,
+  }
+
+  afterEach(() => {
+    process.chdir(ORIGINAL_CWD)
+    for (const key of Object.keys(ORIGINAL_ENV)) {
+      if (ORIGINAL_ENV[key] === undefined) delete process.env[key]
+      else process.env[key] = ORIGINAL_ENV[key]
+    }
+  })
+
+  function clearEnv() {
+    delete process.env.npm_config_local_prefix
+    delete process.env.INIT_CWD
+  }
+
+  test('prefers npm_config_local_prefix when it is a real project', () => {
+    clearEnv()
+    const project = writePackageJson(path.join(scratch, 'app'), { name: 'a' })
+    process.env.npm_config_local_prefix = project
+    process.env.INIT_CWD = scratch // must lose to local_prefix
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('falls back to INIT_CWD', () => {
+    clearEnv()
+    const project = writePackageJson(path.join(scratch, 'app'), { name: 'a' })
+    process.env.INIT_CWD = project
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('ignores an env root with no package.json', () => {
+    clearEnv()
+    const bogus = path.join(scratch, 'not-a-project')
+    fs.mkdirSync(bogus, { recursive: true })
+    process.env.npm_config_local_prefix = bogus
+    const project = writePackageJson(path.join(scratch, 'real'), { name: 'r' })
+    const deep = path.join(project, 'deep', 'deeper')
+    fs.mkdirSync(deep, { recursive: true })
+    process.chdir(deep)
+    expect(updates.resolveProjectRoot()).toBe(project)
+  })
+
+  test('walks up from cwd to the nearest package.json in a monorepo child', () => {
+    clearEnv()
+    const root = writePackageJson(path.join(scratch, 'mono'), { name: 'mono' })
+    const child = path.join(root, 'apps', 'web')
+    fs.mkdirSync(child, { recursive: true })
+    process.chdir(child)
+    expect(updates.resolveProjectRoot()).toBe(root)
   })
 })
 
@@ -235,25 +344,27 @@ describe('updateCommand', () => {
     })
   })
 
-  test('uses each manager add/install form', () => {
+  test('uses each manager add/install form with the name prefixed', () => {
     const spec = 'github:arts009009009/Blazefire'
 
+    // A bare spec is not self-describing for registry-style installs
+    // (`npm install ^1.1.2` → ETARGET "undefined@^1.1.2"), so every
+    // manager gets `name@spec`.
     expect(updates.updateCommand(scratch, 'npm')).toEqual({
       command: 'npm',
-      args: ['install', spec],
+      args: ['install', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'yarn')).toEqual({
       command: 'yarn',
-      // Yarn 4 refuses a bare URL (or any other spec) without the name.
       args: ['add', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'pnpm')).toEqual({
       command: 'pnpm',
-      args: ['add', spec],
+      args: ['add', 'blazefire@' + spec],
     })
     expect(updates.updateCommand(scratch, 'bun')).toEqual({
       command: 'bun',
-      args: ['add', spec],
+      args: ['add', 'blazefire@' + spec],
     })
   })
 
@@ -264,7 +375,7 @@ describe('updateCommand', () => {
     const cmd = updates.updateCommand(scratch, 'npm')
     expect(cmd.args).toEqual([
       'install',
-      'github:arts009009009/Blazefire#release',
+      'blazefire@github:arts009009009/Blazefire#release',
     ])
   })
 })
@@ -274,6 +385,7 @@ describe('shouldNotify', () => {
     CI: process.env.CI,
     SKIP: process.env.BLAZEFIRE_SKIP_UPDATE_CHECK,
     TTY: process.stdout.isTTY,
+    ARGV: process.argv,
   }
 
   afterEach(() => {
@@ -284,6 +396,10 @@ describe('shouldNotify', () => {
       if (value === undefined) delete process.env[key]
       else process.env[key] = value
     }
+    // Restore argv too: jest reuses worker processes across files, and a
+    // leaked ['node','next','dev'] would make later suites that evaluate
+    // shouldNotify() see a phantom dev invocation.
+    process.argv = ORIGINAL_ENV.ARGV
     Object.defineProperty(process.stdout, 'isTTY', {
       value: ORIGINAL_ENV.TTY,
       configurable: true,
@@ -353,6 +469,32 @@ describe('shouldNotify', () => {
     setArgv(['dev'])
     expect(updates.shouldNotify()).toBe(false)
   })
+
+  test('only the subcommand counts, not any "dev" argv element', () => {
+    Object.defineProperty(process.stdout, 'isTTY', {
+      value: true,
+      configurable: true,
+      writable: true,
+    })
+    delete process.env.CI
+    delete process.env.BLAZEFIRE_SKIP_UPDATE_CHECK
+
+    // `next lint dev` / `next build dev` are not the dev server.
+    setArgv(['lint', 'dev'])
+    expect(updates.shouldNotify()).toBe(false)
+    setArgv(['build', 'dev'])
+    expect(updates.shouldNotify()).toBe(false)
+
+    // A flag *value* named "dev" is not the subcommand either.
+    setArgv(['--dir', 'dev', 'build'])
+    expect(updates.shouldNotify()).toBe(false)
+    setArgv(['--dir=dev', 'build'])
+    expect(updates.shouldNotify()).toBe(false)
+
+    // Flags before the subcommand must not hide it.
+    setArgv(['--turbo', 'dev'])
+    expect(updates.shouldNotify()).toBe(true)
+  })
 })
 
 describe('promptYesNo', () => {
@@ -375,6 +517,175 @@ describe('promptYesNo', () => {
       writable: true,
     })
     expect(answered).toBe(false)
+  })
+
+  function mockInteractiveTerminal() {
+    const stdin = process.stdin
+    const stdout = process.stdout
+    const stdinNames = [
+      'isTTY',
+      'setRawMode',
+      'resume',
+      'pause',
+      'addListener',
+      'removeListener',
+    ]
+    const originals = new Map(
+      stdinNames.map((name) => [name, Object.getOwnPropertyDescriptor(stdin, name)])
+    )
+    const stdoutWrite = Object.getOwnPropertyDescriptor(stdout, 'write')
+    const stdoutTTY = Object.getOwnPropertyDescriptor(stdout, 'isTTY')
+    let onData
+    const setRawMode = jest.fn()
+    const resume = jest.fn()
+    const pause = jest.fn()
+    const removeListener = jest.fn()
+
+    Object.defineProperties(stdin, {
+      isTTY: { configurable: true, value: true },
+      setRawMode: { configurable: true, value: setRawMode },
+      resume: { configurable: true, value: resume },
+      pause: { configurable: true, value: pause },
+      addListener: {
+        configurable: true,
+        value: jest.fn((event, listener) => {
+          if (event === 'data') onData = listener
+          return stdin
+        }),
+      },
+      removeListener: {
+        configurable: true,
+        value: removeListener,
+      },
+    })
+    Object.defineProperty(stdout, 'write', {
+      configurable: true,
+      writable: true,
+      value: jest.fn(() => true),
+    })
+    Object.defineProperty(stdout, 'isTTY', { configurable: true, value: true })
+
+    return {
+      answer: (key) => onData(Buffer.from(key)),
+      setRawMode,
+      resume,
+      pause,
+      removeListener,
+      restore() {
+        for (const [name, descriptor] of originals) {
+          if (descriptor) Object.defineProperty(stdin, name, descriptor)
+          else delete stdin[name]
+        }
+        if (stdoutWrite) Object.defineProperty(stdout, 'write', stdoutWrite)
+        else delete stdout.write
+        if (stdoutTTY) Object.defineProperty(stdout, 'isTTY', stdoutTTY)
+        else delete stdout.isTTY
+      },
+    }
+  }
+
+  test.each([
+    ['y', true],
+    ['n', false],
+    ['\r', true],
+    ['\u0003', false],
+    ['\u0004', false],
+  ])('answers %j and restores terminal state', (key, expected) => {
+    jest.useFakeTimers()
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      terminal.answer(key)
+
+      expect(answered).toHaveBeenCalledWith(expected)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.removeListener).toHaveBeenCalledWith(
+        'data',
+        expect.any(Function)
+      )
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      terminal.restore()
+      jest.useRealTimers()
+    }
+  })
+
+  test('declines after the prompt timeout and cleans up', () => {
+    jest.useFakeTimers()
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      jest.advanceTimersByTime(30_000)
+
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+      expect(jest.getTimerCount()).toBe(0)
+    } finally {
+      terminal.restore()
+      jest.useRealTimers()
+    }
+  })
+
+  test('restores cooked mode if stdin setup fails after raw mode is enabled', () => {
+    const terminal = mockInteractiveTerminal()
+    terminal.resume.mockImplementation(() => {
+      throw new Error('stdin unavailable')
+    })
+    const answered = jest.fn()
+
+    try {
+      expect(() => updates.promptYesNo('Update? ', answered)).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
+  })
+
+  test('does not strand the callback if stdout fails while printing the answer', () => {
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+    process.stdout.write.mockImplementation((text) => {
+      if (text === '\n') throw new Error('stdout closed')
+      return true
+    })
+
+    try {
+      updates.promptYesNo('Update? ', answered)
+      expect(() => terminal.answer('n')).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
+  })
+
+  test('restores terminal state if stdout fails while printing the question', () => {
+    const terminal = mockInteractiveTerminal()
+    const answered = jest.fn()
+    process.stdout.write.mockImplementation(() => {
+      throw new Error('stdout closed')
+    })
+
+    try {
+      expect(() => updates.promptYesNo('Update? ', answered)).not.toThrow()
+      expect(answered).toHaveBeenCalledWith(false)
+      expect(terminal.setRawMode.mock.calls).toEqual([[true], [false]])
+      expect(terminal.removeListener).toHaveBeenCalledWith(
+        'data',
+        expect.any(Function)
+      )
+      expect(terminal.pause).toHaveBeenCalledTimes(1)
+    } finally {
+      terminal.restore()
+    }
   })
 })
 
@@ -670,6 +981,59 @@ describe('purgeCachedInstall', () => {
     expect(fs.existsSync(other)).toBe(true)
     expect(fs.existsSync(sideEntry)).toBe(false)
     expect(fs.existsSync(unrelatedSide)).toBe(true)
+  })
+
+  test('pnpm: a URL spec does not sweep other projects\' "+main" cache entries', () => {
+    // The loose repo-token heuristic used to run for direct URL specs too:
+    // `…/refs/heads/main.tar.gz` → token "main" → every store entry merely
+    // CONTAINING "+main" was deleted, including other projects' caches
+    // (the pnpm store is machine-global).
+    const store = path.join(scratch, 'store-v10')
+    const mine = path.join(
+      store,
+      'https+++github.com+arts009009009+Blazefire+archive+refs+heads+main.tar.gz'
+    )
+    const otherRepoMain = path.join(
+      store,
+      'https+++github.com+someone+else+archive+refs+heads+main.tar.gz'
+    )
+    const maintainerScoped = path.join(
+      store,
+      'https+++codeload.github.com+maintainer+thing+tar.gz+abc'
+    )
+    fs.mkdirSync(mine, { recursive: true })
+    fs.mkdirSync(otherRepoMain, { recursive: true })
+    fs.mkdirSync(maintainerScoped, { recursive: true })
+
+    updates.purgeCachedInstall(
+      scratch,
+      'pnpm',
+      'https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz',
+      { homeDir: scratch, pnpmStorePath: store }
+    )
+
+    expect(fs.existsSync(mine)).toBe(false) // mine — exact mangled name
+    expect(fs.existsSync(otherRepoMain)).toBe(true) // NOT swept by "+main"
+    expect(fs.existsSync(maintainerScoped)).toBe(true) // NOT swept by "main"
+  })
+
+  test('pnpm store path is resolved only once per project', () => {
+    const store = path.join(scratch, 'store')
+    fs.mkdirSync(store)
+    const spawnSync = jest.fn(() => ({ status: 0, stdout: store + '\n' }))
+    try {
+      jest.doMock('child_process', () => ({ spawn: jest.fn(), spawnSync }))
+      let isolatedUpdates
+      jest.isolateModules(() => {
+        isolatedUpdates = require('../blazefire/update-check.cjs')
+      })
+
+      isolatedUpdates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      isolatedUpdates.purgeCachedInstall(scratch, 'pnpm', SPEC)
+      expect(spawnSync).toHaveBeenCalledTimes(1)
+    } finally {
+      jest.dontMock('child_process')
+    }
   })
 
   test('pnpm: matches codeload side entries for github: specs by repo name', () => {

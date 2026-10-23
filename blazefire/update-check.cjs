@@ -68,25 +68,26 @@ function getRepoSlug() {
 }
 
 /**
- * Loose semver compare: -1 when a < b, 0 when equal, 1 when a > b.
+ * SemVer compare: -1 when a < b, 0 when equal, 1 when a > b.
  *
- * Only the numeric triple matters here — GitHub's "latest" release is always
- * a stable tag, and prerelease suffixes (the repo has `v1.0.1-blazefire-pnpm`)
- * rank below the release of the same number so a stray prerelease tag can
- * never look newer than the real thing.
+ * Build metadata does not affect precedence. Prerelease identifiers follow
+ * SemVer ordering, so (for example) rc.10 ranks above rc.2 while every
+ * prerelease still ranks below the release of the same numeric version.
  */
 function compareVersions(a, b) {
   const parse = (v) => {
     const m = String(v || '')
       .trim()
       .replace(/^[vV]/, '')
-      .match(/^(\d+)\.(\d+)\.(\d+)(.*)$/)
+      .match(
+        /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+      )
     if (!m) return null
     return {
-      major: Number(m[1]),
-      minor: Number(m[2]),
-      patch: Number(m[3]),
-      pre: m[4] || '',
+      major: m[1],
+      minor: m[2],
+      patch: m[3],
+      pre: m[4] ? m[4].split('.') : null,
     }
   }
 
@@ -94,17 +95,44 @@ function compareVersions(a, b) {
   const y = parse(b)
   if (!x || !y) return 0
 
+  const compareNumeric = (left, right) => {
+    const normalizedLeft = left.replace(/^0+(?=\d)/, '')
+    const normalizedRight = right.replace(/^0+(?=\d)/, '')
+    if (normalizedLeft.length !== normalizedRight.length) {
+      return normalizedLeft.length < normalizedRight.length ? -1 : 1
+    }
+    if (normalizedLeft === normalizedRight) return 0
+    return normalizedLeft < normalizedRight ? -1 : 1
+  }
+
   const keys = ['major', 'minor', 'patch']
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
-    if (x[key] !== y[key]) return x[key] < y[key] ? -1 : 1
+    const comparison = compareNumeric(x[key], y[key])
+    if (comparison !== 0) return comparison
   }
 
   // Same number: a release outranks a prerelease of that number.
-  if (x.pre === y.pre) return 0
-  if (x.pre === '') return 1
-  if (y.pre === '') return -1
-  return x.pre < y.pre ? -1 : 1
+  if (!x.pre && !y.pre) return 0
+  if (!x.pre) return 1
+  if (!y.pre) return -1
+
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const left = x.pre[i]
+    const right = y.pre[i]
+    if (left === undefined) return -1
+    if (right === undefined) return 1
+    if (left === right) continue
+
+    const leftIsNumeric = /^\d+$/.test(left)
+    const rightIsNumeric = /^\d+$/.test(right)
+    if (leftIsNumeric && rightIsNumeric) {
+      return compareNumeric(left, right)
+    }
+    if (leftIsNumeric !== rightIsNumeric) return leftIsNumeric ? -1 : 1
+    return left < right ? -1 : 1
+  }
+  return 0
 }
 
 /**
@@ -153,6 +181,37 @@ async function fetchLatestVersion() {
  * since the last attempt. That is what makes "once a day" true everywhere.
  * ------------------------------------------------------------------ */
 
+/**
+ * The project root the update machinery should act on.
+ *
+ * `process.cwd()` is wrong whenever the tool runs from a subdirectory or a
+ * monorepo (state keys, lockfile edits, and the spawned install's cwd would
+ * all follow the stray cwd). Prefer the roots package managers already set,
+ * then the nearest `package.json`, then cwd.
+ */
+function resolveProjectRoot() {
+  const candidates = [
+    process.env.npm_config_local_prefix,
+    process.env.INIT_CWD,
+  ]
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(path.join(candidate, 'package.json'))) {
+      return candidate
+    }
+  }
+
+  // Nearest `package.json` walking up from cwd — covers `next dev` started in
+  // a workspace child where the manager did not set the env roots.
+  let dir = process.cwd()
+  for (let i = 0; i < 16; i++) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return process.cwd()
+}
+
 function stateFile(projectRoot) {
   const key = crypto
     .createHash('sha1')
@@ -164,7 +223,14 @@ function stateFile(projectRoot) {
 
 function readState(projectRoot) {
   try {
-    return JSON.parse(fs.readFileSync(stateFile(projectRoot), 'utf8'))
+    const parsed = JSON.parse(fs.readFileSync(stateFile(projectRoot), 'utf8'))
+    // A non-object (tampered `null`, a stray string/array) would throw on
+    // `state.lastCheck` in recentlyChecked and on Object.assign in
+    // writeState — silently disabling the notifier until the file is
+    // deleted. Normalise anything unusable to a fresh state.
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed
+      : {}
   } catch (_) {
     return {}
   }
@@ -173,7 +239,17 @@ function readState(projectRoot) {
 function writeState(projectRoot, patch) {
   try {
     const next = Object.assign(readState(projectRoot), patch)
-    fs.writeFileSync(stateFile(projectRoot), JSON.stringify(next))
+    const file = stateFile(projectRoot)
+    // Atomic: a crash mid-write must not leave a truncated JSON file, which
+    // would read as `{}` and silently re-enable the daily notifier.
+    const tmp =
+      file +
+      '.tmp-' +
+      process.pid +
+      '-' +
+      Math.random().toString(36).slice(2)
+    fs.writeFileSync(tmp, JSON.stringify(next))
+    fs.renameSync(tmp, file)
     return true
   } catch (_) {
     // Read-only temp dir, sandboxed CI, whatever — the cost is one extra
@@ -186,6 +262,10 @@ function writeState(projectRoot, patch) {
 function recentlyChecked(projectRoot, now) {
   const state = readState(projectRoot)
   const last = Number(state.lastCheck) || 0
+  // A stamp from the future (clock was corrected backwards, or a tampered
+  // state file) would otherwise suppress every check until the clock catches
+  // up — potentially forever. Treat it as "never checked".
+  if (last > now) return false
   return now - last < CHECK_INTERVAL_MS
 }
 
@@ -249,20 +329,19 @@ function readInstalledSpec(projectRoot) {
 /** The `<pm> add <spec>` invocation for a manager. */
 function updateCommand(projectRoot, manager) {
   const spec = readInstalledSpec(projectRoot)
-  switch (manager) {
-    case 'yarn': {
-      // Yarn 4 refuses a bare tarball URL ("package names to be explicitly
-      // specified") and wants `name@spec`; Yarn 1 accepts that shape too, so
-      // one form serves both.
-      return { command: 'yarn', args: ['add', 'blazefire@' + spec] }
-    }
-    case 'pnpm':
-      return { command: 'pnpm', args: ['add', spec] }
-    case 'bun':
-      return { command: 'bun', args: ['add', spec] }
-    default:
-      return { command: 'npm', args: ['install', spec] }
-  }
+  // Unknown names fall back to npm (runUpdate may be handed anything).
+  const pm =
+    manager === 'yarn' || manager === 'pnpm' || manager === 'bun'
+      ? manager
+      : 'npm'
+  // Every manager gets the package name prefixed. A bare range from
+  // package.json (`"blazefire": "^1.1.2"` → `^1.1.2`) is NOT self-describing:
+  // `npm install ^1.1.2` resolves "undefined@^1.1.2" and fails with ETARGET,
+  // which broke `blazefire update` for the most common install shape on
+  // npm/pnpm/bun (only yarn qualified the name). `name@spec` works for all
+  // four managers and for every spec shape (range, tag, github:, file:, URL).
+  const verb = pm === 'npm' ? 'install' : 'add'
+  return { command: pm, args: [verb, 'blazefire@' + spec] }
 }
 
 /* ------------------------------------------------------------------ *
@@ -532,9 +611,17 @@ function purgeYarnInstall(root, options) {
   return removed
 }
 
+// `pnpm store path` spawns a real pnpm and can block the event loop for up to
+// 15s (spawnSync + timeout). A purge can ask for the store more than once, so
+// memoize per root: at most one blocking call per process per project.
+const pnpmStoreCache = new Map()
+
 /** Where pnpm keeps its store for *this* project (the location varies). */
 function pnpmStoreDir(root, options) {
   if (options && options.pnpmStorePath) return options.pnpmStorePath
+  const cacheKey = String(root)
+  if (pnpmStoreCache.has(cacheKey)) return pnpmStoreCache.get(cacheKey)
+  let result = null
   try {
     const res = spawnSync('pnpm', ['store', 'path'], {
       cwd: root,
@@ -549,12 +636,13 @@ function pnpmStoreDir(root, options) {
           return line.trim()
         })
         .filter(Boolean)
-      if (out.length) return out[out.length - 1]
+      if (out.length) result = out[out.length - 1]
     }
   } catch (_) {
     /* pnpm missing or not runnable — nothing to clear */
   }
-  return null
+  pnpmStoreCache.set(cacheKey, result)
+  return result
 }
 
 /** How pnpm mangles a spec into a side-store directory name. */
@@ -579,8 +667,14 @@ function purgePnpmSideEntries(root, spec, options) {
   // match on the spec's repo/path segment instead (ref stripped first, so
   // `github:o/r#dev` matches on `o/r`, not on `dev`). Short tokens are
   // skipped so a 1-letter repo name cannot sweep unrelated entries along.
+  //
+  // ONLY for github:/git shorthand. A direct URL spec is keyed by its own
+  // mangled URL — which pnpmSideEntryNames already matches exactly — and the
+  // loose token match there was destructive: `…/refs/heads/main.tar.gz`
+  // produced token "main" and deleted every store entry containing "+main",
+  // including OTHER projects' caches (the store is machine-global).
   let token = ''
-  if (typeof spec === 'string' && spec) {
+  if (typeof spec === 'string' && /^(github:|git[:+])/i.test(spec)) {
     const parts = spec.split('#')[0].split(/[/?]/).filter(Boolean)
     token = (parts[parts.length - 1] || '').replace(/\.(tar\.gz|tgz|zip)$/i, '')
   }
@@ -945,12 +1039,6 @@ function purgeCachedInstall(projectRoot, manager, spec, options) {
 }
 
 /**
- * Re-install blazefire in `projectRoot`, streaming the PM's own output.
- *
- * Calls back with the child's exit code (never rejects) so callers can report
- * without a try/catch of their own.
- */
-/**
  * Is this package specifier safe to put on a package-manager command line?
  *
  * The specifier comes from this project's own package.json — a file that may
@@ -978,8 +1066,15 @@ function quoteForCmd(value) {
   return '"' + String(value).replace(/"/g, '""') + '"'
 }
 
+/**
+ * Re-install blazefire in `projectRoot`, streaming the PM's own output.
+ *
+ * Calls back with the child's exit code (never rejects) so callers can report
+ * without a try/catch of their own. A hung package manager is cancelled after
+ * a bounded timeout (see the guard below the spawn).
+ */
 function runUpdate(projectRoot, callback) {
-  const root = projectRoot || process.cwd()
+  const root = projectRoot || resolveProjectRoot()
   const manager = detectPackageManager(root)
   const cmd = updateCommand(root, manager)
   const command = cmd.command
@@ -1033,9 +1128,13 @@ function runUpdate(projectRoot, callback) {
       })
 
   let settled = false
+  let timer = null
+  let killTimer = null
   const done = function (code) {
     if (settled) return
     settled = true
+    if (timer) clearTimeout(timer)
+    if (killTimer) clearTimeout(killTimer)
     if (typeof callback === 'function') callback(code)
   }
 
@@ -1046,6 +1145,41 @@ function runUpdate(projectRoot, callback) {
   child.on('close', function (code) {
     done(code == null ? 1 : code)
   })
+
+  // A hung package manager (network stall, an unanswered prompt the child is
+  // waiting on) must not hang `blazefire update` forever. 5 minutes is far
+  // longer than any healthy install but finite. Override with
+  // BLAZEFIRE_UPDATE_TIMEOUT_MS (milliseconds); 0 disables the guard.
+  const raw = Number(process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS)
+  const timeoutMs =
+    Number.isFinite(raw) && raw >= 0 ? raw : 5 * 60 * 1000
+  if (timeoutMs > 0) {
+    timer = setTimeout(function () {
+      try {
+        console.error(
+          'blazefire: the update is taking too long — cancelling. ' +
+            'Re-run it with your package manager if it is still needed.'
+        )
+      } catch (_) {
+        /* stderr gone — the exit code still reports the failure */
+      }
+      try {
+        child.kill('SIGTERM')
+      } catch (_) {
+        /* already gone */
+      }
+      killTimer = setTimeout(function () {
+        try {
+          child.kill('SIGKILL')
+        } catch (_) {
+          /* already gone */
+        }
+        done(1)
+      }, 5000)
+      if (killTimer.unref) killTimer.unref()
+    }, timeoutMs)
+    if (timer.unref) timer.unref()
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -1093,7 +1227,11 @@ function promptYesNo(question, callback) {
     if (settled) return
     settled = true
     cleanup()
-    process.stdout.write('\n')
+    try {
+      process.stdout.write('\n')
+    } catch (_) {
+      /* a closed stdout must not strand the caller */
+    }
     callback(answer)
   }
 
@@ -1116,10 +1254,15 @@ function promptYesNo(question, callback) {
     stdin.addListener('data', onData)
   } catch (_) {
     settled = true
+    cleanup()
     return callback(false)
   }
 
-  process.stdout.write(question)
+  try {
+    process.stdout.write(question)
+  } catch (_) {
+    return finish(false)
+  }
   timer = setTimeout(function () {
     finish(false)
   }, PROMPT_TIMEOUT_MS)
@@ -1142,8 +1285,26 @@ function shouldNotify() {
   if (process.env.CI) return false
   if (!process.stdout.isTTY) return false
 
+  // Only the *subcommand* counts. Matching any argv element means
+  // `next lint dev` or a positional dir named `dev` gets a raw-mode
+  // mid-command prompt, violating the "build and start stay silent" rule.
+  // Scan positionals; skip flag values and anything that looks like the
+  // invoked script path (`node --flag path/to/next dev` puts the binary
+  // inside slice(2)).
   const argv = process.argv.slice(2)
-  return argv.indexOf('dev') !== -1
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--') break
+    if (a.charAt(0) === '-') {
+      // Skip a flag's inline value (`--dir=dev` is one token; `--dir dev`
+      // consumes the next, which must not be read as the subcommand).
+      if (/^--(dir|config|name|distDir|plugin|envFile)$/.test(a)) i++
+      continue
+    }
+    if (/[\\/]/.test(a) || /\.(c?js|mjs|ts)$/.test(a)) continue // script path
+    return a === 'dev'
+  }
+  return false
 }
 
 /**
@@ -1155,7 +1316,7 @@ function maybeNotify() {
   try {
     if (!shouldNotify()) return
 
-    const projectRoot = process.cwd()
+    const projectRoot = resolveProjectRoot()
     const now = Date.now()
     if (recentlyChecked(projectRoot, now)) return
 
@@ -1163,37 +1324,60 @@ function maybeNotify() {
     // against the window — otherwise a flaky connection nags every run.
     writeState(projectRoot, { lastCheck: now })
 
-    checkForUpdate().then(function (info) {
-      if (!info || !info.updateAvailable) return
+    // Fire-and-forget. This detached chain is the one place the outer
+    // try/catch cannot reach: a throw here becomes an unhandled rejection,
+    // which on Node >= 15 terminates the process — i.e. it would kill the
+    // user's dev server. The `.catch` is what keeps that promise.
+    checkForUpdate()
+      .then(function (info) {
+        if (!info || !info.updateAvailable) return
 
-      const line =
-        '\n  blazefire: v' +
-        info.latest +
-        ' is available (you have v' +
-        info.current +
-        ').\n'
+        const line =
+          '\n  blazefire: v' +
+          info.latest +
+          ' is available (you have v' +
+          info.current +
+          ').\n'
 
-      promptYesNo(line + '  Update now? [Y/n] ', function (yes) {
-        if (!yes) {
-          // "No" continues dev untouched — nothing else to do.
-          return
-        }
-        process.stdout.write('  blazefire: updating…\n')
-        runUpdate(projectRoot, function (code) {
-          if (code === 0) {
-            process.stdout.write(
-              '  blazefire: updated. Restart your dev server to pick it up.\n'
-            )
-          } else {
-            process.stdout.write(
-              '  blazefire: update failed (exit ' +
-                code +
-                '). Run `npx blazefire update` to retry.\n'
-            )
+        promptYesNo(line + '  Update now? [Y/n] ', function (yes) {
+          if (!yes) {
+            // "No" continues dev untouched — nothing else to do.
+            return
+          }
+          // Both the writes and the spawn inside runUpdate sit in callbacks,
+          // so they are wrapped too — a broken pipe or a synchronous spawn
+          // throw must degrade to a message, never a crash.
+          try {
+            process.stdout.write('  blazefire: updating…\n')
+          } catch (_) {
+            /* stdout gone — carry on */
+          }
+          try {
+            runUpdate(projectRoot, function (code) {
+              try {
+                if (code === 0) {
+                  process.stdout.write(
+                    '  blazefire: updated. Restart your dev server to pick it up.\n'
+                  )
+                } else {
+                  process.stdout.write(
+                    '  blazefire: update failed (exit ' +
+                      code +
+                      '). Run `npx blazefire update` to retry.\n'
+                  )
+                }
+              } catch (_) {
+                /* stdout gone — the exit code is all we can honour */
+              }
+            })
+          } catch (_) {
+            /* a spawn that throws synchronously must not take dev down */
           }
         })
       })
-    })
+      .catch(function () {
+        /* a failed check must never surface as an unhandled rejection */
+      })
   } catch (_) {
     // A notifier must never be the reason a dev server fails to start.
   }
@@ -1234,6 +1418,7 @@ module.exports = {
   readInstalledSpec,
   readState,
   recentlyChecked,
+  resolveProjectRoot,
   runUpdate,
   shouldNotify,
   stateFile,

@@ -88,7 +88,7 @@ afterAll(() => {
 let fixtureCount = 0
 
 /** A fresh app dir depending on the packed tarball + next stub (all local). */
-function makeFixture({ pnpmAllowlist = false } = {}) {
+function makeFixture({ trustedDependency = false } = {}) {
   const dir = path.join(workdir, 'app-' + fixtureCount++)
   fs.mkdirSync(dir, { recursive: true })
   const packageJson = {
@@ -99,9 +99,7 @@ function makeFixture({ pnpmAllowlist = false } = {}) {
       blazefire: 'file:../' + path.basename(TARBALL),
     },
   }
-  if (pnpmAllowlist) {
-    packageJson.pnpm = { onlyBuiltDependencies: ['blazefire'] }
-  }
+  if (trustedDependency) packageJson.trustedDependencies = ['blazefire']
   fs.writeFileSync(
     path.join(dir, 'package.json'),
     JSON.stringify(packageJson, null, 2)
@@ -111,11 +109,13 @@ function makeFixture({ pnpmAllowlist = false } = {}) {
 }
 
 function cleanEnv(patch = {}) {
-  const env = { ...process.env, ...patch }
+  const env = { ...process.env }
   delete env.INIT_CWD
   delete env.npm_config_local_prefix
   delete env.npm_lifecycle_event
   delete env.BLAZEFIRE_SKIP_AUTO
+  delete env.BLAZEFIRE_UPDATE_TIMEOUT_MS
+  Object.assign(env, patch)
   env.npm_config_update_notifier = 'false'
   env.YARN_DISABLE_UPDATE_NOTIFIER = '1'
   return env
@@ -149,9 +149,9 @@ function blazefire(args, cwd, patch) {
 
 for (const pmName of MANAGERS) {
   const describePm = available[pmName] ? describe : describe.skip
-  // pnpm 10 blocks dependency build scripts by default; the allowlist is the
-  // documented way to opt blazefire in.
-  const allowlist = pmName === 'pnpm'
+  // pnpm 10 requires a one-time explicit init; Bun can opt in to dependency
+  // scripts with the documented trustedDependencies setting.
+  const trustedDependency = pmName === 'bun'
 
   describePm(`${pmName} compatibility`, () => {
     jest.setTimeout(240000)
@@ -159,25 +159,36 @@ for (const pmName of MANAGERS) {
     let dir
 
     beforeAll(() => {
-      dir = makeFixture({ pnpmAllowlist: allowlist })
+      dir = makeFixture({ trustedDependency })
     })
 
-    it('install auto-activates the project and links the bin', () => {
+    it('install/initialization activates the project and links the bin', () => {
       const res = pm(pmName, INSTALL_ARGS[pmName], dir)
       expect(res.status).toBe(0)
 
       const wired = read(dir, 'next.config.js')
-      expect(wired).toContain(MARKER)
-      expect(wired).toContain('reactStrictMode: true')
-      expect(read(dir, path.join(BACKUP_DIR, 'next.config.js'))).toBe(CONFIG)
-      expect(read(dir, '.gitignore')).toContain(BACKUP_DIR)
-
-      const pkg = JSON.parse(read(dir, 'package.json'))
-      expect(pkg.scripts.postinstall).toBe(HOOK_COMMAND)
-
       // The PM linked our bin into node_modules/.bin.
       expect(exists(dir, 'node_modules/.bin/blazefire')).toBe(true)
       expect(exists(dir, 'node_modules/blazefire/package.json')).toBe(true)
+
+      if (pmName === 'pnpm') {
+        // pnpm 10 blocks dependency lifecycle scripts unless explicitly
+        // approved. Match the documented one-time `blazefire init` bootstrap.
+        expect(wired).toBe(CONFIG)
+        const pkg = JSON.parse(read(dir, 'package.json'))
+        expect(pkg.scripts && pkg.scripts.postinstall).toBeUndefined()
+
+        const init = blazefire(['init'], dir)
+        expect(init.status).toBe(0)
+      }
+
+      const activated = read(dir, 'next.config.js')
+      expect(activated).toContain(MARKER)
+      expect(activated).toContain('reactStrictMode: true')
+      expect(read(dir, path.join(BACKUP_DIR, 'next.config.js'))).toBe(CONFIG)
+      expect(read(dir, '.gitignore')).toContain(BACKUP_DIR)
+      const pkg = JSON.parse(read(dir, 'package.json'))
+      expect(pkg.scripts.postinstall).toBe(HOOK_COMMAND)
 
       const help = blazefire(['--help'], dir)
       expect(help.status).toBe(0)
@@ -231,7 +242,7 @@ for (const pmName of MANAGERS) {
     })
 
     it('BLAZEFIRE_SKIP_AUTO=1 blocks activation through the PM script runner', () => {
-      const fresh = makeFixture({ pnpmAllowlist: allowlist })
+      const fresh = makeFixture({ trustedDependency })
       const res = pm(pmName, INSTALL_ARGS[pmName], fresh, {
         BLAZEFIRE_SKIP_AUTO: '1',
       })
@@ -249,7 +260,7 @@ if (available.pnpm) {
     jest.setTimeout(240000)
 
     it('without onlyBuiltDependencies, the postinstall does NOT run (documented)', () => {
-      const dir = makeFixture({ pnpmAllowlist: false })
+      const dir = makeFixture()
       const res = pm('pnpm', INSTALL_ARGS.pnpm, dir)
       expect(res.status).toBe(0) // install succeeds…
       expect(read(dir, 'next.config.js')).toBe(CONFIG) // …but never activated
@@ -272,7 +283,8 @@ describe('blazefire check (live update feed)', () => {
       [path.join(REPO, 'blazefire', 'cli.cjs'), 'check'],
       { cwd: workdir, env: cleanEnv(), encoding: 'utf8', timeout: 30000 }
     )
-    expect(res.status).toBe(0)
+    const offline = res.stdout.includes('could not reach the update feed')
+    expect(res.status).toBe(offline ? 1 : 0)
     expect(res.stdout).toMatch(
       /blazefire: installed v\d+\.\d+\.\d+, latest v|could not reach the update feed/
     )
@@ -284,7 +296,8 @@ describe('blazefire check (live update feed)', () => {
       [path.join(REPO, 'blazefire', 'cli.cjs'), 'outdated'],
       { cwd: workdir, env: cleanEnv(), encoding: 'utf8', timeout: 30000 }
     )
-    expect(res.status).toBe(0)
+    const offline = res.stdout.includes('could not reach the update feed')
+    expect(res.status).toBe(offline ? 1 : 0)
     expect(res.stdout).toMatch(
       /blazefire: installed v\d+\.\d+\.\d+, latest v|could not reach the update feed/
     )

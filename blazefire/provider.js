@@ -13,6 +13,7 @@
 
 import React, { createContext, useContext, useEffect } from 'react'
 import { BLAZEFIRE_VERSION, insertBlazefireStyles } from './utils.js'
+import { BlazefireDevTools } from './src/components/BlazefireDevTools.js'
 
 const BlazefireContext = createContext({
   version: BLAZEFIRE_VERSION,
@@ -29,13 +30,11 @@ function BlazefireDevToolsAuto() {
     typeof process !== 'undefined' &&
     process.env &&
     process.env.NODE_ENV === 'development'
+  // The real indicator (toggle + panel), not a placeholder. `BlazefireDevTools`
+  // renders nothing on the server and until it mounts, so this is SSR-safe and
+  // stays out of production builds.
   if (!isDev) return null
-  return React.createElement('div', {
-    'data-blazefire-devtools': true,
-    role: 'status',
-    style: { position: 'fixed', bottom: 20, right: 20, zIndex: 2147483647 },
-    'aria-label': 'Blazefire Dev Tools',
-  })
+  return React.createElement(BlazefireDevTools, null)
 }
 
 export function BlazefireProvider(props) {

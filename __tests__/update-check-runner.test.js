@@ -210,6 +210,7 @@ describe('maybeNotify', () => {
 describe('runUpdate', () => {
   const originalPath = process.env.PATH
   const originalUserAgent = process.env.npm_config_user_agent
+  const originalUpdateTimeout = process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS
   const created = []
 
   function fakePackageManager(name, exitCode) {
@@ -240,17 +241,24 @@ describe('runUpdate', () => {
     })
   }
 
+  beforeEach(() => {
+    process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS = '0'
+  })
+
   afterEach(() => {
     process.env.PATH = originalPath
     if (originalUserAgent === undefined)
       delete process.env.npm_config_user_agent
     else process.env.npm_config_user_agent = originalUserAgent
+    if (originalUpdateTimeout === undefined)
+      delete process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS
+    else process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS = originalUpdateTimeout
     for (const dir of created.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  it('runs `npm install <spec>` and propagates a non-zero exit code', async () => {
+  it('runs `npm install blazefire@<spec>` and propagates a non-zero exit code', async () => {
     const { bin, log } = fakePackageManager('npm', 7)
     process.env.PATH = bin + path.delimiter + originalPath
     delete process.env.npm_config_user_agent
@@ -260,7 +268,7 @@ describe('runUpdate', () => {
 
     expect(code).toBe(7)
     const args = fs.readFileSync(log, 'utf8').trim()
-    expect(args).toBe('install github:arts009009009/Blazefire')
+    expect(args).toBe('install blazefire@github:arts009009009/Blazefire')
   })
 
   it('runs `pnpm add <spec>` when the user agent says pnpm', async () => {
@@ -273,6 +281,30 @@ describe('runUpdate', () => {
 
     expect(code).toBe(0)
     const args = fs.readFileSync(log, 'utf8').trim()
-    expect(args).toBe('add github:arts009009009/Blazefire')
+    expect(args).toBe('add blazefire@github:arts009009009/Blazefire')
   })
+
+  it(
+    'terminates a package manager that exceeds the configured timeout',
+    async () => {
+      const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-bin-timeout-'))
+      created.push(bin)
+      fs.writeFileSync(
+        path.join(bin, 'npm'),
+        '#!/bin/sh\nexec sleep 10\n',
+        { mode: 0o755 }
+      )
+      process.env.PATH = bin + path.delimiter + originalPath
+      delete process.env.npm_config_user_agent
+      process.env.BLAZEFIRE_UPDATE_TIMEOUT_MS = '25'
+
+      const root = fixtureProject()
+      const startedAt = Date.now()
+      const code = await runUpdateAsync(root)
+
+      expect(code).toBe(1)
+      expect(Date.now() - startedAt).toBeLessThan(5000)
+    },
+    10000
+  )
 })

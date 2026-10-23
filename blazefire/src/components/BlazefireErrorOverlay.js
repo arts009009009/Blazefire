@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { BlazefireLogo } from './BlazefireLogo.js'
 
 export function BlazefireErrorOverlay(props) {
@@ -10,16 +10,45 @@ export function BlazefireErrorOverlay(props) {
   var children = props.children
   var mounted = useState(false)
   var setMounted = mounted[1]
+  var panelRef = useRef(null)
 
   useEffect(function () {
     setMounted(true)
   }, [])
+
+  // Accessibility: once visible, move focus into the dialog so keyboard and
+  // screen-reader users land on it, allow Escape to close (when closable), and
+  // restore focus on unmount. Runs only after the mounted gate opens, so it
+  // never touches the DOM during SSR.
+  useEffect(
+    function () {
+      if (!mounted[0]) return
+      var previous = document.activeElement
+      if (panelRef.current && panelRef.current.focus) panelRef.current.focus()
+
+      if (!onClose) {
+        return function () {
+          if (previous && previous.focus) previous.focus()
+        }
+      }
+      function onKeyDown(event) {
+        if (event.key === 'Escape') onClose()
+      }
+      document.addEventListener('keydown', onKeyDown)
+      return function () {
+        document.removeEventListener('keydown', onKeyDown)
+        if (previous && previous.focus) previous.focus()
+      }
+    },
+    [mounted[0], onClose]
+  )
 
   if (!mounted[0]) return null
 
   return React.createElement(
     'div',
     {
+      role: 'presentation',
       style: {
         position: 'fixed',
         top: 0,
@@ -36,6 +65,11 @@ export function BlazefireErrorOverlay(props) {
     React.createElement(
       'div',
       {
+        ref: panelRef,
+        role: 'alertdialog',
+        'aria-modal': true,
+        'aria-label': 'Blazefire error overlay',
+        tabIndex: -1,
         style: {
           background: '#000',
           border: '1px solid rgba(0,255,255,0.2)',
@@ -45,6 +79,7 @@ export function BlazefireErrorOverlay(props) {
           overflow: 'auto',
           boxShadow: '0 0 30px rgba(0,255,255,0.15)',
           position: 'relative',
+          outline: 'none',
         },
       },
       React.createElement(
@@ -114,7 +149,9 @@ export function BlazefireErrorOverlay(props) {
         React.createElement(
           'button',
           {
+            type: 'button',
             onClick: onClose,
+            'aria-label': 'Close error overlay',
             style: {
               position: 'absolute',
               top: 12,

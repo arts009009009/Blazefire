@@ -73,9 +73,10 @@ describe('server rendering (SSR)', () => {
       </BlazefireProvider>
     )
     expect(html).toContain('<p>hello</p>')
-    // no hydration-breaking markup: styles are injected in an effect, the
-    // dev-tools marker only exists in development…
-    expect(html).not.toContain('data-blazefire-devtools')
+    // no hydration-breaking markup: styles are injected in an effect, and the
+    // DevTools indicator is dev-only and mounted-gated, so nothing of it is
+    // server-rendered…
+    expect(html).not.toContain('Blazefire Dev Tools')
   })
 
   it('mounted-gated components render null on the server', () => {
@@ -121,7 +122,7 @@ describe('BlazefireProvider (client)', () => {
     await unmount()
   })
 
-  it('renders the dev-tools marker only under NODE_ENV=development', async () => {
+  it('renders the real DevTools indicator only under NODE_ENV=development', async () => {
     const original = process.env.NODE_ENV
     try {
       process.env.NODE_ENV = 'development'
@@ -130,14 +131,13 @@ describe('BlazefireProvider (client)', () => {
           <span />
         </BlazefireProvider>
       )
-      expect(
-        dev.container.querySelector('[data-blazefire-devtools]')
-      ).not.toBeNull()
-      expect(
-        dev.container
-          .querySelector('[data-blazefire-devtools]')
-          .getAttribute('aria-label')
-      ).toBe('Blazefire Dev Tools')
+      // The provider mounts the actual BlazefireDevTools toggle (a button),
+      // not the old inert placeholder div.
+      const toggle = dev.container.querySelector(
+        'button[aria-label="Open Blazefire Dev Tools"]'
+      )
+      expect(toggle).not.toBeNull()
+      expect(toggle.getAttribute('aria-expanded')).toBe('false')
       await dev.unmount()
 
       process.env.NODE_ENV = 'production'
@@ -147,7 +147,7 @@ describe('BlazefireProvider (client)', () => {
         </BlazefireProvider>
       )
       expect(
-        prod.container.querySelector('[data-blazefire-devtools]')
+        prod.container.querySelector('[aria-label="Open Blazefire Dev Tools"]')
       ).toBeNull()
       await prod.unmount()
     } finally {
@@ -188,20 +188,26 @@ describe('BlazefireErrorOverlay (client)', () => {
 
   it('calls onClose when the close button is clicked', async () => {
     const onClose = jest.fn()
+    const onSubmit = jest.fn((event) => event.preventDefault())
     const { container, unmount } = await render(
-      <BlazefireErrorOverlay
-        errorType="Error"
-        errorMessage="boom"
-        onClose={onClose}
-      />
+      <form onSubmit={onSubmit}>
+        <BlazefireErrorOverlay
+          errorType="Error"
+          errorMessage="boom"
+          onClose={onClose}
+        />
+      </form>
     )
     const buttons = [...container.querySelectorAll('button')]
     const close = buttons.find((b) => b.textContent === '×')
     expect(close).toBeDefined()
+    expect(close.type).toBe('button')
+    expect(close.getAttribute('aria-label')).toBe('Close error overlay')
     await act(async () => {
       close.click()
     })
     expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onSubmit).not.toHaveBeenCalled()
     await unmount()
   })
 
@@ -210,6 +216,55 @@ describe('BlazefireErrorOverlay (client)', () => {
       <BlazefireErrorOverlay errorType="Error" errorMessage="boom" />
     )
     expect(container.querySelectorAll('button')).toHaveLength(0)
+    await unmount()
+  })
+
+  it('is an accessible modal dialog: role, focus and Escape', async () => {
+    const onClose = jest.fn()
+    const { container, unmount } = await render(
+      <BlazefireErrorOverlay
+        errorType="Error"
+        errorMessage="boom"
+        onClose={onClose}
+      />
+    )
+    const dialog = container.querySelector('[role="alertdialog"]')
+    expect(dialog).not.toBeNull()
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    // focus moved into the dialog
+    expect(document.activeElement).toBe(dialog)
+    // Escape closes
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    await unmount()
+    // listener removed on unmount — no further calls
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('BlazefireLogo (client)', () => {
+  it('gives each instance unique gradient/filter ids', async () => {
+    const { container, unmount } = await render(
+      <div>
+        <BlazefireLogo />
+        <BlazefireLogo />
+      </div>
+    )
+    const ids = [...container.querySelectorAll('[id]')].map((el) => el.id)
+    expect(ids.length).toBeGreaterThan(0)
+    expect(new Set(ids).size).toBe(ids.length) // no duplicates
+    // every url(#…) reference points at an id that exists
+    for (const url of container.querySelectorAll('[fill^="url(#"], [filter^="url(#)"]')) {
+      const ref = /url\(#([^)]+)\)/.exec(
+        url.getAttribute('fill') || url.getAttribute('filter')
+      )[1]
+      expect(ids).toContain(ref)
+    }
     await unmount()
   })
 })

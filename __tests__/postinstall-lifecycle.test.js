@@ -125,6 +125,19 @@ describe('init lifecycle (run)', () => {
     expect(first.match(/blazefire\(/g)).toHaveLength(1)
   })
 
+  it('a mention of blazefire/plugin in a comment is not "already wired"', () => {
+    // Regression: the marker string alone counted as wired, so a config that
+    // merely *mentioned* blazefire/plugin (a comment, dead code) was reported
+    // "already" forever and never actually wrapped.
+    const mention = `// theme handled by blazefire/plugin\n${CJS_CONFIG}`
+    const root = makeProject({ config: mention })
+    targeting(root)
+
+    expect(run({ cli: true })).toBe('activated')
+    const wired = read(root, 'next.config.js')
+    expect(wired).toContain('blazefire(nextConfig)')
+  })
+
   it('the automatic (non-CLI) path activates an installed project too', () => {
     const root = makeProject({ config: CJS_CONFIG })
     targeting(root)
@@ -294,6 +307,43 @@ describe('restore lifecycle', () => {
     const pkg = JSON.parse(read(root, 'package.json'))
     expect(pkg.scripts.postinstall).toBeUndefined()
     expect(pkg.dependencies).toEqual({ next: '16.0.0', blazefire: '^1.1.2' })
+  })
+
+  it('restore removes the .gitignore note activation added (regression)', () => {
+    // Regression: `noteGitignore` appended a block that `restore` never took
+    // back out, so un-installing Blazefire left .gitignore permanently edited.
+    const root = makeProject({ config: CJS_CONFIG })
+    fs.writeFileSync(path.join(root, '.gitignore'), 'node_modules\n')
+    targeting(root)
+    expect(run({ cli: true })).toBe('activated')
+    expect(read(root, '.gitignore')).toContain(BACKUP_DIR)
+
+    expect(restore()).toBe(0)
+    expect(read(root, '.gitignore')).toBe('node_modules\n') // exact original
+  })
+
+  it('restore strips a .gitignore it created wholesale', () => {
+    const root = makeProject({ config: CJS_CONFIG })
+    targeting(root)
+    expect(run({ cli: true })).toBe('activated')
+    expect(exists(root, '.gitignore')).toBe(true)
+
+    expect(restore()).toBe(0)
+    // The file we created now holds none of our content (an empty file may
+    // remain — we cannot prove we created it, so deleting would be rude).
+    expect(read(root, '.gitignore')).not.toContain(BACKUP_DIR)
+  })
+
+  it('restore leaves a user-written .gitignore mention alone', () => {
+    // If the user already ignores the backup dir themselves, activation did
+    // not add the note — restore must not delete their line.
+    const root = makeProject({ config: CJS_CONFIG })
+    fs.writeFileSync(path.join(root, '.gitignore'), BACKUP_DIR + '/\n')
+    targeting(root)
+    expect(run({ cli: true })).toBe('activated')
+
+    expect(restore()).toBe(0)
+    expect(read(root, '.gitignore')).toBe(BACKUP_DIR + '/\n')
   })
 
   it('a second restore reports nothing to restore (regression)', () => {

@@ -111,7 +111,12 @@ export function createBlazefireLogo(size) {
   // The size is interpolated into an attribute list, so it must be a number —
   // an unvalidated string like `40" onerror="…` would close the attribute and
   // inject markup. Anything non-numeric falls back to the default.
-  var n = Number(size)
+  var n
+  try {
+    n = Number(size)
+  } catch (_) {
+    n = NaN
+  }
   if (!Number.isFinite(n) || n <= 0) n = 40
   return (
     '<img src="' +
@@ -157,8 +162,22 @@ export function createCompiler(options) {
   return {
     options: merged,
     version: FROSTFAST_VERSION,
-    transform: function (code) {
-      return Promise.resolve({ code: code })
+    transform: async function (code, filename) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
+      const swc = await import(
+        /* webpackIgnore: true */
+        /* turbopackIgnore: true */
+        './src/compiler/swc/index.js'
+      )
+      const transformOptions = filename
+        ? { ...merged, filename: filename }
+        : merged
+      const result = await swc.transform(code, transformOptions)
+      return { code: result.code }
     },
   }
 }

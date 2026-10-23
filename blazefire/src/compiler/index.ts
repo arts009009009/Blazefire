@@ -2,6 +2,8 @@
  * Blazefire Frostfast Compiler Entry Point
  */
 
+import { transform } from './swc/index.js'
+
 export interface CompilerConfig {
   target?: string
   module?: string
@@ -18,12 +20,32 @@ export function createCompiler(config: CompilerConfig = {}) {
     jsx: 'react-jsx',
     strict: true,
   }
+  const merged = { ...defaults, ...config }
 
   return {
-    config: { ...defaults, ...config },
+    config: merged,
     version: COMPILER_VERSION,
-    async compile(code: string) {
-      return { code, error: null }
+    async compile(code: string, filename?: string) {
+      if (typeof window !== 'undefined') {
+        throw new Error(
+          'Frostfast transforms are only available in a Node.js runtime.'
+        )
+      }
+      const options = {
+        jsc: {
+          target: merged.target,
+          parser: { syntax: 'typescript', tsx: true },
+          transform: {
+            react: {
+              runtime: merged.jsx === 'react' ? 'classic' : 'automatic',
+            },
+          },
+        },
+        module: { type: merged.module },
+        ...(filename ? { filename } : {}),
+      }
+      const result = await transform(code, options)
+      return { code: result.code, error: null }
     },
   }
 }

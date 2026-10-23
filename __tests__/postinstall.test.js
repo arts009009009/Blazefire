@@ -8,6 +8,7 @@
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const ts = require('typescript')
 const {
   rewrite,
   plan,
@@ -75,6 +76,22 @@ describe('rewrite — ESM configs', () => {
     expect(out.code).toContain('blazefire(nextConfig satisfies NextConfig);')
   })
 
+  it('preserves regex literals containing escaped URL delimiters', () => {
+    const source = String.raw`export default { matcher: /https?:\/\// }
+const afterConfig = true
+`
+    const out = rewrite(source)
+
+    expect(out.ok).toBe(true)
+    expect(out.code).toContain('matcher: /https?:\\/\\//')
+    expect(out.code).toContain('export default blazefire({')
+    expect(out.code).toContain('const afterConfig = true')
+    expect(
+      ts.createSourceFile('next.config.ts', out.code, ts.ScriptTarget.Latest)
+        .parseDiagnostics
+    ).toHaveLength(0)
+  })
+
   it('preserves CRLF line endings', () => {
     const out = rewrite('const a = 1;\r\nexport default a;\r\n')
     expect(out.ok).toBe(true)
@@ -114,6 +131,21 @@ describe('rewrite — CommonJS configs', () => {
     const out = plan('module.exports = { a: 1 };\nmodule.exports = { b: 2 };\n')
     expect(out.ok).toBe(false)
     expect(out.reason).toMatch(/more than once/)
+  })
+
+  it('preserves regex literals in a CommonJS config', () => {
+    const source = String.raw`module.exports = { matcher: /https?:\/\// }
+const afterConfig = true
+`
+    const out = rewrite(source)
+
+    expect(out.ok).toBe(true)
+    expect(out.code).toContain('matcher: /https?:\\/\\//')
+    expect(out.code).toContain('module.exports = blazefire({')
+    expect(
+      ts.createSourceFile('next.config.js', out.code, ts.ScriptTarget.Latest)
+        .parseDiagnostics
+    ).toHaveLength(0)
   })
 
   it('reports configs with no export at all', () => {

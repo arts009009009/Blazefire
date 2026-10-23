@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-10-22T15:54:41Z",
+  "generatedOnPlatform": "linux",
+  "projectType": "cli",
+  "setup": [],
+  "assertions": [
+    {
+      "name": "production-build",
+      "kind": "process",
+      "command": "npm",
+      "args": ["run", "build"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 240
+    },
+    {
+      "name": "tests-pass",
+      "kind": "process",
+      "command": "npm",
+      "args": ["test", "--", "--runInBand"],
+      "verificationMethod": "test-results",
+      "expected": "0",
+      "timeoutSeconds": 300
+    },
+    {
+      "name": "cli-help-exits-zero",
+      "kind": "process",
+      "command": "node",
+      "args": ["blazefire/cli.cjs", "--help"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 30
+    },
+    {
+      "name": "cli-version-exits-zero",
+      "kind": "process",
+      "command": "node",
+      "args": ["blazefire/cli.cjs", "--version"],
+      "verificationMethod": "exit-code",
+      "expected": "0",
+      "timeoutSeconds": 30
+    }
+  ]
+}

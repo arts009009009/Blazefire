@@ -303,6 +303,61 @@ function skipString(src, i) {
   return i
 }
 
+const REGEX_PREFIX_KEYWORDS = new Set([
+  'await',
+  'case',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'in',
+  'instanceof',
+  'of',
+  'return',
+  'throw',
+  'typeof',
+  'void',
+  'yield',
+])
+
+/** Does a slash at `i` start a regex literal rather than division? */
+function startsRegexLiteral(src, i) {
+  let previous = i - 1
+  while (previous >= 0 && /\s/.test(src[previous])) previous -= 1
+  if (previous < 0) return true
+
+  const char = src[previous]
+  if ('([{,:;=!?&|+-*%^~<>'.includes(char)) return true
+  if (!/[A-Za-z0-9_$]/.test(char)) return false
+
+  let start = previous
+  while (start > 0 && /[A-Za-z0-9_$]/.test(src[start - 1])) start -= 1
+  return REGEX_PREFIX_KEYWORDS.has(src.slice(start, previous + 1))
+}
+
+/** Return the index just past a regex literal opened at `i`. */
+function skipRegexLiteral(src, i) {
+  i += 1
+  let inCharacterClass = false
+  while (i < src.length) {
+    const char = src[i]
+    if (char === '\\') {
+      i += 2
+      continue
+    }
+    if (char === '\n' || char === '\r') return i
+    if (char === '[') inCharacterClass = true
+    else if (char === ']') inCharacterClass = false
+    else if (char === '/' && !inCharacterClass) {
+      i += 1
+      while (/[A-Za-z]/.test(src[i] || '')) i += 1
+      return i
+    }
+    i += 1
+  }
+  return i
+}
+
 /** Find the first top-level occurrence of any target string. */
 function findTopLevel(src, targets) {
   let i = 0
@@ -317,6 +372,10 @@ function findTopLevel(src, targets) {
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2)
       i = e === -1 ? src.length : e + 2
+      continue
+    }
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
       continue
     }
     if (c === '"' || c === "'" || c === '`') {
@@ -343,32 +402,130 @@ function findTopLevel(src, targets) {
   return null
 }
 
-/** Index just past the statement starting at `start` (its terminating `;`, else EOF). */
+/**
+ * Index just past the statement starting at `start`.
+ *
+ * Two ways to stop, in order of precedence:
+ *   1. a depth-0 `;`
+ *   2. a newline (at depth 0) followed by a new top-level statement keyword —
+ *      automatic-semicolon-insertion ends the statement there. Without this,
+ *      a semicolon-less config like
+ *          module.exports = cfg
+ *          module.exports.env = { FOO: 'bar' }
+ *      scanned to EOF and the wrap glued BOTH statements into one call:
+ *          blazefire(cfg\nmodule.exports.env = …)   ← syntax error
+ */
 function statementEnd(src, start) {
   let i = start
   let depth = 0
+  // A new statement can only begin where depth is 0 and we are at a line start.
+  let atLineStart = true
   while (i < src.length) {
     const c = src[i]
     if (c === '"' || c === "'" || c === '`') {
       i = skipString(src, i)
+      atLineStart = false
       continue
     }
     if (c === '/' && src[i + 1] === '/') {
       const e = src.indexOf('\n', i)
       i = e === -1 ? src.length : e + 1
+      atLineStart = true
       continue
     }
     if (c === '/' && src[i + 1] === '*') {
       const e = src.indexOf('*/', i + 2)
       i = e === -1 ? src.length : e + 2
+      atLineStart = false
       continue
     }
-    if (c === '{' || c === '(' || c === '[') depth += 1
-    else if (c === '}' || c === ')' || c === ']') depth -= 1
-    else if (c === ';' && depth <= 0) return i + 1
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
+      atLineStart = false
+      continue
+    }
+    if (c === '{' || c === '(' || c === '[') {
+      depth += 1
+      atLineStart = false
+    } else if (c === '}' || c === ')' || c === ']') {
+      depth -= 1
+      atLineStart = false
+    } else if (c === ';' && depth <= 0) {
+      return i + 1
+    } else if (c === '\n') {
+      atLineStart = depth <= 0
+    } else if (!/\s/.test(c)) {
+      // First significant character of a line at depth 0: does a new
+      // statement begin here? Only top-level statement starters count —
+      // nothing that can legally continue an expression after ASI.
+      if (atLineStart && depth <= 0 && startsNewStatement(src, i)) {
+        // Return the end of the *previous* line (just past its newline),
+        // excluding trailing whitespace.
+        let j = i
+        while (j > start && /[ \t\r]/.test(src[j - 1])) j -= 1
+        return j
+      }
+      atLineStart = false
+    }
     i += 1
   }
   return src.length
+}
+
+/**
+ * Does the token at `i` begin a new top-level statement?
+ *
+ * Restricted to unambiguous statement starters — a token that can never
+ * continue an expression (`const`, `module.exports`, `export`, `import`, …).
+ * Operators that *do* continue an expression (`.`, `?`, `:`, `&&`, `+`, …)
+ * are deliberately absent, so a multi-line object/array/chain keeps scanning.
+ */
+function startsNewStatement(src, i) {
+  return (
+    /^(module\s*\.|exports\s*\.|export\s|import\s|const\s|let\s|var\s|function\s|class\s|require\s*\(|module\s*\(\))/.test(
+      src.slice(i, i + 40)
+    )
+  )
+}
+
+/**
+ * Index of the first top-level `//` line comment within src[from..to), or -1.
+ *
+ * String- and block-comment-aware, depth-tracked: a `//` inside a nested
+ * object/array/call or inside a string does not count. Used to keep a
+ * trailing comment out of the wrapped expression.
+ */
+function findTopLevelLineComment(src, from, to) {
+  let depth = 0
+  let i = from
+  const end = Math.min(to, src.length)
+  while (i < end) {
+    const c = src[i]
+    if (c === '"' || c === "'" || c === '`') {
+      const s = skipString(src, i)
+      i = s === -1 ? i + 1 : s
+      continue
+    }
+    if (c === '/' && src[i + 1] === '*') {
+      const e = src.indexOf('*/', i + 2)
+      i = e === -1 ? end : e + 2
+      continue
+    }
+    if (c === '/' && startsRegexLiteral(src, i)) {
+      i = skipRegexLiteral(src, i)
+      continue
+    }
+    if (c === '/' && src[i + 1] === '/') {
+      if (depth === 0) return i
+      const e = src.indexOf('\n', i)
+      i = e === -1 ? end : e + 1
+      continue
+    }
+    if (c === '{' || c === '(' || c === '[') depth += 1
+    else if (c === '}' || c === ')' || c === ']') depth = Math.max(0, depth - 1)
+    i += 1
+  }
+  return -1
 }
 
 const SNIPPET =
@@ -458,10 +615,31 @@ function plan(src) {
     exprEnd = endOfStatement // the `;` is re-emitted by the replacement
   } else {
     const raw = src.slice(exprStart, endOfStatement)
-    const trimmed = raw.trimEnd()
-    expression = trimmed.trim()
+    let trimmed = raw.trimEnd()
+    // A trailing `//` comment must not swallow the closing `)` of the wrap
+    // (`module.exports = nextConfig // note` → `blazefire(nextConfig // note)`
+    // is a hard syntax error). Cut the expression before the comment; the
+    // comment stays in the tail after the call. If real code follows the
+    // comment's line the shape is too uncertain to rewrite — refuse instead.
+    const commentAt = findTopLevelLineComment(
+      src,
+      exprStart,
+      exprStart + trimmed.length
+    )
+    if (commentAt !== -1) {
+      const afterCut = src.slice(commentAt, exprStart + trimmed.length)
+      const eolIdx = afterCut.indexOf('\n')
+      if (eolIdx !== -1 && afterCut.slice(eolIdx).trim() !== '') {
+        return {
+          ok: false,
+          reason: 'trailing line comment is followed by more code',
+        }
+      }
+      trimmed = src.slice(exprStart, commentAt).trimEnd()
+    }
     // Stop before trailing whitespace so blank lines / final newline stay in
     // the tail instead of being swallowed by the wrapped call.
+    expression = trimmed.trim()
     exprEnd = exprStart + trimmed.length
   }
 
@@ -520,6 +698,9 @@ function backup(originalFile, contents, projectRoot) {
   return saved
 }
 
+const GITIGNORE_NOTE_HEADER =
+  '# Blazefire keeps a copy of the config it edits'
+
 function noteGitignore(projectRoot) {
   const file = path.join(projectRoot, '.gitignore')
   try {
@@ -530,13 +711,40 @@ function noteGitignore(projectRoot) {
       current = '' // none yet — creating it is the entire point of this
     }
     if (current.includes(BACKUP_DIR)) return
-    const note =
-      '# Blazefire keeps a copy of the config it edits\n' + BACKUP_DIR + '/\n'
+    const note = GITIGNORE_NOTE_HEADER + '\n' + BACKUP_DIR + '/\n'
     const body =
       current === ''
         ? note
         : (current.endsWith('\n') ? current : current + '\n') + '\n' + note
     fs.writeFileSync(file, body, 'utf8')
+  } catch (_) {
+    /* cosmetic only */
+  }
+}
+
+/**
+ * Remove the two-line note noteGitignore() appends — and the blank-line
+ * separator that preceded it. Without this, `restore` put the config back
+ * but left `.gitignore` permanently edited. Only the exact block we write is
+ * touched, and a `.gitignore` that ends up empty is left in place (we cannot
+ * prove we created it).
+ */
+function stripGitignoreNote(projectRoot) {
+  const file = path.join(projectRoot, '.gitignore')
+  let current
+  try {
+    current = fs.readFileSync(file, 'utf8')
+  } catch (_) {
+    return
+  }
+  if (!current.includes(GITIGNORE_NOTE_HEADER)) return
+  const block = GITIGNORE_NOTE_HEADER + '\n' + BACKUP_DIR + '/\n'
+  let next = current.replace(block, '')
+  if (next === current) return
+  // Undo exactly the one separator newline noteGitignore inserted.
+  if (next.endsWith('\n\n')) next = next.slice(0, -2) + '\n'
+  try {
+    fs.writeFileSync(file, next, 'utf8')
   } catch (_) {
     /* cosmetic only */
   }
@@ -712,7 +920,7 @@ function activate(projectRoot, configPath, original) {
   }
 
   const saved = backup(configPath, original, projectRoot)
-  fs.writeFileSync(configPath, result.code, 'utf8')
+  writeAtomicSync(configPath, result.code)
   noteGitignore(projectRoot)
 
   say(
@@ -721,6 +929,30 @@ function activate(projectRoot, configPath, original) {
       ' — original saved to ' +
       path.relative(projectRoot, saved).split(path.sep).join('/')
   )
+}
+
+/**
+ * Replace `file` atomically: write a sibling temp file, then rename it over
+ * the target. A plain writeFileSync can leave the user's config truncated if
+ * the process dies mid-write — and the config is the one file an interrupted
+ * `npm install` must never be allowed to corrupt.
+ */
+function writeAtomicSync(file, contents) {
+  const tmp =
+    file + '.blazefire-tmp-' + process.pid + '-' + Math.random().toString(36).slice(2)
+  fs.writeFileSync(tmp, contents, 'utf8')
+  try {
+    fs.renameSync(tmp, file)
+  } catch (err) {
+    // Windows can refuse rename-over-existing in edge cases: fall back to a
+    // direct write rather than leaving a stray temp file as the only copy.
+    try {
+      fs.unlinkSync(tmp)
+    } catch (_) {
+      /* best effort */
+    }
+    fs.writeFileSync(file, contents, 'utf8')
+  }
 }
 
 function locateCandidates() {
@@ -798,7 +1030,10 @@ function run(opts) {
       if (!configPath) continue
 
       const original = fs.readFileSync(configPath, 'utf8')
-      if (original.includes(MARKER)) {
+      // The marker alone is not proof of wiring: a comment or dead code can
+      // mention `blazefire/plugin` without ever calling it. Require both the
+      // marker and an actual call, matching the shape rewrite() emits.
+      if (original.includes(MARKER) && /(?:^|[^\w$.])blazefire\s*\(/.test(original)) {
         // Already wired, but the hook may not be: the config could have been
         // activated by our own postinstall on an earlier npm/yarn install.
         hookBoth(root, projectRoot)
@@ -887,7 +1122,7 @@ function restore() {
         for (const name of CONFIG_NAMES) {
           const saved = path.join(backupRoot, name)
           if (!fs.existsSync(saved)) continue
-          fs.copyFileSync(saved, path.join(root, name))
+          writeAtomicSync(path.join(root, name), fs.readFileSync(saved, 'utf8'))
           say('restored ' + name + ' from ' + BACKUP_DIR + '/')
           restored += 1
           // The backup has served its purpose — consume it. Keeping it meant
@@ -909,6 +1144,25 @@ function restore() {
       // even though its backup lives in the child, so undo it regardless of
       // whether this particular root holds a backup directory.
       if (undoHook(root)) restored += 1
+
+      // The .gitignore note rode along with activation — take it back too.
+      const giFile = path.join(root, '.gitignore')
+      let giBefore = null
+      try {
+        giBefore = fs.readFileSync(giFile, 'utf8')
+      } catch (_) {
+        /* absent — nothing to strip */
+      }
+      if (giBefore !== null) {
+        stripGitignoreNote(root)
+        let giAfter = giBefore
+        try {
+          giAfter = fs.readFileSync(giFile, 'utf8')
+        } catch (_) {
+          /* unchanged */
+        }
+        if (giAfter !== giBefore) restored += 1
+      }
 
       // Drop the backup directory once it is empty, so a second `restore`
       // correctly reports "nothing to restore" instead of a phantom success.

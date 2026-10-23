@@ -22,11 +22,6 @@ Blazefire
   npx blazefire update    re-install the latest Blazefire release
   npx blazefire check     report the installed and latest version
   npx blazefire --version print the installed version
-  npx blazefire init       wire Blazefire into this project's next.config.*
-  npx blazefire restore    put the original back from "Blazefire Backup/"
-  npx blazefire update     re-install the latest Blazefire release
-  npx blazefire check      report the installed and latest version
-  npx blazefire --version  print the installed version
 
   Init backs the original up first and never runs twice on the same file.
   If the config shape is not recognised it prints exactly what to paste
@@ -105,6 +100,9 @@ try {
         console.log(
           '  blazefire: could not reach the update feed (offline, or no releases published).'
         )
+        // A failed check is indeterminate — exit non-zero so scripts can tell
+        // "could not check" apart from "checked, up to date".
+        process.exitCode = 1
         return
       }
       console.log(
@@ -119,6 +117,15 @@ try {
       } else {
         console.log('  You are up to date.')
       }
+    }).catch(function (error) {
+      // A feed that blows up (DNS failure, proxy error, malformed JSON)
+      // must report itself, not crash the CLI as an unhandled rejection.
+      console.log(
+        '  blazefire: could not reach the update feed (' +
+          (error && error.message ? error.message : String(error)) +
+          ').'
+      )
+      process.exitCode = 1
     })
   } else if (command === '--help' || command === '-h' || command === 'help') {
     console.log(HELP.trim())

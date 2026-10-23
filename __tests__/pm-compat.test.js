@@ -96,29 +96,49 @@ describe('updateCommand — per package manager', () => {
     fs.rmSync(scratch, { recursive: true, force: true })
   })
 
-  it('npm/pnpm/bun use the spec verbatim; yarn prefixes the package name', () => {
-    expect(upd.updateCommand(scratch, 'npm')).toEqual({
-      command: 'npm',
-      args: ['install', SPEC],
-    })
-    // Yarn 4 refuses a bare tarball URL and wants `name@spec`; Yarn 1
-    // accepts that shape too.
-    expect(upd.updateCommand(scratch, 'yarn')).toEqual({
-      command: 'yarn',
-      args: ['add', 'blazefire@' + SPEC],
-    })
-    for (const pm of ['pnpm', 'bun']) {
+  it('every manager prefixes the package name (bare ranges are nameless)', () => {
+    // `npm install ^1.1.2` would resolve "undefined@^1.1.2" (ETARGET) — the
+    // spec from package.json must always be qualified with the name.
+    for (const [pm, verb] of [
+      ['npm', 'install'],
+      ['yarn', 'add'],
+      ['pnpm', 'add'],
+      ['bun', 'add'],
+    ]) {
       expect(upd.updateCommand(scratch, pm)).toEqual({
         command: pm,
-        args: ['add', SPEC],
+        args: [verb, 'blazefire@' + SPEC],
       })
     }
   })
 
-  it('an unknown manager name falls back to npm', () => {
+  it('a registry range from package.json becomes blazefire@<range>', () => {
+    // The shape `npm install blazefire` writes — the most common install
+    // shape, and the one that used to make `blazefire update` fail.
+    fs.writeFileSync(
+      path.join(scratch, 'package.json'),
+      JSON.stringify({
+        name: 'fixture',
+        dependencies: { blazefire: '^1.1.2' },
+      })
+    )
+    for (const [pm, verb] of [
+      ['npm', 'install'],
+      ['yarn', 'add'],
+      ['pnpm', 'add'],
+      ['bun', 'add'],
+    ]) {
+      expect(upd.updateCommand(scratch, pm)).toEqual({
+        command: pm,
+        args: [verb, 'blazefire@^1.1.2'],
+      })
+    }
+  })
+
+  it('an unknown manager name falls back to npm (name still prefixed)', () => {
     expect(upd.updateCommand(scratch, 'carrier-pigeon')).toEqual({
       command: 'npm',
-      args: ['install', SPEC],
+      args: ['install', 'blazefire@' + SPEC],
     })
   })
 
@@ -194,7 +214,7 @@ describe('runUpdate — yarn and bun child processes', () => {
     process.env.npm_config_user_agent = 'bun/1.4.2'
 
     expect(await runUpdate(fixture())).toBe(0)
-    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add ' + SPEC)
+    expect(fs.readFileSync(log, 'utf8').trim()).toBe('add blazefire@' + SPEC)
   })
 
   it('a missing package manager reports exit 1 instead of throwing', async () => {

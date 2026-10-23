@@ -265,6 +265,17 @@ describe('prependRuntimeToEntries', () => {
     })
   })
 
+  it('handles a descriptor with a single-string import', () => {
+    expect(
+      prependRuntimeToEntries(
+        { a: { import: './a.js', dependOn: 'b' } },
+        '/rt'
+      )
+    ).toEqual({
+      a: { import: ['/rt', './a.js'], dependOn: 'b' },
+    })
+  })
+
   it('leaves unknown shapes and missing entries untouched', () => {
     expect(prependRuntimeToEntries(undefined, '/rt')).toBeUndefined()
     expect(prependRuntimeToEntries(null, '/rt')).toBeNull()
@@ -276,6 +287,9 @@ describe('prependRuntimeToEntries', () => {
       a: ['/rt', './a.js'],
     })
     expect(prependRuntimeToEntries({ a: '/rt' }, '/rt')).toEqual({ a: ['/rt'] })
+    expect(
+      prependRuntimeToEntries({ a: { import: '/rt' } }, '/rt')
+    ).toEqual({ a: { import: '/rt' } })
   })
 })
 
@@ -317,6 +331,82 @@ describe('mergeConfigs', () => {
     )
     expect(out.poweredByHeader).toBe(false)
     expect(out.reactStrictMode).toBe(true)
+  })
+})
+
+// Regression: a brand-new Next.js release must be usable through the wrapper
+// the moment it ships. Next 16.4 shipped a batch of new config keys
+// (cacheComponents, reactCompiler, experimental.agentUpgrade, ...). Because
+// `mergeConfigs` is a `{...base, ...ours}` spread with explicit merges only
+// for env/headers/turbopack/webpack, none of them may be dropped — and none
+// of Blazefire's own keys may collide with a same-named Next key (the
+// boolean/string type check on `headers`/`compiler` is what keeps the user's
+// `headers()` function and `compiler: {}` object from being eaten).
+describe('next 16.x feature passthrough', () => {
+  const next164Config = {
+    // new top-level keys in 16.4
+    cacheComponents: true,
+    partialPrefetching: true,
+    reactCompiler: true,
+    // new experimental keys in 16.4
+    experimental: {
+      agentUpgrade: 'security',
+      agentFeedback: true,
+      turbopackGc: true,
+      turbopackLazyDynamicImports: true,
+      turbopackPluginRuntimeStrategy: 'workerThreads',
+      turbopackAdditionalRoots: { linkedPackages: { path: '/x' } },
+      turbopackRustReactCompiler: true,
+    },
+    // collision-prone keys that must NOT be mistaken for Blazefire options
+    headers: async () => [
+      { source: '/secret', headers: [{ key: 'X-Security', value: 'keep' }] },
+    ],
+    compiler: { styledComponents: true },
+    turbopack: { root: '/my/root' },
+    env: { MY_PUBLIC_VAR: 'hello' },
+    reactStrictMode: true,
+    trailingSlash: true,
+    webpack: (config) => {
+      config.userWebpackRan = true
+      return config
+    },
+  }
+
+  it('passes every new 16.4 config key through the wrapper untouched', async () => {
+    const wrapped = blazefire(next164Config)
+    const resolved = typeof wrapped === 'function'
+      ? await wrapped('phase-production-build', { defaultConfig: {} })
+      : wrapped
+
+    // top-level 16.4 keys
+    expect(resolved.cacheComponents).toBe(true)
+    expect(resolved.partialPrefetching).toBe(true)
+    expect(resolved.reactCompiler).toBe(true)
+
+    // experimental sub-keys survive — `ours` must never set `experimental`
+    expect(resolved.experimental).toEqual(next164Config.experimental)
+
+    // collision-prone keys survive
+    expect(resolved.compiler).toEqual({ styledComponents: true })
+    expect(resolved.turbopack.root).toBe('/my/root')
+    expect(resolved.env.MY_PUBLIC_VAR).toBe('hello')
+    expect(resolved.reactStrictMode).toBe(true)
+    expect(resolved.trailingSlash).toBe(true)
+  })
+
+  it("keeps the user's headers() AND adds Blazefire's in one wire list", async () => {
+    const resolved = blazefire(next164Config)
+    const merged = await awaitValue(resolved.headers)
+    expect(merged.some((h) => h.source === '/secret')).toBe(true)
+    expect(merged.some((h) => h.source === '/:path*')).toBe(true)
+    expect(merged.length).toBe(2)
+  })
+
+  it('chains webpack so the user hook still runs alongside ours', () => {
+    const resolved = blazefire(next164Config)
+    const out = resolved.webpack({ entry: './app.js' }, { isServer: false })
+    expect(out.userWebpackRan).toBe(true)
   })
 })
 

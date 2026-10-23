@@ -1,0 +1,123 @@
+{
+  "planHash": "bfb6185dd8c8a8c0918c468d886599a03d97e7efb3da7f148986250c287beb18",
+  "phase": "standalone",
+  "recordedAtUtc": "2026-10-22T16:09:05.8254921Z",
+  "retryCount": 1,
+  "resetBaseline": false,
+  "complete": true,
+  "result": {
+    "setupSucceeded": true,
+    "setupDurationMs": 0,
+    "setupFailureOutput": null,
+    "assertions": [
+      {
+        "name": "production-build",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "\n\u003E blazefire@1.1.2 build\n\u003E node blazefire/build-logo-data.cjs \u0026\u0026 tsc\n\n[blazefire] wrote /home/adam/Blazefire/blazefire/logo-data.cjs (232332 base64 chars)\n",
+        "durationMs": 3167
+      },
+      {
+        "name": "tests-pass",
+        "kind": "process",
+        "verificationMethod": "test-results",
+        "passed": false,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 1,
+        "outputSample": "\n\u003E blazefire@1.1.2 test\n\u003E jest --runInBand\n\nFAIL __tests__/update-check.test.js\n  \u25CF Console\n\n    console.error\n      blazefire: refusing to run the update \u2014 the \u0022blazefire\u0022 entry in package.json is not a plausible package specifier. Reinstall manually with your package manager.\n\n      1087 |   if (!isSafeSpec(spec)) {\n      1088 |     try {\n    \u003E 1089 |       console.error(\n           |               ^\n      1090 |         \u0027blazefire: refusing to run the update \u2014 the \u0022blazefire\u0022 entry in \u0027 \u002B\n      1091 |           \u0027package.json is not a plausible package specifier. Reinstall \u0027 \u002B\n      1092 |           \u0027manually with your package manager.\u0027\n\n      at Object.runUpdate (blazefire/update-check.cjs:1089:15)\n      at Object.runUpdate (__tests__/update-check.test.js:1307:13)\n\n  \u25CF purgeCachedInstall \u203A pnpm store path is resolved only once per project\n\n    ENOENT: no such file or directory, open \u0027/tmp/blazefire-test-o3AiBA/pnpm-calls.log\u0027\n\n      1035 |       updates.purgeCachedInstall(scratch, \u0027pnpm\u0027, SPEC)\n      1036 |       updates.purgeCachedInstall(scratch, \u0027pnpm\u0027, SPEC)\n    \u003E 1037 |       expect(fs.readFileSync(calls, \u0027utf8\u0027).trim().split(\u0027\\n\u0027)).toHaveLength(1)\n           |                 ^\n      1038 |     } finally {\n      1039 |       process.env.PATH = originalPath\n      1040 |     }\n\n      at Object.readFileSync (__tests__/update-check.test.js:1037:17)\n\nPASS __tests__/pm-matrix.test.js (51.248 s)\nPASS __tests__/packaging.test.js\nPASS __tests__/cli.test.js\n(node:104417) [DEP0040] DeprecationWarning: The \u0060punycode\u0060 module is deprecated. Please use a userland alternative instead.\n(Use \u0060node --trace-deprecation ...\u0060 to show where the warning was created)\nPASS __tests__/components.test.js\nPASS __tests__/update-check-runner.test.js\n  \u25CF Console\n\n    console.error\n      blazefire: the update is taking too long \u2014 cancelling. Re-run it with your package manager if it is still needed.\n\n      1157 |     timer = setTimeout(function () {\n      1158 |       try {\n    \u003E 1159 |         console.error(\n           |                 ^\n      1160 |           \u0027blazefire: the update is taking too long \u2014 cancelling. \u0027 \u002B\n      1161 |             \u0027Re-run it with your package manager if it is still needed.\u0027\n      1162 |         )\n\n      at Timeout._onTimeout (blazefire/update-check.cjs:1159:17)\n\nPASS __tests__/types.test.js\nPASS __tests__/entry.test.js\nPASS __tests__/postinstall.test.js\nPASS __tests__/runtime-inject.test.js\nPASS __tests__/compiler.test.js\nPASS __tests__/postinstall-lifecycle.test.js\nPASS __tests__/plugin.test.js\nPASS __tests__/pm-compat.test.js\nPASS __tests__/compiler-swc.test.js\nPASS __tests__/utils.test.js\nPASS __tests__/branding.test.js\nPASS __tests__/version-sync.test.js\nPASS __tests__/runtime-loader.test.js\n\nTest Suites: 1 failed, 18 passed, 19 total\nTests:       1 failed, 1 skipped, 311 passed, 313 total\nSnapshots:   0 total\nTime:        65.118 s, estimated 68 s\nRan all test suites.\n",
+        "durationMs": 66776,
+        "testResults": {
+          "testFramework": "jest",
+          "runnerDetectedFrom": "package_json",
+          "testsTotal": 313,
+          "testsPassed": 311,
+          "testsFailed": 1,
+          "testsSkipped": 1,
+          "parseFailed": false
+        }
+      },
+      {
+        "name": "cli-help-exits-zero",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "Blazefire\n\n  npx blazefire init      wire Blazefire into this project\u0027s next.config.*\n  npx blazefire restore   put the original back from \u0022Blazefire Backup/\u0022\n  npx blazefire update    re-install the latest Blazefire release\n  npx blazefire check     report the installed and latest version\n  npx blazefire --version print the installed version\n\n  Init backs the original up first and never runs twice on the same file.\n  If the config shape is not recognised it prints exactly what to paste\n  instead of guessing.\n\n  It also writes a \u0022postinstall\u0022 hook into your package.json (chaining onto\n  any you already have), so pnpm and bun \u2014 which refuse to run a dependency\u0027s\n  own postinstall \u2014 still self-activate on every install. \u0022restore\u0022 removes\n  that hook again.\n\n  Update clears your package manager\u0027s cached copy of Blazefire, then re-adds\n  the specifier you installed with, so a branch re-resolves to its tip while a\n  commit-pinned URL stays put. On \u0060next dev\u0060 Blazefire offers this same\n  update at most once per 24 hours; answering no just continues your dev\n  server.\n\n  Opt out of auto-activation on install with BLAZEFIRE_SKIP_AUTO=1.\n  Opt out of the update check with BLAZEFIRE_SKIP_UPDATE_CHECK=1.\n",
+        "durationMs": 161
+      },
+      {
+        "name": "cli-version-exits-zero",
+        "kind": "process",
+        "verificationMethod": "exit-code",
+        "passed": true,
+        "timedOut": false,
+        "skipped": false,
+        "skippedReason": null,
+        "exitCode": 0,
+        "outputSample": "blazefire v1.1.2\n",
+        "durationMs": 153
+      }
+    ],
+    "executions": [
+      {
+        "source": "production-build",
+        "resolvedExecutable": "/usr/bin/npm",
+        "args": [
+          "run",
+          "build"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "tests-pass",
+        "resolvedExecutable": "/usr/bin/npm",
+        "args": [
+          "test",
+          "--",
+          "--runInBand"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "cli-help-exits-zero",
+        "resolvedExecutable": "/usr/bin/node",
+        "args": [
+          "blazefire/cli.cjs",
+          "--help"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      },
+      {
+        "source": "cli-version-exits-zero",
+        "resolvedExecutable": "/usr/bin/node",
+        "args": [
+          "blazefire/cli.cjs",
+          "--version"
+        ],
+        "cwd": "/home/adam/Blazefire",
+        "env": {},
+        "prependPath": [],
+        "platform": "linux"
+      }
+    ]
+  }
+}
