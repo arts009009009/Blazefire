@@ -48,8 +48,8 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         }
         known = next
       }
-    } catch {
-      if (!controller.signal.aborted) throw
+    } catch (error) {
+      if (!controller.signal.aborted) throw error
     }
   })()
 
@@ -73,8 +73,8 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
           })
         }
       }
-    } catch {
-      if (!controller.signal.aborted) throw
+    } catch (error) {
+      if (!controller.signal.aborted) throw error
     }
   })()
 
@@ -97,8 +97,8 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
                 l(payload)
               }
             }
-          } catch {
-            if (!controller.signal.aborted) throw
+          } catch (error) {
+            if (!controller.signal.aborted) throw error error
           }
         })()
       }
