@@ -72,7 +72,7 @@ export function isSafeSpec(spec: string): boolean {
 export function quoteForCmd(manager: PackageManager, value: string): string {
   // All supported managers accept double-quoted args on POSIX and Windows
   // cmd; embedded double quotes cannot occur in the specs we accept.
-  return `"${value.replace(/"/g, '\\"')}"`
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
 
 /** The shell command that re-installs blazefire at `spec`. */
