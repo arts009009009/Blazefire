@@ -1,17 +1,25 @@
-/**
- * Jest only runs this package's own suites (`__tests__/**`). Without this
- * config jest would walk the entire repo, including the vendored Next.js /
- * Turbopack trees under `packages/`, `turbopack/`, and `test/`, which contain
- * thousands of test files that do not belong to this package.
- */
-
 'use strict'
 
 /** @type {import('jest').Config} */
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/__tests__'],
-  testMatch: ['**/*.test.js'],
-  // Quiet the CLI's "blazefire:" progress logs without hiding real output.
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs'],
+  testMatch: ['**/*.test.ts'],
+  transform: {
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        // The package emits ESM (NodeNext), but Jest runs CJS. Tests compile
+        // with a CJS override; source files keep .js-extension imports which
+        // TS resolves back to the .ts sources.
+        tsconfig: {
+          module: 'commonjs',
+          moduleResolution: 'node',
+          verbatimModuleSyntax: false,
+          isolatedModules: true,
+          types: ['node', 'jest'],
+        },
+      },
+    ],
+  },
 }
