@@ -81,8 +81,11 @@ function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string
   // Loader options must round-trip through JSON identically or the Rust side
   // rejects them at project construction (v1 serializability guard, kept —
   // deep-equality catches functions, Dates, Maps, dropped undefined keys).
-  for (const [glob, rules] of Object.entries(out.turbopack?.rules ?? {})) {
-    for (const rule of rules as Array<{ options?: unknown }>) {
+  const turbopack = out.turbopack as
+    | { rules?: Record<string, Array<{ options?: unknown }>> }
+    | undefined
+  for (const [glob, rules] of Object.entries(turbopack?.rules ?? {})) {
+    for (const rule of rules) {
       if (rule.options === undefined) continue
       const round = JSON.parse(JSON.stringify(rule.options))
       if (!isDeepStrictEqual(rule.options, round)) {
