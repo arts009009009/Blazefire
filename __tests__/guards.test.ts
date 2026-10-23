@@ -23,17 +23,41 @@ function walk(dir: string, out: string[] = []): string[] {
 const sourceFiles = walk(SRC).filter((f) => /\.(ts|tsx)$/.test(f))
 const relative = (f: string): string => f.slice(ROOT.length + 1)
 
+/** Every import/require specifier in a source file (globs and probes excluded). */
+function importSpecifiers(source: string): string[] {
+  const specifiers: string[] = []
+  const patterns = [
+    /\bimport\s+[^'"]*?from\s*['"]([^'"]+)['"]/g,
+    /\bimport\s*['"]([^'"]+)['"]/g,
+    /\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+  ]
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      if (match[1]) specifiers.push(match[1])
+    }
+  }
+  return specifiers
+}
+
+/** Strip comments so prose about webpack can never trip the guards. */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
 describe('mandate 1 — no legacy bundler bloat', () => {
   it('never imports webpack', () => {
     const offenders = sourceFiles.filter((f) =>
-      /['"](?:next\/dist\/compiled\/)?webpack/.test(readFileSync(f, 'utf8'))
+      importSpecifiers(readFileSync(f, 'utf8')).some(
+        (s) => s === 'webpack' || s.startsWith('webpack/')
+      )
     )
     expect(offenders.map(relative)).toEqual([])
   })
 
   it('never imports from next/dist (no host-framework indirection)', () => {
     const offenders = sourceFiles.filter((f) =>
-      /['"]next\/dist/.test(readFileSync(f, 'utf8'))
+      importSpecifiers(readFileSync(f, 'utf8')).some((s) => s.startsWith('next/dist'))
     )
     expect(offenders.map(relative)).toEqual([])
   })

@@ -333,6 +333,12 @@ export function plan(src: string): ActivationPlan {
 
   if (!expression) return { ok: false, reason: 'could not locate the config expression' }
 
+  // Idempotency at the engine level: an already-wrapped config is refused,
+  // so a second activation can never produce blazefire(bnazefire(...)).
+  if (/^blazefire\s*\(/.test(expression)) {
+    return { ok: false, reason: 'config is already wrapped in blazefire()' }
+  }
+
   // `mid` already carries the `export default` / `module.exports =` keyword
   // verbatim, so the replacement is ONLY the call.
   const replacement = `blazefire(${expression})${semicolon ? ';' : ''}`
