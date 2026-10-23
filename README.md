@@ -1,335 +1,109 @@
-<div align="center">
-  <h1>Blazefire</h1>
-  <p>Blazefire framework powered by Frostfast compiler</p>
-</div>
+# Blazefire v2.0
 
-## Early Showcase of custom error overlay triggered by hydration mismatch
-## ⚠️ Note only yarn and bun that has been tested and output no errors ⚠️
+**A pure App Router, Turbopack/Frostfast-first React framework runtime.**
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/91770e1d-d05f-491c-ac95-a4384e5bad44" />
+Blazefire v2 is a ground-up rewrite guided by the v1 architecture spec
+(`blazefire_v1_spec.json`) — with full feature parity for BlazeFire's
+identity: the branding engine, the dev-overlay rebranding, the Frostfast
+compiler headers, the custom CLI commands, and the seamless host-injection
+pipeline (postinstall + CLI) are all ported, in clean single-source
+TypeScript.
 
-# Blazefire Framework 🔥
+## What changed from v1
 
-![Blazefire logo](./blazefire/assets/blazefire-logo.png)
+| v1 hotspot | v2 disposition |
+| --- | --- |
+| H-01 webpack build tree (147 files + 2,967-line config) | **Gone.** Turbopack-only; a `webpack()` config hook is a hard error |
+| H-02 triple HMR stack | **One** event-stream pipeline (`src/dev/hot-reloader.ts`) |
+| H-03 pages router | **Gone.** App Router only |
+| H-04 mirrored .js/.tsx pairs | **Gone.** One TS source per module; compiled to `dist/` |
+| H-05 production MutationObserver | **One-shot in production** (zero observers); dev observers settle |
+| H-08 pretty-printed config re-serialization | Compact JSON + sha256 change gate; unchanged configs are never re-sent |
+| H-09 discarded issue marshalling | Suppressed **at the Rust source** via the subscription gate |
+| H-13 worker-scheduler re-registration | Idempotent, once per process |
+| H-16 update-check network call | **Ported intact** (v1 parity): TTY-only, non-CI, once per 24h, fire-and-forget from `next dev` |
+| H-17 postinstall host mutation | **Ported intact** (v1 parity): auto-activation + host hook, opt out with `BLAZEFIRE_SKIP_AUTO=1` |
+| H-18 dead code / duplicate branding | Single branding module; single logo asset; injected version constants |
 
-Blazefire is a chaos‑driven web framework with custom runtime, overlay branding, and compiler hooks.  
-It’s inspired by modern meta‑frameworks like Next.js, but built with its own identity and features.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full module map,
+the napi calling conventions, and the complete hotspot disposition matrix.
 
-## Acknowledgements
+## Layout
 
-- [Next.js](https://nextjs.org/) — for pioneering the meta‑framework model and inspiring routing + SSR concepts.
-- Frostfast Compiler — Blazefire's SWC-powered TypeScript + JSX transform layer.
-- Community devs who shaped the ecosystem we build on.
+```
+blazefire-logo.png          # the ONE logo asset (data URI generated at build)
+scripts/generate-logo-data.mjs
+scripts/postinstall-entry.mjs  # never-throw shim into dist/postinstall/run.js
+src/
+  index.ts                  # public API
+  plugin.ts                 # next.config wrapper (turbopack.rules only)
+  branding.ts               # single source of truth for brand tokens
+  version.ts                # version constants
+  package-root.ts           # dual-mode package anchor (ESM dist / jest stub)
+  cli.ts                    # full v1 command surface (see below)
+  config/                   # merge + compact hash-gated serialization
+  compiler/                 # Frostfast native contract, binding ladder, project graph
+  components/               # React surface: logo + error-overlay layout
+  dev/                      # typed HMR protocol + single hot-reloader pipeline
+  build/                    # production build orchestrator (Rust writes, JS consumes)
+  postinstall/              # activation engine (scanner + driver, shared with CLI)
+  runtime/                  # client injection (H-05) + turbopack loader
+  update-check/             # feed, throttle, package-manager detection, updater
+__tests__/                  # jest suite incl. structural mandate guards
+```
 
-## Features
-
-- Cyberpunk/OLED dark theme
-- Neon glow effects
-- Flame logo with gradient
-- Error overlay with custom branding
-- DevTools indicator
-- Frostfast compiler (SWC-powered TypeScript + JSX transforms)
-
-## Compatibility
-
-Blazefire is a layer over Next.js, not a fork — it only uses Next's stable
-public config surface (`headers()`, `poweredByHeader`, `turbopack.root`, the
-webpack `entry` hook, and the `next/dist/build/swc` bindings), so it tracks
-new Next.js releases without needing internal changes.
-
-Verified against **Next.js 16.4.2** (latest stable) across the full matrix:
-`next dev` and `next build`+`next start`, each with both Turbopack and
-Webpack. The peer range is `next: ">=13.0.0"`; older 13–15 releases should
-work via the same public APIs but are not part of the automated matrix.
-
-Note: the experimental `packages/next` source fork in this repository is
-separate, is not built or published, and is not what installs from npm.
-
-## Quick start
-
-The full loop, end to end, with Bun (swap the first command for your package
-manager — see [Installation](#installation)):
+## Commands
 
 ```bash
-# 1. install straight from GitHub (the package is not on npm)
-bun add github:arts009009009/Blazefire
-
-# 2. activate — automatic via postinstall; if your manager blocks
-#    dependency scripts (bun, pnpm, CI with ignore-scripts), run it once:
-bunx blazefire init
-
-# 3. run your app — your usual Next.js scripts, unchanged
-bun run dev          # npm run dev / yarn dev / pnpm dev
-
-# 4. verify and maintain
-bunx blazefire --version   # installed version (npx blazefire --version)
-bunx blazefire check       # installed vs. latest release
-bunx blazefire update      # install the latest release
-bunx blazefire restore     # undo activation
+npm install
+npm run build      # generate logo data + tsc -> dist/
+npm test           # jest
+npm run typecheck  # tsc --noEmit
 ```
-
-On `next dev`, Blazefire offers the update it finds at most once every 24
-hours; answering no just continues your dev server.
-
-## Installation
-
-Install straight from GitHub — the package is not published to npm. For Yarn
-Berry, use the archive URL so Yarn does not require a Git repository approval.
-
-```bash
-# npm
-npm install github:arts009009009/Blazefire
-
-# Yarn (Classic or Berry)
-yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
-
-# pnpm
-pnpm add github:arts009009009/Blazefire
-
-# Bun
-bun add github:arts009009009/Blazefire
-```
-
-That is all for npm, Yarn 1, and pnpm. Yarn Berry and pnpm each need one extra
-step — see below. Your `next.config.*` is copied
-to `Blazefire Backup/` and its export is wrapped with `blazefire()` — and
-activation writes this into your `package.json`:
-
-```json
-"postinstall": "blazefire init || echo blazefire skipped"
-```
-
-A project's own scripts are never blocked, so once that line is committed
-**every** package manager self-activates on install, including the ones
-below. Commit it alongside the config.
-
-### Yarn Berry (2+)
-
-Berry ships with `enableScripts: false` and an empty git allowlist, so it
-runs no dependency install scripts and blocks **every** `github:`
-dependency until you opt in. One `.yarnrc.yml` at the project root covers
-both gates:
-
-```yaml
-nodeLinker: node-modules
-enableScripts: true
-approvedGitRepositories:
-  - 'https://github.com/**'
-```
-
-Patterns match the resolved HTTPS URL, and `**` is required —
-`https://github.com/*` stops one path segment short, and a bare `*` never
-matches a URL containing slashes.
-
-Prefer not to enable every dependency's scripts? Drop `enableScripts` and
-allow just this package from `package.json`:
-
-```json
-{ "dependenciesMeta": { "blazefire": { "built": true } } }
-```
-
-Or skip the git allowlist entirely by installing the archive directly —
-a `refs/tags/vX.Y.Z.tar.gz` URL pins a release, `main.tar.gz` tracks the
-branch tip:
-
-```bash
-yarn add blazefire@https://github.com/arts009009009/Blazefire/archive/refs/heads/main.tar.gz
-```
-
-Using Yarn Plug'n'Play instead (no `node_modules`)? Run `yarn blazefire init`
-rather than `npx`, so Yarn loads its PnP environment and `next` resolves
-through it.
-
-This is **one-time** setup: once the hook exists in `package.json`,
-project scripts always run regardless of `enableScripts`, so later
-installs — including a fresh clone — self-activate under stock Berry
-defaults.
-
-### pnpm
-
-pnpm installs fine, but skips a _dependency's_ build scripts by default, so
-the very first install activates nothing. Bootstrap it once:
-
-```bash
-pnpm exec blazefire init      # or: pnpm approve-builds, then pnpm install
-```
-
-After that the hook takes over and no allowlist is needed. Worth knowing:
-an `onlyBuiltDependencies` entry for a git dependency embeds the full commit
-SHA, so it quietly stops matching on your next commit — the hook doesn't.
-
-### bun
-
-Same one-time bootstrap — bun blocks untrusted postinstalls:
-
-```bash
-bunx blazefire init
-```
-
-or allow the package outright in your `package.json`:
-
-```json
-"trustedDependencies": ["blazefire"]
-```
-
-### Monorepos and workspaces
-
-Installing at the repository root is fine even when the root has no Next.js
-config. The installer then looks inside the workspaces you have _declared_ —
-`package.json#workspaces` (npm, yarn, pnpm) or the `packages:` list in
-`pnpm-workspace.yaml` — and activates the one that actually holds a
-`next.config.*`:
-
-```text
-elite-shop/              blazefire installed here
-├── package.json
-├── pnpm-workspace.yaml    packages: ["frontend"]
-└── frontend/             the app
-    ├── next.config.ts      wrapped + copied to frontend/Blazefire Backup/
-    └── package.json        receives the self-activation hook
-```
-
-The backup and the hook both land beside the app rather than at the root, and
-`npx blazefire restore` reaches them from either place. Only declared
-workspaces are searched — nothing is found by scanning directories — so the
-outcome is deterministic.
-
-### Not supported: Deno
-
-Deno's installer only resolves npm-registry and JSR specifiers, so it drops
-`github:` (and `git+https`) dependencies without an error. Use npm, Yarn, pnpm,
-or Bun to install, then run `npx blazefire init`.
-
-### Restore
-
-To undo activation, restore the original config and remove Blazefire's
-postinstall hook:
-
-```bash
-npx blazefire restore
-```
-
-Set `BLAZEFIRE_SKIP_AUTO=1` to opt out of auto-activation entirely: no hook
-is written, and an existing hook honours the flag too.
-
-## CLI
-
-Every command works through npx — or `bunx blazefire …`, `yarn blazefire …`,
-`pnpm exec blazefire …` if you prefer your package manager's runner:
-
-```text
-blazefire init       wire Blazefire into this project's next.config.*
-blazefire restore    put the original back from "Blazefire Backup/"
-blazefire update     re-install the latest Blazefire release
-blazefire check      report the installed and latest version
-blazefire --version  print the installed version   (-v, version)
-blazefire --help     show all of the above with details (-h, help)
-```
-
-`init` is idempotent — a second run reports `already active` and writes
-nothing. If the config shape is not recognised it prints exactly what to
-paste rather than guessing.
-
-`update` re-runs your package manager's add for the specifier you installed
-with, so a branch install re-resolves to its tip while a pinned tarball URL
-resolves to the same commit. Restart your dev server afterwards to pick it
-up.
-
-If an unknown command ever prints `(blazefire vX.Y.Z)` next to it, that
-installed copy simply predates the command — run `blazefire update`.
-
-Note: package managers may warn that Blazefire's peer dependencies
-(`next`, `react`, `react-dom`) are not provided — harmless when your app
-itself depends on them; the warning only means the manager found them
-higher up (or not at all) in the tree.
 
 ## Usage
 
-```jsx
-import {
-  insertBlazefireStyles,
-  createCompiler,
-  BlazefireProvider,
-} from 'blazefire'
-import { BlazefireLogo } from 'blazefire/components/BlazefireLogo'
-import { BlazefireErrorOverlay } from 'blazefire/components/BlazefireErrorOverlay'
+```ts
+// next.config.ts
+import blazefire from 'blazefire/plugin'
 
-// Insert styles (safe to call from a Server Component — it no-ops on the server)
-insertBlazefireStyles()
-
-// Create compiler instance
-const compiler = createCompiler()
-
-// Use components (client components — import them from blazefire/components/*)
-function App() {
-  return (
-    <BlazefireProvider>
-      <BlazefireLogo size={48} />
-      <BlazefireErrorOverlay
-        errorType="Runtime Error"
-        errorMessage="Something went wrong"
-        onClose={() => {}}
-      />
-    </BlazefireProvider>
-  )
-}
+export default blazefire({
+  // your existing config survives — wrapping merges, never replaces
+})
 ```
 
-## Compiler
+Installing into a project with a `next.config.*` auto-activates it (v1
+behavior): the original is backed up to `Blazefire Backup/` (never
+overwritten), the config is wrapped, and a self-perpetuating
+`postinstall` hook is chained into the host `package.json`. Opt out with
+`BLAZEFIRE_SKIP_AUTO=1`.
 
-The `blazefire/compiler` entry uses the SWC bindings from the Next.js
-installation in the current project to transform TypeScript and JSX. Next.js
-continues to own bundling (Webpack or Turbopack) and hot module replacement;
-Frostfast does not replace those systems. Transforms run in Node.js and do not
-perform TypeScript type-checking.
+Verified on all four package managers — the framework switch itself is
+always automatic (no `next.config` edits), with two package-manager-level
+script approvals required first where their global security policies block
+dependency scripts:
 
-```js
-import { createCompiler, COMPILER_VERSION } from 'blazefire/compiler'
+| Manager | Activation |
+| --- | --- |
+| npm | automatic |
+| yarn (classic) | automatic |
+| pnpm ≥ 10 | one-time `pnpm approve-builds` (pnpm blocks *all* dependency scripts by default) |
+| bun | add `"trustedDependencies": ["blazefire"]` (bun never runs dependency scripts unlisted) |
 
-const compiler = createCompiler({ target: 'es2022' })
-const result = await compiler.compile(
-  'export const Page = () => <main>Hello</main>',
-  'src/page.tsx'
-)
+Locked-down environments (`ignore-scripts=true`, CI, Yarn Berry PnP) fall
+back to the same engine via the explicit CLI:
 
-console.log(`Compiler v${COMPILER_VERSION}`)
-console.log(result.code)
+```bash
+npx blazefire init       # activate (idempotent; prints what it did)
+npx blazefire restore    # original config back, host hook removed
+npx blazefire update     # re-install the latest release (cache-purging)
+npx blazefire check      # installed vs latest
+npx blazefire --version
 ```
 
-Note: the compiler entry (`blazefire/compiler`) is separate from the root
-`createCompiler()` export. The root helper accepts SWC options and exposes an
-async `transform()` method; invoking either transform API requires Next.js to
-be installed in the current project. The root module itself remains safe to
-import in client bundles, but calling `transform()` in a browser is unsupported.
+## Status
 
-## Components
-
-Import components from their `blazefire/components/*` subpath (they are
-client components):
-
-- `BlazefireLogo` - Flame logo with neon glow — `blazefire/components/BlazefireLogo`
-- `BlazefireErrorOverlay` - Full error overlay — `blazefire/components/BlazefireErrorOverlay`
-- `BlazefireDevTools` - Floating dev tools indicator/panel — `blazefire/components/BlazefireDevTools`
-
-The root entry (`blazefire`) exports the runtime utilities and
-`BlazefireProvider` / `useBlazefire`, not the components.
-
-## Styles
-
-Import the CSS file for the full cyberpunk theme:
-
-```css
-@import 'blazefire/styles';
-```
-
-Or inject the equivalent styles at runtime (e.g. when you can't ship a CSS
-import):
-
-```js
-import { insertBlazefireStyles } from 'blazefire'
-```
-
-## License
-
-MIT
-Copyright (c) 2025 Vercel, Inc.
+v2.0 core + identity parity: config, branding, compiler bridge,
+dev/build orchestration, client injection, activation engine, update
+pipeline, CLI, and the React component surface (logo, error-overlay
+layout) — all TypeScript-only, per the single-source mandate.
