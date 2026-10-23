@@ -147,12 +147,12 @@ describe('npm lockfile surgery', () => {
       writeFileSync(join(projectRoot, 'package.json'), '{"name":"host"}')
       const entry = join(projectRoot, 'node_modules', 'blazefire')
       writeFileSync(join(projectRoot, 'package-lock.json'), JSON.stringify({ packages: {} }))
-      require('node:fs').mkdirSync(entry, { recursive: true })
+      mkdirSync(entry, { recursive: true })
       writeFileSync(join(entry, 'package.json'), '{"name":"blazefire"}')
 
       const removed = purgeCachedInstall('npm', projectRoot)
       expect(removed).toContain(entry)
-      expect(require('node:fs').existsSync(entry)).toBe(false)
+      expect(existsSync(entry)).toBe(false)
     } finally {
       rmSync(projectRoot, { recursive: true, force: true })
     }
