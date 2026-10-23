@@ -76,7 +76,22 @@ Installing into a project with a `next.config.*` auto-activates it (v1
 behavior): the original is backed up to `Blazefire Backup/` (never
 overwritten), the config is wrapped, and a self-perpetuating
 `postinstall` hook is chained into the host `package.json`. Opt out with
-`BLAZEFIRE_SKIP_AUTO=1`. Everything is also available explicitly:
+`BLAZEFIRE_SKIP_AUTO=1`.
+
+Verified on all four package managers — the framework switch itself is
+always automatic (no `next.config` edits), with two package-manager-level
+script approvals required first where their global security policies block
+dependency scripts:
+
+| Manager | Activation |
+| --- | --- |
+| npm | automatic |
+| yarn (classic) | automatic |
+| pnpm ≥ 10 | one-time `pnpm approve-builds` (pnpm blocks *all* dependency scripts by default) |
+| bun | add `"trustedDependencies": ["blazefire"]` (bun never runs dependency scripts unlisted) |
+
+Locked-down environments (`ignore-scripts=true`, CI, Yarn Berry PnP) fall
+back to the same engine via the explicit CLI:
 
 ```bash
 npx blazefire init       # activate (idempotent; prints what it did)
