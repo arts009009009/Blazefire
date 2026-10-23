@@ -17,6 +17,9 @@ Rust/TS boundary.
 │   dev/       one HMR pipeline over graph event streams     │
 │   build/     production orchestrator                       │
 │   runtime/   client injection (dev-scoped observers)       │
+│   postinstall/ activation engine (scanner + fs driver)     │
+│   update-check/ feed + throttle + updater (v1 parity)      │
+│   components/ React surface (logo, error-overlay layout)   │
 ├────────────────────────────────────────────────────────────┤
 │ Frostfast native binary (napi .node)                       │
 │   incremental Turbo Engine graph, SWC transforms,          │
@@ -75,8 +78,8 @@ accessor never loads (native-only contract). Version checks compare against
 | H-13 | Worker scheduler re-registered per project | `ensureWorkerScheduler` registers once per process |
 | H-14 | Webpack memory/manifest plugins | Deleted with H-01 |
 | H-15 | JS SourceMapConsumer path | Rust `getSourceMap`/`traceSource` bound directly |
-| H-16 | update-check on every config evaluation | Deleted; nothing phones home |
-| H-17 | Silent postinstall host mutation | No install hooks; explicit `blazefire init` with preview + `--yes` + backup |
+| H-16 | update-check on every config evaluation | Ported intact (v1 parity): TTY-only, non-CI, one prompt per rolling 24h, fire-and-forget from config evaluation — never blocks startup, never throws out of `next.config` |
+| H-17 | Silent postinstall host mutation | Ported intact (v1 parity): auto-activation + chained host hook on install; `BLAZEFIRE_SKIP_AUTO=1` opts out; `restore` removes the hook; engine is one implementation shared by postinstall and CLI |
 | H-18 | Dead code, duplicate branding/logo, stale artifacts | One branding module, one logo asset (generated data URI, gitignored), version constants test-enforced |
 | H-19 | Unbuildable vendored fork | Fork deleted as a concept; direct Frostfast binding |
 | H-20 | Swallowed binding-load diagnostics | Attempts aggregated per error; version warnings keyed per code |
@@ -103,12 +106,35 @@ accessor never loads (native-only contract). Version checks compare against
 `src/generated/logo-data.ts` (gitignored) at build time — v1 shipped the PNG
 AND a baked base64 twin, both git-tracked (H-18).
 
-## 6. Deferred to the next increment
+## 6. Activation + update pipeline (v1 identity parity)
 
-- React component surface (devtools panel, error overlay, logo component) —
-  TypeScript-only, per the single-source mandate.
+One engine, two entry points (v1 rule kept):
+
+- `src/postinstall/scanner.ts` — pure comment/string/regex-aware text
+  scanner: `plan()`/`rewrite()` wrap a top-level default export in
+  `blazefire(...)`. Idempotent at the engine level (an already-wrapped
+  config is refused, so a double wrap is impossible).
+- `src/postinstall/activation.ts` — the fs driver: project/workspace
+  discovery, Next.js-resolvability check, backup to `Blazefire Backup/`
+  (existing backups never overwritten), atomic writes, `.gitignore` note,
+  and the chained host `postinstall` hook (never clobbers the host's own).
+- `scripts/postinstall-entry.mjs` — the never-throw shim npm runs; missing
+  `dist/` (fresh clone pre-build) skips silently.
+- `src/cli.ts` — the full v1 command surface (`init|setup|activate`,
+  `restore|revert`, `update|upgrade`, `check|outdated`, `--version`,
+  `--help`), calling the same engine.
+- `src/update-check/` — GitHub Releases feed (4s timeout, silent on every
+  failure), 24h throttle state in the OS temp dir, package-manager
+  detection (user-agent + lockfiles), per-manager cache purge (yarn
+  classic/berry, pnpm virtual store, npm lock entries, bun), and
+  `maybeNotify()` — the TTY-only, non-CI, fire-and-forget dev prompt.
+
+## 7. Deferred to the next increment
+
 - Dev-server process wiring (HTTP + WebSocket fanout around
   `createHotReloader`).
 - Persistent-cache seeding across worktrees (v1 `turbopack-cache-seed.ts`).
 - The full 54-symbol napi surface: v2 binds the subset it consumes; the
   contract file documents how to extend it.
+- The devtools-panel React component (the logo + error-overlay layout
+  components ship in `src/components/` today).
