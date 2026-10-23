@@ -4,6 +4,10 @@
   "description": "BlazeFire v2 — a pure App Router, Turbopack/Frostfast-first React framework runtime",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arts009009009/Blazefire.git"
+  },
   "bin": {
     "blazefire": "./dist/cli.js"
   },
@@ -24,9 +28,21 @@
       "types": "./dist/compiler/index.d.ts",
       "default": "./dist/compiler/index.js"
     },
+    "./postinstall": {
+      "types": "./dist/postinstall/index.d.ts",
+      "default": "./dist/postinstall/index.js"
+    },
+    "./update-check": {
+      "types": "./dist/update-check/index.d.ts",
+      "default": "./dist/update-check/index.js"
+    },
     "./runtime/inject": {
       "types": "./dist/runtime/inject.d.ts",
       "default": "./dist/runtime/inject.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "default": "./dist/components/index.js"
     }
   },
   "files": [
@@ -40,13 +56,24 @@
   "scripts": {
     "generate": "node scripts/generate-logo-data.mjs",
     "build": "npm run generate && tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "postinstall": "node scripts/postinstall-entry.mjs",
     "typecheck": "npm run generate && tsc -p tsconfig.json --noEmit",
     "test": "npm run generate && jest",
     "clean": "rm -rf dist src/generated"
   },
+  "peerDependencies": {
+    "react": ">=18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
     "typescript": "^5.7.2"
