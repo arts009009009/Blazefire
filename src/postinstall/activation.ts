@@ -159,7 +159,7 @@ export function locateCandidates(start: string): {
   return { configs, packageRoots }
 }
 
-function ensureHook(packageRoot: string): HookStatus {
+export function ensureHook(packageRoot: string): HookStatus {
   const packageJsonPath = path.join(packageRoot, 'package.json')
   if (!fs.existsSync(packageJsonPath)) return { status: 'no-package-json' }
 

@@ -98,7 +98,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
               }
             }
           } catch (error) {
-            if (!controller.signal.aborted) throw error error
+            if (!controller.signal.aborted) throw error
           }
         })()
       }
