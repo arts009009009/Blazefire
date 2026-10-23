@@ -143,8 +143,8 @@ describe('mandate 4 — runtime overhead', () => {
   })
 
   it('serializes config compactly (no pretty-printing) and hashes it', () => {
-    const serialize = readFileSync(join(SRC, 'config', 'serialize.ts'), 'utf8')
-    expect(serialize).not.toMatch(/JSON\.stringify\([^)]*,\s*2\s*\)/)
-    expect(serialize).toContain("createHash('sha256')")
+    const code = stripComments(readFileSync(join(SRC, 'config', 'serialize.ts'), 'utf8'))
+    expect(code).not.toMatch(/JSON\.stringify\([^)]*,\s*2\s*\)/)
+    expect(code).toContain("createHash('sha256')")
   })
 })
