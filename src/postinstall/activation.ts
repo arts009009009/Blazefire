@@ -367,7 +367,11 @@ export function restore(): boolean {
   }
 
   for (const entry of originals) {
-    const base = entry.slice(0, entry.indexOf('.original'))
+    // Backup names are `<config-name>.<ISO-timestamp>.original`; the ISO
+    // stamp has its dots replaced, so the LAST dot in the stem separates
+    // the timestamp from the (dot-containing) config name.
+    const stem = entry.slice(0, -'.original'.length)
+    const base = stem.slice(0, stem.lastIndexOf('.'))
     const target = path.join(process.cwd(), base)
     if (!fs.existsSync(target)) {
       say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
