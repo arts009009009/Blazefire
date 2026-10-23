@@ -47,6 +47,7 @@
   },
   "files": [
     "dist",
+    "scripts/postinstall-entry.mjs",
     "blazefire-logo.png",
     "README.md"
   ],
