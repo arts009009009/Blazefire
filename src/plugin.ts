@@ -15,15 +15,13 @@
  *    once per 24h.
  */
 
-import { join, dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { BLAZEFIRE_BRANDING } from './branding.js'
 import { DEFAULTS, isNextConfig, omitOptions, pickOptions } from './config/options.js'
 import { mergeConfigs } from './config/merge.js'
 import type { BlazefireOptions, NextConfigLike, TurbopackRules } from './config/types.js'
+import { PACKAGE_ROOT } from './package-root.js'
 import { maybeNotify } from './update-check/index.js'
-
-const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
  * v1 parity: during `next dev`, offer the update once per 24h. Strictly
@@ -85,7 +83,7 @@ export function buildConfig(opts: BlazefireOptions): NextConfigLike {
 export function buildTurbopackRules(injectRuntime: boolean): TurbopackRules {
   if (!injectRuntime) return {}
 
-  const loader = join(packageRoot, 'dist', 'runtime', 'turbopack-loader.js')
+  const loader = join(PACKAGE_ROOT, 'dist', 'runtime', 'turbopack-loader.js')
   const targets = [
     '**/next/dist/client/app-next*.js',
     '**/next/dist/client/next*.js',

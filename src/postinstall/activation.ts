@@ -13,9 +13,10 @@
  * The rewriting itself lives in ./scanner.ts; this file is all fs.
  */
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { plan, rewrite, SNIPPET } from './scanner.js'
+import { PACKAGE_ROOT } from '../package-root.js'
+import { rewrite, SNIPPET } from './scanner.js'
 
 export const CONFIG_NAMES = [
   'next.config.js',
@@ -31,9 +32,6 @@ export const MARKER = ' (Blazefire)'
 
 export const HOOK_COMMAND = 'blazefire init || echo blazefire skipped'
 const SKIP_ENV = 'BLAZEFIRE_SKIP_AUTO'
-
-/** Root of this package (two levels up from dist/postinstall/). */
-const PACKAGE_ROOT = path.join(fileURLToPath(new URL('../..', import.meta.url)))
 
 type HookStatus =
   | { status: 'already-active' }
@@ -100,12 +98,16 @@ function listWorkspaces(packageRoot: string): string[] {
 /**
  * Next.js must be resolvable from the project's *own* node_modules, so the
  * plugin cannot be silently activating a tree that never runs it.
+ * Uses createRequire (not a bare `require`) so the engine runs in ESM dist
+ * and CJS test transforms alike.
  */
+const resolveFrom = createRequire(path.join(PACKAGE_ROOT, 'package.json')).resolve
+
 function hasInstalledNext(projectRoot: string): boolean {
   for (const modulePath of ['next/package.json', 'next/dist/server/next.js']) {
     const target = path.join(projectRoot, 'node_modules', ...modulePath.split('/'))
     try {
-      require.resolve(modulePath, { paths: [projectRoot] })
+      resolveFrom(modulePath, { paths: [projectRoot] })
       return true
     } catch {
       if (fs.existsSync(target)) return true
@@ -302,6 +304,10 @@ export function run(start = process.cwd()): void {
     const source = fs.readFileSync(configPath, 'utf8')
     const result = rewrite(source)
     if (!result.ok) {
+      if (/already wrapped/.test(result.reason)) {
+        say(`skipped ${relative} — already activated`)
+        continue
+      }
       say(`skipped ${relative} — ${result.reason}`)
       say(`add this next to your config manually:\n  ${SNIPPET}`)
       continue
@@ -320,10 +326,6 @@ export function run(start = process.cwd()): void {
     }
 
     const nextSource = result.code
-    if (!plan(nextSource).ok) {
-      say(`skipped ${relative} — rewrite did not produce a recognisable config`)
-      continue
-    }
 
     writeAtomicSync(configPath, nextSource)
     appendGitignoreNote(projectRoot)

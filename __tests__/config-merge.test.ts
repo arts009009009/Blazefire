@@ -68,13 +68,16 @@ describe('mergeConfigs', () => {
     expect(merged.poweredByHeader).toBe(false)
   })
 
-  it('rejects a webpack() hook on the blazefire half', () => {
+  it('rejects a webpack() hook on the host config', () => {
     expect(() =>
-      mergeConfigs({} as NextConfigLike, {
-        webpack: () => {
-          throw new Error('never runs')
-        },
-      } as unknown as NextConfigLike)
+      mergeConfigs(
+        {
+          webpack: () => {
+            throw new Error('never runs')
+          },
+        } as unknown as NextConfigLike,
+        {}
+      )
     ).toThrow(BlazefireConfigError)
   })
 })

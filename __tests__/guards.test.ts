@@ -106,19 +106,17 @@ describe('mandate 3 — identity pipelines are intact', () => {
     }
   })
 
-  it('keeps the Frostfast headers in the plugin output', () => {
+  it('keeps the Frostfast headers in the plugin output', async () => {
     const { buildConfig } = require('../src/plugin') as typeof import('../src/plugin')
     const config = buildConfig({
       theme: true,
       overlay: true,
       headers: true,
     } as never)
-    const headers = (config.headers as () => Promise<{ headers: Array<{ key: string; value: string }> }>)()
-    return headers.then((resolved) => {
-      const values = resolved.headers.map((h) => `${h.key}: ${h.value}`)
-      expect(values).toContain('X-Powered-By: Blazefire Framework')
-      expect(values).toContain('X-Compiler: Frostfast v2.0.0')
-    })
+    const routes = await (config.headers as () => Promise<Array<{ headers: Array<{ key: string; value: string }> }>>)()
+    const values = routes.flatMap((route) => route.headers).map((h) => `${h.key}: ${h.value}`)
+    expect(values).toContain('X-Powered-By: Blazefire Framework')
+    expect(values).toContain('X-Compiler: Frostfast v2.0.0')
   })
 
   it('injects the runtime only through turbopack.rules', () => {

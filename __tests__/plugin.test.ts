@@ -6,6 +6,10 @@ import { blazefire, buildConfig } from '../src/plugin'
 import { BlazefireConfigError } from '../src/config/types'
 import type { BlazefireOptions, NextConfigLike } from '../src/config/types'
 
+type HeadersProvider = () => Promise<
+  Array<{ source: string; headers: Array<{ key: string; value: string }> }>
+>
+
 describe('buildConfig', () => {
   it('publishes the runtime toggles as NEXT_PUBLIC_ env values', () => {
     const config = buildConfig({ theme: true, overlay: true } as BlazefireOptions)
@@ -16,25 +20,25 @@ describe('buildConfig', () => {
     })
   })
 
-  it('honours theme:false in the toggles and drops the loader', () => {
-    const config = buildConfig({ theme: false, overlay: false } as BlazefireOptions)
+  it('honours theme:false/headers:false in the toggles and drops the loader', () => {
+    const config = buildConfig({ theme: false, overlay: false, headers: false } as BlazefireOptions)
     expect(config.env?.NEXT_PUBLIC_BLAZEFIRE_THEME).toBe('false')
     expect(config.turbopack?.rules).toEqual({})
     expect(config.poweredByHeader).toBeUndefined() // no headers -> keep host's
+    expect(config.headers).toBeUndefined()
   })
 
-  it('supports custom header values (v1 opts)', () => {
+  it('supports custom header values (v1 opts)', async () => {
     const config = buildConfig({
       theme: false,
       overlay: false,
       poweredBy: 'My Framework',
     } as BlazefireOptions)
-    const headers = (config.headers as () => Promise<{ headers: Array<{ key: string; value: string }> }>)()
-    return headers.then((resolved) => {
-      expect(resolved.headers).toContainEqual({
-        key: 'X-Powered-By',
-        value: 'My Framework',
-      })
+    const routes = await (config.headers as HeadersProvider)()
+    const all = routes.flatMap((route) => route.headers)
+    expect(all).toContainEqual({
+      key: 'X-Powered-By',
+      value: 'My Framework',
     })
   })
 })

@@ -8,17 +8,23 @@
  *   - repo slug is read from this package's own package.json "repository"
  */
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
+import { PACKAGE_ROOT } from '../package-root.js'
 import { compareVersions } from './semver.js'
 import { readState, writeState } from './state.js'
 
 const REQUEST_TIMEOUT_MS = 4000
 
+function readOwnPackageJson(): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8')) as Record<
+    string,
+    unknown
+  >
+}
+
 export function getInstalledVersion(): string {
   try {
-    const packageJson = JSON.parse(
-      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
-    ) as { version?: string }
+    const packageJson = readOwnPackageJson() as { version?: string }
     return packageJson.version ?? '0.0.0'
   } catch {
     return '0.0.0'
@@ -28,9 +34,7 @@ export function getInstalledVersion(): string {
 /** `arts009009009/Blazefire` from the repository field. */
 export function getRepoSlug(): string {
   try {
-    const packageJson = JSON.parse(
-      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
-    ) as {
+    const packageJson = readOwnPackageJson() as {
       repository?: string | { url?: string }
     }
     const raw =
