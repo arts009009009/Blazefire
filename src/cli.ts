@@ -1,143 +1,140 @@
+#!/usr/bin/env node
 /**
- * blazefire CLI — EXPLICIT activation (spec H-17).
+ * blazefire CLI — v1 command surface, ported.
  *
- * v1's postinstall silently rewrote the host's next.config.* AND injected a
- * self-perpetuating postinstall hook into the host package.json — a
- * supply-chain-style behavior. v2 never mutates a project on install. The
- * only mutation path is this CLI, which prints its plan first and applies
- * only with --yes:
+ *   npx blazefire init | setup | activate   wire Blazefire into next.config.*
+ *   npx blazefire restore | revert          put the original back
+ *   npx blazefire update | upgrade          re-install the latest release
+ *   npx blazefire check | outdated          report installed vs latest
+ *   npx blazefire --version | --help
  *
- *   blazefire init [--yes]   wrap next.config.* in blazefire() (with backup)
- *   blazefire restore        revert to the backed-up config
- *   blazefire --version
+ * init/restore run the SAME engine as the postinstall (src/postinstall) —
+ * there is deliberately one implementation of the rewrite, not two.
  */
-
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { BLAZEFIRE_VERSION, FROSTFAST_VERSION } from './version.js'
 import { BLAZEFIRE_BRANDING } from './branding.js'
+import { run, restore } from './postinstall/index.js'
+import {
+  checkForUpdate,
+  getInstalledVersion,
+  maybeNotify,
+  runUpdate,
+} from './update-check/index.js'
+import { BLAZEFIRE_VERSION, FROSTFAST_VERSION } from './version.js'
 
-const CONFIG_NAMES = ['next.config.ts', 'next.config.mjs', 'next.config.js', 'next.config.cjs']
-const BACKUP_DIR = '.blazefire'
-const MARKER = '// blazefire:activated'
+const HELP = `
+Blazefire
 
-export async function findConfig(dir: string): Promise<string | null> {
-  for (const name of CONFIG_NAMES) {
-    const candidate = join(dir, name)
-    try {
-      await readFile(candidate, 'utf8')
-      return candidate
-    } catch {
-      /* try next */
-    }
-  }
-  return null
-}
+  npx blazefire init      wire Blazefire into this project's next.config.*
+  npx blazefire restore   put the original back from "Blazefire Backup/"
+  npx blazefire update    re-install the latest Blazefire release
+  npx blazefire check     report the installed and latest version
+  npx blazefire --version print the installed version
 
-export interface ActivationPlan {
-  configPath: string
-  alreadyActive: boolean
-  wrapped: string
-}
+  Init backs the original up first and never runs twice on the same file.
+  If the config shape is not recognised it prints exactly what to paste
+  instead of guessing.
 
-export async function plan(dir: string): Promise<ActivationPlan> {
-  const configPath = await findConfig(dir)
-  if (!configPath) {
-    throw new Error(
-      `No next.config.* found in ${dir}. Create one, then re-run \`blazefire init\`.`
-    )
-  }
-  const source = await readFile(configPath, 'utf8')
-  if (source.includes(MARKER)) {
-    return { configPath, alreadyActive: true, wrapped: source }
-  }
+  It also writes a "postinstall" hook into your package.json so the
+  activation keeps applying on a fresh install. Remove it with
+  \`npx blazefire restore\`.
 
-  const importLine = `import blazefire from 'blazefire/plugin'\n`
-  const hasEsmExport = /export\s+default\s/.test(source)
-  const wrapped = hasEsmExport
-    ? `${importLine}${MARKER}\n${source.replace(/export\s+default\s+/, 'export default blazefire(')}\n`
-    : `${importLine}${MARKER}\n// CJS config: export your config as \`config\` and let the wrap re-export it.\nmodule.exports = blazefire(require('./next.config.cjs.orig'))\n`
+  Set BLAZEFIRE_SKIP_AUTO=1 to opt out of the automatic activation.
+`.trim()
 
-  return { configPath, alreadyActive: false, wrapped }
-}
-
-export async function apply(dir: string): Promise<string> {
-  const p = await plan(dir)
-  if (p.alreadyActive) return p.configPath
-
-  await mkdir(join(dir, BACKUP_DIR), { recursive: true })
-  await copyFile(p.configPath, join(dir, BACKUP_DIR, 'next.config.backup'))
-  await writeFile(p.configPath, p.wrapped, 'utf8')
-  return p.configPath
-}
-
-export async function restore(dir: string): Promise<string | null> {
-  const backup = join(dir, BACKUP_DIR, 'next.config.backup')
-  const configPath = (await findConfig(dir)) ?? join(dir, CONFIG_NAMES[0]!)
+/**
+ * The engine call — the same as the postinstall. Returns an exit code:
+ * 0 = activated (or already active), 1 = skipped/failed.
+ */
+function init(): number {
   try {
-    await copyFile(backup, configPath)
-    await rm(join(dir, BACKUP_DIR), { recursive: true, force: true })
-    return configPath
-  } catch {
-    return null
+    run()
+    return 0
+  } catch (error) {
+    process.stderr.write(
+      `[Blazefire] activation failed: ${(error as Error)?.message ?? error}\n`
+    )
+    return 1
   }
 }
 
-export async function main(argv: string[], cwd = process.cwd()): Promise<void> {
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   const command = argv[0] ?? '--help'
-  const yes = argv.includes('--yes')
 
   switch (command) {
     case 'init':
-    case 'setup': {
-      const p = await plan(cwd)
-      if (p.alreadyActive) {
-        console.log(`blazefire: ${p.configPath} is already active`)
-        return
-      }
-      console.log(`blazefire: would wrap ${p.configPath} in blazefire()`)
-      console.log('--- preview ---')
-      console.log(p.wrapped.slice(0, 400))
-      if (!yes) {
-        console.log('\nRe-run with --yes to apply (a backup is written to .blazefire/).')
-        return
-      }
-      const applied = await apply(cwd)
-      console.log(`blazefire: activated ${applied} (backup in .blazefire/)`)
-      return
-    }
+    case 'setup':
+    case 'activate':
+      return init()
+
     case 'restore':
-    case 'revert': {
-      const restored = await restore(cwd)
-      console.log(restored ? `blazefire: restored ${restored}` : 'blazefire: nothing to restore')
-      return
-    }
-    case '--version':
-    case 'version':
-      console.log(`blazefire ${BLAZEFIRE_VERSION} (Frostfast ${FROSTFAST_VERSION})`)
-      return
-    default:
-      console.log(
-        [
-          BLAZEFIRE_BRANDING.banner,
-          '',
-          'Usage:',
-          '  blazefire init [--yes]   activate Blazefire (prints a preview first)',
-          '  blazefire restore        revert to the backed-up config',
-          '  blazefire --version      print versions',
-        ].join('\n')
+    case 'revert':
+      try {
+        return restore() ? 0 : 1
+      } catch (error) {
+        process.stderr.write(
+          `[Blazefire] restore failed: ${(error as Error)?.message ?? error}\n`
+        )
+        return 1
+      }
+
+    case 'update':
+    case 'upgrade':
+      return runUpdate()
+
+    case 'check':
+    case 'check-update':
+    case 'outdated': {
+      const { current, latest, updateAvailable } = await checkForUpdate()
+      if (!latest) {
+        process.stdout.write(
+          `blazefire ${current} — could not reach the release feed\n`
+        )
+        return 1
+      }
+      process.stdout.write(
+        `blazefire ${current} → ${latest} ${updateAvailable ? '(update available)' : '(up to date)'}\n`
       )
+      return 0
+    }
+
+    case '--version':
+    case '-v':
+    case 'version':
+      process.stdout.write(
+        `blazefire ${BLAZEFIRE_VERSION} (Frostfast ${FROSTFAST_VERSION})\n`
+      )
+      return 0
+
+    case '--help':
+    case '-h':
+    case 'help':
+      process.stdout.write(`${HELP}\n\n${BLAZEFIRE_BRANDING.banner}\n`)
+      return 0
+
+    default:
+      process.stderr.write(
+        `blazefire: unknown command "${command}"\n\n${HELP}\n`
+      )
+      return 1
   }
 }
 
-// Run only when executed directly — importing this module (tests) must not
-// consume argv.
+export { maybeNotify }
+
+// Run only when executed directly — importing this module (tests, the
+// postinstall engine) must never consume argv.
 const isDirectRun =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+
 if (isDirectRun) {
-  main(process.argv.slice(2)).catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error)
-    process.exitCode = 1
-  })
+  main()
+    .then((code) => {
+      process.exitCode = code
+    })
+    .catch((error: unknown) => {
+      process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+      process.exitCode = 1
+    })
 }

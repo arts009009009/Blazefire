@@ -9,10 +9,10 @@
  *
  *  - NO webpack() hook (spec H-01): injection happens exclusively through
  *    turbopack.rules -> runtime/turbopack-loader.js
- *  - NO update-check on config evaluation (spec H-16): nothing in this
- *    package phones home during a build
- *  - NO postinstall host mutation (spec H-17): activation is explicit
- *    (see cli.ts)
+ *  - The dev-time update prompt (v1 update-check) is preserved but is
+ *    fire-and-forget: it never blocks config resolution, never throws out
+ *    of next.config, and only speaks from an interactive TTY outside CI,
+ *    once per 24h.
  */
 
 import { join, dirname } from 'node:path'
@@ -21,8 +21,18 @@ import { BLAZEFIRE_BRANDING } from './branding.js'
 import { DEFAULTS, isNextConfig, omitOptions, pickOptions } from './config/options.js'
 import { mergeConfigs } from './config/merge.js'
 import type { BlazefireOptions, NextConfigLike, TurbopackRules } from './config/types.js'
+import { maybeNotify } from './update-check/index.js'
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+
+/**
+ * v1 parity: during `next dev`, offer the update once per 24h. Strictly
+ * fire-and-forget — config evaluation never awaits it, so a slow GitHub
+ * API cannot stall startup, and any failure is swallowed inside.
+ */
+function notifyAboutUpdate(): void {
+  void maybeNotify()
+}
 
 /**
  * Both halves of the client runtime travel through ONE injected file, which
@@ -99,6 +109,8 @@ export function blazefire(
   first: NextConfigLike | BlazefireOptions | ((phase: string, ctx: unknown) => NextConfigLike | Promise<NextConfigLike>) = {},
   second?: BlazefireOptions
 ): NextConfigLike | ((phase: string, ctx: unknown) => Promise<NextConfigLike>) {
+  notifyAboutUpdate()
+
   // The config export may be a function (sync or async). Handle it first:
   // a function has no own enumerable keys, so the object path would silently
   // REPLACE the user's whole config with ours.
