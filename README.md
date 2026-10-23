@@ -3,12 +3,11 @@
 **A pure App Router, Turbopack/Frostfast-first React framework runtime.**
 
 Blazefire v2 is a ground-up rewrite guided by the v1 architecture spec
-(`blazefire_v1_spec.json`). Where v1 layered branding and a client runtime
-over a stock Next.js install — and carried an unbuildable, 239K-line
-vendored fork full of webpack/pages-router holdovers — v2 is a single-source
-TypeScript codebase that binds the **Frostfast** compiler core (the
-incremental Turbo Engine graph, exposed through binary napi contracts)
-directly, with zero wrapper cruft.
+(`blazefire_v1_spec.json`) — with full feature parity for BlazeFire's
+identity: the branding engine, the dev-overlay rebranding, the Frostfast
+compiler headers, the custom CLI commands, and the seamless host-injection
+pipeline (postinstall + CLI) are all ported, in clean single-source
+TypeScript.
 
 ## What changed from v1
 
@@ -22,8 +21,8 @@ directly, with zero wrapper cruft.
 | H-08 pretty-printed config re-serialization | Compact JSON + sha256 change gate; unchanged configs are never re-sent |
 | H-09 discarded issue marshalling | Suppressed **at the Rust source** via the subscription gate |
 | H-13 worker-scheduler re-registration | Idempotent, once per process |
-| H-16 update-check network call | **Gone.** Nothing phones home |
-| H-17 silent postinstall mutation | **Gone.** Explicit `blazefire init` with preview + `--yes` |
+| H-16 update-check network call | **Ported intact** (v1 parity): TTY-only, non-CI, once per 24h, fire-and-forget from `next dev` |
+| H-17 postinstall host mutation | **Ported intact** (v1 parity): auto-activation + host hook, opt out with `BLAZEFIRE_SKIP_AUTO=1` |
 | H-18 dead code / duplicate branding | Single branding module; single logo asset; injected version constants |
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full module map,
@@ -34,17 +33,22 @@ the napi calling conventions, and the complete hotspot disposition matrix.
 ```
 blazefire-logo.png          # the ONE logo asset (data URI generated at build)
 scripts/generate-logo-data.mjs
+scripts/postinstall-entry.mjs  # never-throw shim into dist/postinstall/run.js
 src/
   index.ts                  # public API
   plugin.ts                 # next.config wrapper (turbopack.rules only)
   branding.ts               # single source of truth for brand tokens
-  version.ts                # version constants (test-enforced vs package.json)
-  cli.ts                    # explicit activation (init / restore)
+  version.ts                # version constants
+  package-root.ts           # dual-mode package anchor (ESM dist / jest stub)
+  cli.ts                    # full v1 command surface (see below)
   config/                   # merge + compact hash-gated serialization
   compiler/                 # Frostfast native contract, binding ladder, project graph
+  components/               # React surface: logo + error-overlay layout
   dev/                      # typed HMR protocol + single hot-reloader pipeline
   build/                    # production build orchestrator (Rust writes, JS consumes)
+  postinstall/              # activation engine (scanner + driver, shared with CLI)
   runtime/                  # client injection (H-05) + turbopack loader
+  update-check/             # feed, throttle, package-manager detection, updater
 __tests__/                  # jest suite incl. structural mandate guards
 ```
 
@@ -68,18 +72,23 @@ export default blazefire({
 })
 ```
 
-Activate a project explicitly (never on install):
+Installing into a project with a `next.config.*` auto-activates it (v1
+behavior): the original is backed up to `Blazefire Backup/` (never
+overwritten), the config is wrapped, and a self-perpetuating
+`postinstall` hook is chained into the host `package.json`. Opt out with
+`BLAZEFIRE_SKIP_AUTO=1`. Everything is also available explicitly:
 
 ```bash
-npx blazefire init        # prints a preview of the wrap
-npx blazefire init --yes  # applies it, with a backup in .blazefire/
-npx blazefire restore
+npx blazefire init       # activate (idempotent; prints what it did)
+npx blazefire restore    # original config back, host hook removed
+npx blazefire update     # re-install the latest release (cache-purging)
+npx blazefire check      # installed vs latest
+npx blazefire --version
 ```
 
 ## Status
 
-This is the v2.0 core skeleton and runtime layer: config, branding,
-compiler bridge, dev/build orchestration, client injection, CLI. The React
-component surface (devtools panel, error overlay, logo component) is
-scheduled for the next increment and will be TypeScript-only, per the
-single-source mandate.
+v2.0 core + identity parity: config, branding, compiler bridge,
+dev/build orchestration, client injection, activation engine, update
+pipeline, CLI, and the React component surface (logo, error-overlay
+layout) — all TypeScript-only, per the single-source mandate.
