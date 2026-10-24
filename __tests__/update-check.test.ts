@@ -44,6 +44,9 @@ describe('compareVersions', () => {
     expect(compareVersions('1.2.3suffix', '1.2.4')).toBe(0)
     expect(compareVersions('1.2.3-..', '1.2.4')).toBe(0)
     expect(compareVersions('1.2.3+build.5', '1.2.3')).toBe(0)
+    expect(
+      compareVersions('999999999999999999999.0.0', '1000000000000000000000.0.0')
+    ).toBeLessThan(0)
   })
 })
 

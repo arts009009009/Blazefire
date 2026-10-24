@@ -8,9 +8,9 @@
  */
 
 function parse(version: string): {
-  major: number
-  minor: number
-  patch: number
+  major: bigint
+  minor: bigint
+  patch: bigint
   prerelease: string[]
 } | null {
   const identifier = '(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
@@ -19,9 +19,9 @@ function parse(version: string): {
   ).exec(version.trim())
   if (!match) return null
   return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
+    major: BigInt(match[1]!),
+    minor: BigInt(match[2]!),
+    patch: BigInt(match[3]!),
     prerelease: match[4] ? match[4].split('.') : [],
   }
 }
@@ -37,11 +37,14 @@ function comparePrerelease(a: string[], b: string[]): number {
     const right = b[i]
     if (left === undefined) return -1
     if (right === undefined) return 1
-    const leftNum = Number(left)
-    const rightNum = Number(right)
-    const bothNum = !Number.isNaN(leftNum) && !Number.isNaN(rightNum)
-    if (bothNum) {
-      if (leftNum !== rightNum) return leftNum - rightNum
+    const leftNum = /^(0|[1-9]\d*)$/.test(left)
+    const rightNum = /^(0|[1-9]\d*)$/.test(right)
+    if (leftNum && rightNum) {
+      const leftValue = BigInt(left)
+      const rightValue = BigInt(right)
+      if (leftValue !== rightValue) return leftValue < rightValue ? -1 : 1
+    } else if (leftNum !== rightNum) {
+      return leftNum ? -1 : 1
     } else if (left !== right) {
       return left < right ? -1 : 1
     }
@@ -53,8 +56,8 @@ export function compareVersions(a: string, b: string): number {
   const left = parse(a)
   const right = parse(b)
   if (!left || !right) return 0
-  if (left.major !== right.major) return left.major - right.major
-  if (left.minor !== right.minor) return left.minor - right.minor
-  if (left.patch !== right.patch) return left.patch - right.patch
+  if (left.major !== right.major) return left.major < right.major ? -1 : 1
+  if (left.minor !== right.minor) return left.minor < right.minor ? -1 : 1
+  if (left.patch !== right.patch) return left.patch < right.patch ? -1 : 1
   return comparePrerelease(left.prerelease, right.prerelease)
 }
