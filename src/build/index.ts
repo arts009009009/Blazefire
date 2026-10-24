@@ -57,9 +57,11 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     isPersistentCachingEnabled: true,
   })
 
+  let buildError: unknown
   try {
     // Rust writes every output file; JS only consumes manifests (v1 truth,
     // preserved — this is where the framework stays out of the hot path).
+    await cleanDistDir(distDir)
     await mkdir(distDir, { recursive: true })
     await writeFile(join(distDir, 'turbopack'), '', 'utf8')
     await writeFile(
@@ -74,9 +76,35 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     const routes = getRouteNames(entrypoints)
 
     return { distDir, routes, durationMs: Date.now() - started }
+  } catch (error) {
+    buildError = error
+    throw error
   } finally {
-    // Always flush + release the graph, even on failure.
-    await project.shutdown()
+    // Always flush + release the graph, even on failure — but never let a
+    // shutdown error mask the REAL build error that got us here.
+    try {
+      await project.shutdown()
+    } catch (shutdownError) {
+      if (!buildError) throw shutdownError
+    }
+  }
+}
+
+/**
+ * Remove stale output from previous builds so a deleted/renamed route cannot
+ * survive into a deploy. Preserves the conventional `cache/` directory that
+ * holds the persistent graph cache.
+ */
+async function cleanDistDir(distDir: string): Promise<void> {
+  let entries: string[] = []
+  try {
+    entries = await readdir(distDir)
+  } catch {
+    return // nothing to clean yet
+  }
+  for (const entry of entries) {
+    if (entry === 'cache') continue
+    await rm(join(distDir, entry), { recursive: true, force: true })
   }
 }
 
