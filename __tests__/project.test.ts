@@ -3,6 +3,7 @@ import type {
   FrostfastBinding,
   NapiEntrypoints,
   ProjectHandle,
+  RootTaskHandle,
 } from '../src/compiler/native-contract'
 
 function makeProjectUpdateMock() {
@@ -65,5 +66,53 @@ describe('FrostfastProject.update', () => {
     await expect(project.update(update)).rejects.toThrow('native update failed')
     await expect(project.update(update)).resolves.toBe(true)
     expect(binding.projectUpdate).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('FrostfastProject event streams', () => {
+  it('forwards callback events and disposes the native task on abort', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const entrypoints = {
+      routes: new Map([['/home', { type: 'app-page' as const }]]),
+    }
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectEntrypointsSubscribe: jest.fn((_handle, callback) => {
+        callback(null, { value: entrypoints })
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding)
+    const controller = new AbortController()
+    const events = project.entrypointEvents(controller.signal)[Symbol.asyncIterator]()
+
+    await expect(events.next()).resolves.toEqual({ done: false, value: entrypoints })
+    const pending = events.next()
+    controller.abort()
+    await expect(pending).resolves.toEqual({ done: true, value: undefined })
+    expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
+  })
+
+  it('normalizes native update messages and propagates native stream errors', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const nativeError = new Error('native subscription failed')
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectUpdateInfoSubscribe: jest.fn((_handle, _aggregationMs, callback) => {
+        callback(null, { updateType: 'start' })
+        callback(nativeError, undefined)
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding)
+    const events = project.updateInfoEvents()[Symbol.asyncIterator]()
+
+    await expect(events.next()).resolves.toEqual({ done: false, value: { type: 'start' } })
+    await expect(events.next()).rejects.toThrow('native subscription failed')
+    expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
   })
 })
