@@ -37,12 +37,32 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
     ((error: unknown) => console.error('[Blazefire] hot-reloader stream failed', error))
   const controller = new AbortController()
   const clientSubscriptions = new Map<string, Set<(payload: unknown) => void>>()
+  const streamTasks = new Set<Promise<void>>()
+
+  const reportError = (error: unknown): void => {
+    try {
+      onError(error)
+    } catch (callbackError) {
+      console.error('[Blazefire] hot-reloader error handler failed', callbackError)
+    }
+  }
+
+  const track = (task: Promise<void>): void => {
+    streamTasks.add(task)
+    void task.then(
+      () => streamTasks.delete(task),
+      (error: unknown) => {
+        streamTasks.delete(task)
+        if (!controller.signal.aborted) reportError(error)
+      }
+    )
+  }
 
   // --- route graph ---------------------------------------------------------
-  void (async () => {
+  track((async () => {
     let known = new Set<string>()
     try {
-      for await (const entrypoints of project.entrypointEvents()) {
+      for await (const entrypoints of project.entrypointEvents(controller.signal)) {
         if (controller.signal.aborted) return
         const next = new Set(getRouteNames(entrypoints))
         for (const route of next) {
@@ -54,15 +74,15 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         known = next
       }
     } catch (error) {
-      if (!controller.signal.aborted) onError(error)
+      if (!controller.signal.aborted) reportError(error)
     }
-  })()
+  })())
 
   // --- build status --------------------------------------------------------
-  void (async () => {
+  track((async () => {
     let defer: ReturnType<typeof setTimeout> | undefined
     try {
-      for await (const info of project.updateInfoEvents(30)) {
+      for await (const info of project.updateInfoEvents(30, controller.signal)) {
         if (controller.signal.aborted) return
         if (info.type === 'start') {
           // Debounce: only announce BUILDING if the tick hasn't ended fast.
@@ -79,9 +99,9 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         }
       }
     } catch (error) {
-      if (!controller.signal.aborted) onError(error)
+      if (!controller.signal.aborted) reportError(error)
     }
-  })()
+  })())
 
   return {
     async subscribeClient(chunkName: string, listener?: (payload: unknown) => void) {
@@ -93,9 +113,13 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
 
       if (isNew) {
         // Own stream per chunk; consumed until dispose().
-        void (async () => {
+        track((async () => {
           try {
-            for await (const payload of project.hmrEvents(chunkName)) {
+            for await (const payload of project.hmrEvents(
+              chunkName,
+              undefined,
+              controller.signal
+            )) {
               if (controller.signal.aborted) return
               emit({ type: 'update', payload })
               for (const l of clientSubscriptions.get(chunkName) ?? []) {
@@ -103,9 +127,9 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
               }
             }
           } catch (error) {
-            if (!controller.signal.aborted) onError(error)
+            if (!controller.signal.aborted) reportError(error)
           }
-        })()
+        })())
       }
 
       return async () => {
@@ -116,6 +140,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
     async dispose() {
       controller.abort()
       clientSubscriptions.clear()
+      await Promise.all(streamTasks)
     },
   }
 }
