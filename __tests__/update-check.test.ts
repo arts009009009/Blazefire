@@ -40,6 +40,10 @@ describe('compareVersions', () => {
   it('treats unparseable versions as equal (never nag on garbage)', () => {
     expect(compareVersions('canary', '1.0.0')).toBe(0)
     expect(compareVersions('', '')).toBe(0)
+    expect(compareVersions('1.2.3-not-a-version!', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3suffix', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3-..', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3+build.5', '1.2.3')).toBe(0)
   })
 })
 

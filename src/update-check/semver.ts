@@ -13,7 +13,10 @@ function parse(version: string): {
   patch: number
   prerelease: string[]
 } | null {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-.]+))?/.exec(version.trim())
+  const identifier = '(?:0|[1-9]\\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)'
+  const match = new RegExp(
+    `^v?(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-(${identifier}(?:\\.${identifier})*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`
+  ).exec(version.trim())
   if (!match) return null
   return {
     major: Number(match[1]),

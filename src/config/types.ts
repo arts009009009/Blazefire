@@ -28,6 +28,13 @@ export interface HeaderRule {
   headers: HeaderEntry[]
 }
 
+export interface RedirectRule {
+  source: string
+  destination: string
+  permanent: boolean
+  [key: string]: unknown
+}
+
 /** headers()/redirects()-style provider: a list or a (possibly async) function returning one. */
 export type ListProvider<T> = T[] | (() => T[] | Promise<T[]>)
 
@@ -54,7 +61,7 @@ export interface TurbopackConfig {
 export interface NextConfigLike {
   env?: Record<string, string | undefined>
   headers?: ListProvider<HeaderRule>
-  redirects?: ListProvider<HeaderRule>
+  redirects?: ListProvider<RedirectRule>
   turbopack?: TurbopackConfig
   [key: string]: unknown
 }

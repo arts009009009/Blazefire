@@ -1,7 +1,12 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BACKUP_DIR, HOOK_COMMAND, restore } from '../src/postinstall/activation'
+import {
+  BACKUP_DIR,
+  HOOK_COMMAND,
+  isLifecycleHook,
+  restore,
+} from '../src/postinstall/activation'
 
 describe('restore', () => {
   let projectRoot: string
@@ -34,5 +39,30 @@ describe('restore', () => {
     expect(
       JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall
     ).toBeUndefined()
+  })
+
+  it('restores the earliest pristine backup and removes only a real Blazefire hook', () => {
+    const liveConfig = join(projectRoot, 'next.config.js')
+    const original = 'module.exports = { reactStrictMode: true }\n'
+    const previouslyWrapped = 'module.exports = blazefire({ reactStrictMode: true })\n'
+    writeFileSync(liveConfig, previouslyWrapped)
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ scripts: { postinstall: 'echo "blazefire is installed"' } })
+    )
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      original
+    )
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-02-01T00-00-00-000Z.original'),
+      previouslyWrapped
+    )
+
+    expect(restore(projectRoot)).toBe(true)
+    expect(readFileSync(liveConfig, 'utf8')).toBe(original)
+    expect(isLifecycleHook('echo "blazefire is installed"')).toBe(false)
+    expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall)
+      .toBe('echo "blazefire is installed"')
   })
 })

@@ -73,13 +73,15 @@ export function injectStyles(doc: Document = document): HTMLStyleElement | null 
  * Fully idempotent: every write is conditional, so a settled pass performs
  * zero DOM writes (and therefore triggers no further mutations).
  */
-export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): void {
+export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): boolean {
+  let changed = false
   if (!root.getElementById('blazefire-overlay-styles')) {
     const style = doc.createElement('style')
     style.id = 'blazefire-overlay-styles'
     style.setAttribute('data-blazefire', 'overlay')
     style.textContent = blazefireOverlayStyles()
     root.appendChild(style)
+    changed = true
   }
 
   for (const label of BLAZEFIRE_BRANDING.labels) {
@@ -94,18 +96,23 @@ export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): 
       if (label.attribute) {
         const cur = el.getAttribute(label.attribute)
         if (cur !== null && label.match.test(cur)) {
-          setAttr(el, label.attribute, cur.replace(label.match, label.replace))
+          changed =
+            setAttr(el, label.attribute, cur.replace(label.match, label.replace)) || changed
         }
       } else {
         const text = textChild(el)
         if (text && label.match.test(text.data)) {
           const next = text.data.replace(label.match, label.replace)
-          if (next !== text.data) text.data = next
+          if (next !== text.data) {
+            text.data = next
+            changed = true
+          }
         }
       }
-      if (label.title) setAttr(el, 'title', label.title)
+      if (label.title) changed = setAttr(el, 'title', label.title) || changed
     }
   }
+  return changed
 }
 
 /**
@@ -147,10 +154,8 @@ export function installOverlayRuntime(
       if (disposed) return
       // applyOverlayToRoot only writes when something differs; a pass with
       // no writes means the overlay has settled.
-      const before = root.innerHTML.length
-      applyOverlayToRoot(root, doc)
-      const after = root.innerHTML.length
-      cleanPasses = before === after ? cleanPasses + 1 : 0
+      const changed = applyOverlayToRoot(root, doc)
+      cleanPasses = changed ? 0 : cleanPasses + 1
       if (cleanPasses >= SETTLE_AFTER_PASSES) {
         observer.disconnect()
         observers.splice(observers.indexOf(observer), 1)
@@ -216,6 +221,8 @@ function textChild(el: Element): Text | null {
   return null
 }
 
-function setAttr(el: Element, name: string, value: string): void {
-  if (el.getAttribute(name) !== value) el.setAttribute(name, value)
+function setAttr(el: Element, name: string, value: string): boolean {
+  if (el.getAttribute(name) === value) return false
+  el.setAttribute(name, value)
+  return true
 }
