@@ -95,6 +95,28 @@ describe('FrostfastProject event streams', () => {
     expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
   })
 
+  it('normalizes an empty native entrypoint result to an empty route set', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectEntrypointsSubscribe: jest.fn((_handle, callback) => {
+        callback(null, { value: {} })
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding)
+    const events = project.entrypointEvents()[Symbol.asyncIterator]()
+
+    await expect(events.next()).resolves.toEqual({
+      done: false,
+      value: { routes: new Map() },
+    })
+    await events.return?.()
+    expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
+  })
+
   it('normalizes native update messages and propagates native stream errors', async () => {
     const handle = {} as ProjectHandle
     const task = {} as RootTaskHandle

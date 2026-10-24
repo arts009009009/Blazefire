@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import {
   CHECK_INTERVAL_MS,
   compareVersions,
+  isValidVersion,
   isSafeSpec,
   purgeCachedInstall,
   readState,
@@ -47,6 +48,13 @@ describe('compareVersions', () => {
     expect(
       compareVersions('999999999999999999999.0.0', '1000000000000000000000.0.0')
     ).toBeLessThan(0)
+  })
+
+  it('validates release tags before they are cached or installed', () => {
+    expect(isValidVersion('v2.0.0')).toBe(true)
+    expect(isValidVersion('2.0.0-rc.1+build.3')).toBe(true)
+    expect(isValidVersion('2.0')).toBe(false)
+    expect(isValidVersion('2.0.0/other')).toBe(false)
   })
 })
 

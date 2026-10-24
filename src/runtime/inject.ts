@@ -141,7 +141,9 @@ export function installOverlayRuntime(
 
   const rebrandPortal = (root: ShadowRoot): void => {
     rebrand(root)
-    if (!dev || disposed) return // PRODUCTION: one-shot, no observer, ever.
+    if (!dev || disposed || typeof MutationObserver === 'undefined') {
+      return // PRODUCTION: one-shot, no observer, ever.
+    }
 
     // Mutations inside a shadow root never reach document observers, so each
     // themed root gets its own — which then SETTLES instead of watching

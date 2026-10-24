@@ -86,10 +86,14 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         if (controller.signal.aborted) return
         if (info.type === 'start') {
           // Debounce: only announce BUILDING if the tick hasn't ended fast.
+          if (defer) clearTimeout(defer)
           defer = setTimeout(() => emit({ type: 'building', source: 'frostfast' }), buildingDeferMs)
           defer.unref?.()
         } else if (info.type === 'end') {
-          if (defer) clearTimeout(defer)
+          if (defer) {
+            clearTimeout(defer)
+            defer = undefined
+          }
           emit({
             type: 'built',
             hash: '',
@@ -100,6 +104,8 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
       }
     } catch (error) {
       if (!controller.signal.aborted) reportError(error)
+    } finally {
+      if (defer) clearTimeout(defer)
     }
   })())
 
