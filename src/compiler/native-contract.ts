@@ -123,6 +123,8 @@ export interface FrostfastBinding {
   projectAllHmrEvents(
     handle: ProjectHandle,
     target: HmrTarget,
+    /** v2 marshalling gate (spec H-09): when false Rust never ships issues. */
+    includeIssues: boolean,
     callback: NapiEventCallback<unknown>
   ): RootTaskHandle
   projectHmrEvents(
@@ -142,7 +144,7 @@ export interface FrostfastBinding {
     handle: ProjectHandle,
     callback: NapiEventCallback<unknown>,
     eventTypes?: string[]
-  ): void
+  ): RootTaskHandle
   projectWriteAllEntrypointsToDisk(handle: ProjectHandle, appDirOnly?: boolean): Promise<void>
   projectGetSourceMap(handle: ProjectHandle, file: string): Promise<string | undefined>
   projectTraceSource(

@@ -29,8 +29,15 @@ import {
   type RustifiedEnvVar,
   type SerializedProjectConfig,
 } from '../config/serialize.js'
-import { shouldForwardIssues, stripDiscardedIssues, type IssuePolicy } from './issues.js'
+import { shouldForwardIssues, stripDiscardedIssues, type IssueBearingPayload, type IssuePolicy } from './issues.js'
 import { FROSTFAST_VERSION } from '../version.js'
+
+/** CI is commonly `CI=1`/`CI=true`; treat any non-falsey value as CI. */
+function isCiEnv(): boolean {
+  const v = process.env.CI
+  if (v === undefined || v === '') return false
+  return !/^(false|0|no)$/i.test(v.trim())
+}
 
 export interface CreateProjectInput {
   binding: FrostfastBinding
@@ -124,7 +131,7 @@ export class FrostfastProject {
     })
 
     const engineOptions: NapiTurboEngineOptions = {
-      isCi: process.env.CI === 'true',
+      isCi: isCiEnv(),
       // Short sessions skip compaction; dev sessions stay resident.
       isShortSession: !input.dev,
       turbopackMemoryEviction: 'auto',
@@ -171,11 +178,6 @@ export class FrostfastProject {
    * @returns true when a native update was issued, false when skipped.
    */
   async update(update: ProjectUpdate): Promise<boolean> {
-    const partial: PartialProjectOptions = {}
-
-    if (update.rootPath !== undefined) partial.rootPath = update.rootPath
-    if (update.projectPath !== undefined) partial.projectPath = update.projectPath
-
     const next = snapshot({
       ...this.#last.parsed,
       env: update.env ?? this.#last.parsed.env,
@@ -185,8 +187,14 @@ export class FrostfastProject {
       projectPath: update.projectPath ?? this.#last.parsed.projectPath,
     })
 
+    const partial: PartialProjectOptions = {}
+
+    // The WHOLE partial — including rootPath/projectPath — is hash-gated, so
+    // passing an UNCHANGED path never forces a native update (spec H-08).
     if (this.#gate.changed(next)) {
       partial.nextConfig = next.json
+      partial.rootPath = next.parsed.rootPath
+      partial.projectPath = next.parsed.projectPath
       if (update.env) partial.env = rustifyEnv(update.env)
       if (update.defineEnv) {
         partial.defineEnv = Object.values(update.defineEnv).flat()
