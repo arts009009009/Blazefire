@@ -347,8 +347,9 @@ export function run(start = process.cwd()): void {
   }
 }
 
-export function restore(): boolean {
-  const backupRoot = path.join(process.cwd(), BACKUP_DIR)
+export function restore(start = process.cwd()): boolean {
+  const projectRoot = resolveProjectRoot(start) ?? path.resolve(start)
+  const backupRoot = path.join(projectRoot, BACKUP_DIR)
   let entries: string[]
   try {
     entries = fs.readdirSync(backupRoot)
@@ -358,7 +359,11 @@ export function restore(): boolean {
   }
 
   const originals = entries
-    .filter((entry) => entry.endsWith('.original'))
+    .filter(
+      (entry) =>
+        entry.endsWith('.original') &&
+        CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
+    )
     .sort((a, b) => a.localeCompare(b))
 
   if (originals.length === 0) {
@@ -367,12 +372,9 @@ export function restore(): boolean {
   }
 
   for (const entry of originals) {
-    // Backup names are `<config-name>.<ISO-timestamp>.original`; the ISO
-    // stamp has its dots replaced, so the LAST dot in the stem separates
-    // the timestamp from the (dot-containing) config name.
-    const stem = entry.slice(0, -'.original'.length)
-    const base = stem.slice(0, stem.lastIndexOf('.'))
-    const target = path.join(process.cwd(), base)
+    const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
+    if (!base) continue
+    const target = path.join(projectRoot, base)
     if (!fs.existsSync(target)) {
       say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
       continue
@@ -382,7 +384,7 @@ export function restore(): boolean {
     fs.writeFileSync(target, content)
     say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
 
-    undoHook(process.cwd())
+    undoHook(projectRoot)
   }
 
   say('restore complete')
