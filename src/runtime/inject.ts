@@ -15,6 +15,9 @@
  *    define-inlining).
  *  - DEV: portal discovery and shadow-root observers exist only while their
  *    overlay portal is mounted, then disconnect on portal removal.
+ *    overlay portal is mounted, then disconnect on portal removal. Every
+ *    observer callback is debounced (~100ms trailing), so a burst of DOM
+ *    mutations coalesces into a single re-scan instead of one per mutation.
  *
  * SSR-safe: bails immediately when no document exists. Toggles travel as
  * static process.env.NEXT_PUBLIC_* member expressions so the bundler
@@ -126,6 +129,27 @@ export function installOverlayRuntime(
   const rootObservers = new Map<ShadowRoot, MutationObserver>()
   let disposed = false
 
+  // Debounced scheduling (v1 re-ran a full querySelectorAll on EVERY DOM
+  // mutation): one trailing timer per observed root plus one for the portal
+  // scan, so a burst of mutations coalesces into a single re-scan ~100ms
+  // after the burst settles. dispose() cancels whatever is still pending.
+  const DEBOUNCE_MS = 100
+  const portalToken = {}
+  const pending = new Map<object, ReturnType<typeof setTimeout>>()
+
+  const schedule = (token: object, run: () => void): void => {
+    if (disposed) return
+    const existing = pending.get(token)
+    if (existing !== undefined) clearTimeout(existing)
+    pending.set(
+      token,
+      setTimeout(() => {
+        pending.delete(token)
+        if (!disposed) run()
+      }, DEBOUNCE_MS)
+    )
+  }
+
   const rebrand = (root: ShadowRoot): void => {
     if (disposed) return
     applyOverlayToRoot(root, doc)
@@ -162,6 +186,12 @@ export function installOverlayRuntime(
       if (disposed) return
       // Writes remain conditional so this observer does not trigger a loop.
       applyOverlayToRoot(root, doc)
+    // Callbacks are debounced: a busy overlay must not re-scan per mutation.
+    if (rootObservers.has(root)) return
+    const observer = new MutationObserver(() => {
+      // Writes inside applyOverlayToRoot stay conditional, so this observer
+      // can never trigger a mutation loop of its own.
+      schedule(root, () => applyOverlayToRoot(root, doc))
     })
     observer.observe(root, { childList: true, subtree: true, characterData: true })
     observers.add(observer)
@@ -175,7 +205,7 @@ export function installOverlayRuntime(
   // compiled out of production bundles entirely.
   let portalObserver: MutationObserver | undefined
   if (dev && !disposed && typeof MutationObserver !== 'undefined') {
-    portalObserver = new MutationObserver(() => scanPortals())
+    portalObserver = new MutationObserver(() => schedule(portalToken, scanPortals))
     portalObserver.observe(doc.documentElement, { childList: true, subtree: true })
     observers.add(portalObserver)
   }
@@ -184,6 +214,8 @@ export function installOverlayRuntime(
     dispose() {
       if (disposed) return
       disposed = true
+      for (const timer of pending.values()) clearTimeout(timer)
+      pending.clear()
       for (const observer of observers) observer.disconnect()
       observers.clear()
       rootObservers.clear()

@@ -11,6 +11,7 @@
  * init/restore run the SAME engine as the postinstall (src/postinstall) —
  * there is deliberately one implementation of the rewrite, not two.
  */
+import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { BLAZEFIRE_BRANDING } from './branding.js'
 import { run, restore } from './postinstall/index.js'
@@ -127,12 +128,20 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 export { maybeNotify }
 
 // Run only when executed directly — importing this module (tests, the
-// postinstall engine) must never consume argv.
-const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+// postinstall engine) must never consume argv. argv[1] may be an npm .bin
+// SYMLINK while import.meta.url is the resolved realpath (npx blazefire
+// init goes through exactly that symlink), so compare realpaths.
+function isDirectRun(): boolean {
+  if (process.argv[1] === undefined) return false
+  if (import.meta.url === pathToFileURL(process.argv[1]).href) return true
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
 
-if (isDirectRun) {
+if (isDirectRun()) {
   main()
     .then((code) => {
       process.exitCode = code

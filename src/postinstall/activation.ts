@@ -82,7 +82,7 @@ function listWorkspaces(packageRoot: string): string[] {
     ? packageJson.workspaces
     : (packageJson.workspaces?.packages ?? [])
 
-  const results: string[] = []
+  const results = new Set<string>()
   for (const pattern of patterns) {
     if (typeof pattern !== 'string' || pattern.startsWith('!')) continue
     for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern)) {
@@ -94,6 +94,65 @@ function listWorkspaces(packageRoot: string): string[] {
     }
   }
   return [...new Set(results)]
+}
+
+function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
+  const segments = pattern.split(/[\\/]+/).filter(Boolean)
+  const matches: string[] = []
+
+  const visit = (dir: string, index: number): void => {
+    if (index === segments.length) {
+      matches.push(dir)
+      return
+    }
+
+    const segment = segments[index]!
+    if (segment === '**') {
+      visit(dir, index + 1)
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) visit(path.join(dir, entry.name), index)
+      }
+      return
+    }
+
+    if (segment.includes('*') || segment.includes('?')) {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      const matcher = new RegExp(
+        `^${segment.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`
+      )
+      for (const entry of entries) {
+        if (entry.isDirectory() && matcher.test(entry.name)) {
+          visit(path.join(dir, entry.name), index + 1)
+        }
+      }
+      return
+    }
+
+    visit(path.join(dir, segment), index + 1)
+  }
+      results.add(workspaceRoot)
+    }
+  }
+
+  for (const pattern of patterns) {
+    if (typeof pattern !== 'string' || !pattern.startsWith('!')) continue
+    for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern.slice(1))) {
+      results.delete(workspaceRoot)
+    }
+  }
+
+  return [...results]
 }
 
 function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
@@ -233,6 +292,10 @@ export function ensureHook(packageRoot: string): HookStatus {
   } else if (!isLifecycleHook(existing)) {
     // A host's own postinstall is not ours to clobber — chain ours after it.
     scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
+    // A host's own postinstall is not ours to clobber — chain ours after it,
+    // grouped so a `;`, background `&` or trailing comment in the host's
+    // script can never swallow or skip our hook (v1 chained bare and lost it).
+    scripts.postinstall = chainAfterHost(existing)
   }
   // else: our hook is already present (pure, or chained after a host prefix).
   // Leave it exactly as-is — overwriting here silently deleted the host's own
@@ -274,9 +337,9 @@ export function undoHook(packageRoot: string): {
   const eol = contents.includes('\r\n') ? '\r\n' : '\n'
 
   const escaped = HOOK_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const withoutHost = postinstall
-    .replace(new RegExp(`\\s*&&\\s*${escaped}`), '')
-    .trim()
+  const withoutHost = unwrapGroup(
+    postinstall.replace(new RegExp(`\\s*&&\\s*${escaped}`), '').trim()
+  )
   if (!withoutHost || withoutHost === HOOK_COMMAND) delete scripts.postinstall
   else scripts.postinstall = withoutHost
 
@@ -289,6 +352,62 @@ export function undoHook(packageRoot: string): {
 export function isLifecycleHook(value: string): boolean {
   const escapedHook = HOOK_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(`(?:^|&&\\s*)${escapedHook}(?:\\s|$)`).test(value)
+}
+
+/**
+ * Shell operators that would swallow or mis-scope a blindly-appended
+ * `&& <hook>`: `;` and newlines start a NEW statement, a single background
+ * `&` is a statement terminator (and makes a bare `x & && y` a syntax
+ * error), and a `#` comment swallows the rest of the line. `&&`, `||` and
+ * `|` are left-associative at equal/tighter precedence and already bind the
+ * appended hook correctly, so scripts carrying only those stay untouched.
+ */
+const NEEDS_GROUPING = /(^|[^&])&([^&]|$)|;|#|\n/
+
+/**
+ * Append our lifecycle hook to a host script.
+ *
+ * Plain one-shot commands chain flat (byte-identical to v1, and the only
+ * form cmd.exe consumers ever see). Scripts with statement separators get a
+ * subshell group so `&& <hook>` binds to the WHOLE script, not just its last
+ * sub-command — v1's bare chaining let `;`/`&`/comments skip the hook, and a
+ * trailing `# …` comment would eat a same-line `)`, so the group always
+ * closes on its own line (which `unwrapGroup` reverses exactly).
+ */
+export function chainAfterHost(host: string): string {
+  if (!NEEDS_GROUPING.test(host)) return `${host} && ${HOOK_COMMAND}`
+  return `(${host}\n) && ${HOOK_COMMAND}`
+}
+
+/**
+ * Drop the grouping parens chainAfterHost added — but only when they wrap
+ * the ENTIRE value (a mid-script subshell is never ours). Removes exactly
+ * the one newline chainAfterHost added, so the host script is restored
+ * byte-for-byte.
+ */
+function unwrapGroup(value: string): string {
+  if (!value.startsWith('(')) return value
+  let depth = 0
+  let quote: string | null = null
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i]!
+    if (quote) {
+      if (c === '\\') i += 1
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') quote = c
+    else if (c === '(') depth += 1
+    else if (c === ')') {
+      depth -= 1
+      if (depth === 0) {
+        if (i !== value.length - 1) return value // wrapper isn't outermost
+        const inner = value.slice(1, -1)
+        return inner.endsWith('\n') ? inner.slice(0, -1) : inner
+      }
+    }
+  }
+  return value
 }
 
 function gitignoreHasEntry(contents: string, entry: string): boolean {
@@ -429,7 +548,7 @@ export function restore(start = process.cwd()): boolean {
     try {
       entries = fs.readdirSync(backupRoot)
     } catch {
-      continue
+      continuehow 
     }
 
     const originals = entries
@@ -453,6 +572,13 @@ export function restore(start = process.cwd()): boolean {
         say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
         continue
       }
+
+      const content = fs.readFileSync(path.join(backupRoot, entry))
+      writeAtomicSync(target, content)
+      say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+      restoredProject = true
+    }
+
 
       const content = fs.readFileSync(path.join(backupRoot, entry))
       writeAtomicSync(target, content)
