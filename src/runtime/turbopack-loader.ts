@@ -12,7 +12,8 @@
  * matched by two rules is not double-injected.
  */
 
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, join, relative } from 'node:path'
+import { PACKAGE_ROOT } from '../package-root.js'
 
 export const INJECT_MARKER = '/* blazefire-injected */'
 
@@ -21,9 +22,8 @@ export interface LoaderContextLike {
 }
 
 /** Absolute path of the compiled client runtime entry. */
-export function runtimeEntryPath(loaderPath: string): string {
-  // loaderPath .../dist/runtime/turbopack-loader.js -> .../dist/runtime/inject.js
-  return resolve(dirname(loaderPath), 'inject.js')
+export function runtimeEntryPath(): string {
+  return join(PACKAGE_ROOT, 'dist', 'runtime', 'inject.js')
 }
 
 export default function blazefireLoader(
@@ -32,7 +32,7 @@ export default function blazefireLoader(
 ): string {
   if (source.includes(INJECT_MARKER)) return source
 
-  const inject = relative(dirname(this.resourcePath), runtimeEntryPath(this.resourcePath))
+  const inject = relative(dirname(this.resourcePath), runtimeEntryPath())
   // Normalize to POSIX separators for module specifiers on Windows.
   const specifier = inject.split('\\').join('/')
 

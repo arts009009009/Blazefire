@@ -83,6 +83,10 @@ function snapshot(input: {
   return { ...serialized, parsed: input }
 }
 
+export function getRouteNames(entrypoints: NapiEntrypoints): string[] {
+  return Array.from(entrypoints.routes.keys())
+}
+
 export class FrostfastProject {
   readonly handle: ProjectHandle
   readonly issuePolicy: IssuePolicy
@@ -169,29 +173,27 @@ export class FrostfastProject {
     if (update.rootPath !== undefined) partial.rootPath = update.rootPath
     if (update.projectPath !== undefined) partial.projectPath = update.projectPath
 
-    if (update.env || update.defineEnv || update.nextConfig) {
-      const next = snapshot({
-        ...this.#last.parsed,
-        env: update.env ?? this.#last.parsed.env,
-        defineEnv: update.defineEnv ?? this.#last.parsed.defineEnv,
-        nextConfig: update.nextConfig ?? this.#last.parsed.nextConfig,
-        rootPath: update.rootPath ?? this.#last.parsed.rootPath,
-        projectPath: update.projectPath ?? this.#last.parsed.projectPath,
-      })
+    const next = snapshot({
+      ...this.#last.parsed,
+      env: update.env ?? this.#last.parsed.env,
+      defineEnv: update.defineEnv ?? this.#last.parsed.defineEnv,
+      nextConfig: update.nextConfig ?? this.#last.parsed.nextConfig,
+      rootPath: update.rootPath ?? this.#last.parsed.rootPath,
+      projectPath: update.projectPath ?? this.#last.parsed.projectPath,
+    })
 
-      if (this.#gate.changed(next)) {
-        partial.nextConfig = next.json
-        if (update.env) partial.env = rustifyEnv(update.env)
-        if (update.defineEnv) {
-          partial.defineEnv = Object.values(update.defineEnv).flat()
-        }
-        this.#last = next
-        this.#gate.remember(next)
+    if (this.#gate.changed(next)) {
+      partial.nextConfig = next.json
+      if (update.env) partial.env = rustifyEnv(update.env)
+      if (update.defineEnv) {
+        partial.defineEnv = Object.values(update.defineEnv).flat()
       }
     }
 
     if (Object.keys(partial).length === 0) return false
     await this.#binding.projectUpdate(this.handle, partial)
+    this.#last = next
+    this.#gate.remember(next)
     return true
   }
 
