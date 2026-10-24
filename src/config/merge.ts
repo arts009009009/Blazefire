@@ -51,13 +51,15 @@ export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextCo
   // Shallow-merge so `turbopack.root` (etc.) survives; only `rules` needs a
   // deeper merge because both sides may define globs.
   if (base.turbopack || ours.turbopack) {
+    const rules = { ...(base.turbopack?.rules || {}) }
+    for (const [glob, oursRules] of Object.entries(ours.turbopack?.rules || {})) {
+      rules[glob] = [...(rules[glob] || []), ...oursRules]
+    }
+
     out.turbopack = {
       ...(base.turbopack || {}),
       ...(ours.turbopack || {}),
-      rules: {
-        ...(base.turbopack?.rules || {}),
-        ...(ours.turbopack?.rules || {}),
-      } as Record<string, TurbopackRule[]>,
+      rules: rules as Record<string, TurbopackRule[]>,
     }
   }
 
