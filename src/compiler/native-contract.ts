@@ -82,6 +82,18 @@ export interface NapiEntrypoints {
   [key: string]: unknown
 }
 
+export interface NapiEventResult<T> {
+  value: T
+  issues?: unknown
+}
+
+export interface NapiUpdateMessage {
+  updateType: string
+  value?: unknown
+}
+
+export type NapiEventCallback<T> = (error: Error | null, value: T) => void
+
 export interface CompilationIssue {
   severity?: string
   message: string
@@ -104,20 +116,33 @@ export interface FrostfastBinding {
   ): Promise<ProjectHandle>
   projectUpdate(handle: ProjectHandle, options: PartialProjectOptions): Promise<void>
   projectEntrypoints(handle: ProjectHandle): Promise<NapiEntrypoints>
-  projectEntrypointsSubscribe(handle: ProjectHandle): Promise<RootTaskHandle>
-  projectAllHmrEvents(handle: ProjectHandle, target: HmrTarget): Promise<RootTaskHandle>
+  projectEntrypointsSubscribe(
+    handle: ProjectHandle,
+    callback: NapiEventCallback<NapiEventResult<NapiEntrypoints | null>>
+  ): RootTaskHandle
+  projectAllHmrEvents(
+    handle: ProjectHandle,
+    target: HmrTarget,
+    callback: NapiEventCallback<unknown>
+  ): RootTaskHandle
   projectHmrEvents(
     handle: ProjectHandle,
     chunkName: string,
     target: HmrTarget,
     /** v2 marshalling gate (spec H-09): when false Rust never ships issues. */
-    includeIssues?: boolean
-  ): Promise<RootTaskHandle>
-  projectUpdateInfoSubscribe(handle: ProjectHandle, aggregationMs: number): Promise<RootTaskHandle>
+    includeIssues: boolean,
+    callback: NapiEventCallback<unknown>
+  ): RootTaskHandle
+  projectUpdateInfoSubscribe(
+    handle: ProjectHandle,
+    aggregationMs: number,
+    callback: NapiEventCallback<NapiUpdateMessage>
+  ): RootTaskHandle
   projectCompilationEventsSubscribe(
     handle: ProjectHandle,
+    callback: NapiEventCallback<unknown>,
     eventTypes?: string[]
-  ): Promise<RootTaskHandle>
+  ): void
   projectWriteAllEntrypointsToDisk(handle: ProjectHandle, appDirOnly?: boolean): Promise<void>
   projectGetSourceMap(handle: ProjectHandle, file: string): Promise<string | undefined>
   projectTraceSource(
