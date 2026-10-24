@@ -13,9 +13,8 @@
  *    dev-only, so production bundles pay nothing (the observer code paths
  *    are behind a build-time-inlined NODE_ENV check and are eliminated by
  *    define-inlining).
- *  - DEV: observers exist only while the overlay can still appear, and each
- *    shadow-root observer SETTLES (disconnects after N consecutive no-op
- *    passes) instead of watching forever.
+ *  - DEV: portal discovery and shadow-root observers exist only while their
+ *    overlay portal is mounted, then disconnect on portal removal.
  *
  * SSR-safe: bails immediately when no document exists. Toggles travel as
  * static process.env.NEXT_PUBLIC_* member expressions so the bundler
@@ -32,9 +31,6 @@ import {
 const THEME_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_THEME !== 'false'
 const OVERLAY_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY !== 'false'
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
-
-/** Dev-only: how many consecutive no-op passes settle a shadow-root observer. */
-const SETTLE_AFTER_PASSES = 3
 
 export interface OverlayRuntime {
   /** Release every observer. Idempotent. */
@@ -124,7 +120,8 @@ export function installOverlayRuntime(
   dev: boolean,
   doc: Document = document
 ): OverlayRuntime {
-  const observers: MutationObserver[] = []
+  const observers = new Set<MutationObserver>()
+  const rootObservers = new Map<ShadowRoot, MutationObserver>()
   let disposed = false
 
   const rebrand = (root: ShadowRoot): void => {
@@ -134,37 +131,39 @@ export function installOverlayRuntime(
 
   const scanPortals = (): void => {
     if (disposed) return
+    const activeRoots = new Set<ShadowRoot>()
     for (const portal of doc.querySelectorAll('nextjs-portal, blazefire-portal')) {
-      if (portal.shadowRoot) rebrandPortal(portal.shadowRoot)
+      if (portal.shadowRoot) {
+        activeRoots.add(portal.shadowRoot)
+        rebrandPortal(portal.shadowRoot)
+      }
+    }
+    for (const [root, observer] of rootObservers) {
+      if (!activeRoots.has(root)) {
+        observer.disconnect()
+        observers.delete(observer)
+        rootObservers.delete(root)
+      }
     }
   }
 
   const rebrandPortal = (root: ShadowRoot): void => {
     rebrand(root)
     if (!dev || disposed || typeof MutationObserver === 'undefined') {
-      return // PRODUCTION: one-shot, no observer, ever.
+      return // Production: one-shot, no observer.
     }
 
-    // Mutations inside a shadow root never reach document observers, so each
-    // themed root gets its own — which then SETTLES instead of watching
-    // forever (the v1 leak).
-    if ((root as unknown as { __blazefireObserved?: boolean }).__blazefireObserved) return
-    ;(root as unknown as { __blazefireObserved?: boolean }).__blazefireObserved = true
-
-    let cleanPasses = 0
+    // Overlay contents can be mounted or replaced long after the portal's
+    // first render; keep this dev-only observer until its portal is removed.
+    if (rootObservers.has(root)) return
     const observer = new MutationObserver(() => {
       if (disposed) return
-      // applyOverlayToRoot only writes when something differs; a pass with
-      // no writes means the overlay has settled.
-      const changed = applyOverlayToRoot(root, doc)
-      cleanPasses = changed ? 0 : cleanPasses + 1
-      if (cleanPasses >= SETTLE_AFTER_PASSES) {
-        observer.disconnect()
-        observers.splice(observers.indexOf(observer), 1)
-      }
+      // Writes remain conditional so this observer does not trigger a loop.
+      applyOverlayToRoot(root, doc)
     })
     observer.observe(root, { childList: true, subtree: true, characterData: true })
-    observers.push(observer)
+    observers.add(observer)
+    rootObservers.set(root, observer)
   }
 
   scanPortals()
@@ -176,19 +175,19 @@ export function installOverlayRuntime(
   if (dev && !disposed && typeof MutationObserver !== 'undefined') {
     portalObserver = new MutationObserver(() => scanPortals())
     portalObserver.observe(doc.documentElement, { childList: true, subtree: true })
-    observers.push(portalObserver)
+    observers.add(portalObserver)
   }
 
   return {
     dispose() {
       if (disposed) return
       disposed = true
-      portalObserver?.disconnect()
-      for (const o of observers) o.disconnect()
-      observers.length = 0
+      for (const observer of observers) observer.disconnect()
+      observers.clear()
+      rootObservers.clear()
     },
     observerCount() {
-      return observers.length
+      return observers.size
     },
   }
 }

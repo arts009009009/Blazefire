@@ -159,6 +159,62 @@ describe('installOverlayRuntime', () => {
   })
 })
 
+it('keeps portal observers for late overlay updates and disconnects on removal', () => {
+  const instances: Array<{
+    callback: MutationCallback
+    disconnected: boolean
+    observe: () => void
+    disconnect: () => void
+    trigger: () => void
+  }> = []
+  const RealMO = global.MutationObserver
+  global.MutationObserver = class {
+    disconnected = false
+    callback: MutationCallback
+    constructor(callback: MutationCallback) {
+      this.callback = callback
+      instances.push(this)
+    }
+    observe() {}
+    disconnect() {
+      this.disconnected = true
+    }
+    trigger() {
+      this.callback([], this as unknown as MutationObserver)
+    }
+  } as unknown as typeof MutationObserver
+
+  const root = {
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    appendChild: () => undefined,
+  } as unknown as ShadowRoot
+  const portal = { shadowRoot: root } as unknown as Element
+  let portalPresent = true
+  const doc = {
+    ...stubDocument(),
+    querySelectorAll: () => portalPresent ? [portal] : [],
+  } as unknown as Document
+
+  try {
+    const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const runtime = installOverlayRuntime(true, doc)
+    expect(runtime.observerCount()).toBe(2)
+    for (let i = 0; i < 5; i++) instances[0]!.trigger()
+    expect(runtime.observerCount()).toBe(2)
+    expect(instances[0]!.disconnected).toBe(false)
+
+    portalPresent = false
+    instances[1]!.trigger()
+    expect(runtime.observerCount()).toBe(1)
+    expect(instances[0]!.disconnected).toBe(true)
+    runtime.dispose()
+    expect(runtime.observerCount()).toBe(0)
+  } finally {
+    global.MutationObserver = RealMO
+  }
+})
+
 describe('installBlazefireRuntime', () => {
   it('is SSR-safe: null with no document', () => {
     const { installBlazefireRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')

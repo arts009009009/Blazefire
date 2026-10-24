@@ -17,7 +17,7 @@ TypeScript.
 | H-02 triple HMR stack | **One** event-stream pipeline (`src/dev/hot-reloader.ts`) |
 | H-03 pages router | **Gone.** App Router only |
 | H-04 mirrored .js/.tsx pairs | **Gone.** One TS source per module; compiled to `dist/` |
-| H-05 production MutationObserver | **One-shot in production** (zero observers); dev observers settle |
+| H-05 production MutationObserver | **One-shot in production** (zero observers); dev observers live only while overlay portals are mounted |
 | H-08 pretty-printed config re-serialization | Compact JSON + sha256 change gate; unchanged configs are never re-sent |
 | H-09 discarded issue marshalling | Suppressed **at the Rust source** via the subscription gate |
 | H-13 worker-scheduler re-registration | Idempotent, once per process |
