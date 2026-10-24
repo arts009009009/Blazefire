@@ -43,7 +43,8 @@
     "./components": {
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

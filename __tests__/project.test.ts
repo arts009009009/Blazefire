@@ -93,6 +93,40 @@ describe('FrostfastProject.shutdown', () => {
   })
 })
 
+describe('FrostfastProject.create', () => {
+  it('shuts down the native project when worker scheduler registration fails', async () => {
+    const handle = {} as ProjectHandle
+    const registrationError = new Error('scheduler registration failed')
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectShutdown: jest.fn().mockResolvedValue(undefined),
+      registerWorkerScheduler: jest.fn(() => {
+        throw registrationError
+      }),
+    } as unknown as FrostfastBinding
+
+    await expect(createProject(binding)).rejects.toBe(registrationError)
+
+    expect(binding.projectShutdown).toHaveBeenCalledWith(handle)
+  })
+
+  it('preserves scheduler and shutdown errors when cleanup also fails', async () => {
+    const registrationError = new Error('scheduler registration failed')
+    const shutdownError = new Error('shutdown failed')
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue({} as ProjectHandle),
+      projectShutdown: jest.fn().mockRejectedValue(shutdownError),
+      registerWorkerScheduler: jest.fn(() => {
+        throw registrationError
+      }),
+    } as unknown as FrostfastBinding
+
+    await expect(createProject(binding)).rejects.toMatchObject({
+      errors: [registrationError, shutdownError],
+    })
+  })
+})
+
 describe('FrostfastProject event streams', () => {
   it('forwards callback events and disposes the native task on abort', async () => {
     const handle = {} as ProjectHandle
