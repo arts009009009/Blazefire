@@ -49,6 +49,7 @@ export function injectStyles(doc: Document = document): HTMLStyleElement | null 
   const style = doc.createElement('style')
   style.id = 'blazefire-styles'
   style.setAttribute('data-blazefire', BLAZEFIRE_BRANDING.version)
+  applyCspNonce(style, doc)
   style.textContent = blazefireStyles()
 
   if (doc.head) {

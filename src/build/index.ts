@@ -12,7 +12,7 @@
 
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
 import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
@@ -36,7 +36,11 @@ export interface BuildResult {
 
 export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const started = Date.now()
-  const distDir = input.distDir ?? join(input.dir, '.blazefire')
+  const dir = resolve(input.dir)
+  const configuredDistDir = input.distDir ?? '.blazefire'
+  const distDir = isAbsolute(configuredDistDir)
+    ? configuredDistDir
+    : resolve(dir, configuredDistDir)
   // Unique per build so successive builds are distinguishable (deployment
   // ID / cache keys). A version-derived default made every build identical.
   const buildId = input.buildId ?? randomUUID()
@@ -45,8 +49,8 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const binding = await loadFrostfastBinding()
   const project = await FrostfastProject.create({
     binding,
-    rootPath: input.dir,
-    projectPath: input.dir,
+    rootPath: dir,
+    projectPath: dir,
     distDir,
     dev: false,
     buildId,
@@ -99,8 +103,16 @@ async function cleanDistDir(distDir: string): Promise<void> {
   let entries: string[] = []
   try {
     entries = await readdir(distDir)
-  } catch {
-    return // nothing to clean yet
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return // nothing to clean yet
+    }
+    throw error
   }
   for (const entry of entries) {
     if (entry === 'cache') continue
