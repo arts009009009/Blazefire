@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   CHECK_INTERVAL_MS,
+  checkForUpdate,
   compareVersions,
   isValidVersion,
   isSafeSpec,
@@ -79,6 +80,23 @@ describe('throttle state', () => {
   it('corrupt state reads as empty instead of throwing', () => {
     writeFileSync(stateFile(), 'not json{{{')
     expect(readState()).toEqual({})
+  })
+
+  it('refreshes malformed cached release versions', async () => {
+    writeState({ lastCheck: Date.now(), latestVersion: '2.1.0/invalid' })
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ tag_name: 'v2.2.0' }),
+    } as Response)
+
+    try {
+      await expect(checkForUpdate()).resolves.toMatchObject({
+        latest: '2.2.0',
+        updateAvailable: true,
+      })
+    } finally {
+      fetchSpy.mockRestore()
+    }
   })
 
   afterAll(() => {
