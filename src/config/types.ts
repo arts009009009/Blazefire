@@ -31,7 +31,9 @@ export interface HeaderRule {
 export interface RedirectRule {
   source: string
   destination: string
-  permanent: boolean
+  /** Next.js accepts EITHER `permanent` or an explicit `statusCode`. */
+  permanent?: boolean
+  statusCode?: number
   [key: string]: unknown
 }
 
