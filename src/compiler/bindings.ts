@@ -179,8 +179,14 @@ export async function loadFrostfastBinding(
     loadedBindings = binding
     return { binding, source }
   })
-  const { binding } = await pendingBindings
-  return binding
+  const pending = pendingBindings
+  try {
+    const { binding } = await pending
+    return binding
+  } catch (error) {
+    if (pendingBindings === pending) pendingBindings = undefined
+    throw error
+  }
 }
 
 /**

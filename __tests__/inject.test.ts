@@ -65,6 +65,22 @@ describe('injectStyles', () => {
   })
 })
 
+describe('blazefireLoader', () => {
+  it('resolves the runtime from the package, not from the matched host file', () => {
+    const { dirname, relative } = require('node:path') as typeof import('node:path')
+    const {
+      blazefireLoader,
+      runtimeEntryPath,
+    } = require('../src/runtime/turbopack-loader') as typeof import('../src/runtime/turbopack-loader')
+    const resourcePath = '/host/node_modules/next/dist/client/app-next.js'
+    const expected = relative(dirname(resourcePath), runtimeEntryPath())
+
+    const result = blazefireLoader.call({ resourcePath }, 'export const app = true')
+    expect(result).toContain(`import "${expected}";`)
+    expect(result).toContain('export const app = true')
+  })
+})
+
 describe('installOverlayRuntime', () => {
   it('constructs ZERO observers in production mode (dev=false)', () => {
     const created: unknown[] = []

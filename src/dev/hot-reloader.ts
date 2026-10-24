@@ -10,7 +10,7 @@
  * never keep the process alive (spec H-10).
  */
 
-import type { FrostfastProject } from '../compiler/project.js'
+import { getRouteNames, type FrostfastProject } from '../compiler/project.js'
 import type { HmrMessage } from './hmr-protocol.js'
 
 export interface HotReloaderOptions {
@@ -39,7 +39,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
     try {
       for await (const entrypoints of project.entrypointEvents()) {
         if (controller.signal.aborted) return
-        const next = new Set(Object.keys(entrypoints.routes ?? {}))
+        const next = new Set(getRouteNames(entrypoints))
         for (const route of next) {
           if (!known.has(route)) emit({ type: 'route-added', pathname: route })
         }
@@ -105,7 +105,6 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
 
       return async () => {
         if (listener) listeners.delete(listener)
-        if (listeners.size === 0) clientSubscriptions.delete(chunkName)
       }
     },
 

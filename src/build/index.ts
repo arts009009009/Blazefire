@@ -13,7 +13,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
-import { FrostfastProject } from '../compiler/project.js'
+import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
 import type { RustifiedEnvVar } from '../config/serialize.js'
 import { BLAZEFIRE_VERSION } from '../version.js'
@@ -69,7 +69,7 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     await project.writeAllEntrypointsToDisk(input.appDirOnly ?? true)
 
     const entrypoints = await project.entrypoints()
-    const routes = Object.keys(entrypoints.routes ?? {})
+    const routes = getRouteNames(entrypoints)
 
     return { distDir, routes, durationMs: Date.now() - started }
   } finally {
