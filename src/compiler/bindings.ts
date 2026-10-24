@@ -291,7 +291,10 @@ let nextWorkerId = 1
 
 function createJsWorker(creation: { options: { filename: string; cwd: string } }): number {
   const id = nextWorkerId++
-  const worker = new Worker(creation.options.filename, { cwd: creation.options.cwd })
+  const filename = isAbsolute(creation.options.filename)
+    ? creation.options.filename
+    : resolve(creation.options.cwd, creation.options.filename)
+  const worker = new Worker(filename)
   worker.unref() // an idle scheduled worker must never keep the process alive
   worker.once('exit', () => activeWorkers.delete(id))
   worker.once('error', () => activeWorkers.delete(id))

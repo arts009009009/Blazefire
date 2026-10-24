@@ -6,6 +6,7 @@ import {
   HOOK_COMMAND,
   ensureHook,
   isLifecycleHook,
+  locateCandidates,
   restore,
 } from '../src/postinstall/activation'
 
@@ -112,5 +113,21 @@ describe('restore', () => {
     expect(readFileSync(workspaceConfig, 'utf8')).toBe('module.exports = { workspace: true }\n')
     expect(JSON.parse(readFileSync(join(workspaceRoot, 'package.json'), 'utf8')).scripts.postinstall)
       .toBeUndefined()
+  })
+
+  it('discovers Next.js configs in globbed workspaces without a root config', () => {
+    const workspaceRoot = join(projectRoot, 'apps', 'web')
+    mkdirSync(workspaceRoot, { recursive: true })
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ workspaces: ['apps/*'] })
+    )
+    writeFileSync(join(workspaceRoot, 'package.json'), '{}')
+    writeFileSync(join(workspaceRoot, 'next.config.js'), 'module.exports = {}\n')
+
+    expect(locateCandidates(projectRoot)).toEqual({
+      configs: [join(workspaceRoot, 'next.config.js')],
+      packageRoots: [workspaceRoot],
+    })
   })
 })

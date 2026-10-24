@@ -84,15 +84,66 @@ function listWorkspaces(packageRoot: string): string[] {
 
   const results: string[] = []
   for (const pattern of patterns) {
-    if (typeof pattern !== 'string' || pattern.includes('*')) continue
-    const workspaceRoot = path.resolve(packageRoot, pattern)
-    if (!fs.existsSync(path.join(workspaceRoot, 'package.json'))) continue
-    if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
-      continue
+    if (typeof pattern !== 'string' || pattern.startsWith('!')) continue
+    for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern)) {
+      if (!fs.existsSync(path.join(workspaceRoot, 'package.json'))) continue
+      if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
+        continue
+      }
+      results.push(workspaceRoot)
     }
-    results.push(workspaceRoot)
   }
-  return results
+  return [...new Set(results)]
+}
+
+function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
+  const segments = pattern.split(/[\\/]+/).filter(Boolean)
+  const matches: string[] = []
+
+  const visit = (dir: string, index: number): void => {
+    if (index === segments.length) {
+      matches.push(dir)
+      return
+    }
+
+    const segment = segments[index]!
+    if (segment === '**') {
+      visit(dir, index + 1)
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) visit(path.join(dir, entry.name), index)
+      }
+      return
+    }
+
+    if (segment.includes('*') || segment.includes('?')) {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      const matcher = new RegExp(
+        `^${segment.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`
+      )
+      for (const entry of entries) {
+        if (entry.isDirectory() && matcher.test(entry.name)) {
+          visit(path.join(dir, entry.name), index + 1)
+        }
+      }
+      return
+    }
+
+    visit(path.join(dir, segment), index + 1)
+  }
+
+  visit(path.resolve(packageRoot), 0)
+  return matches
 }
 
 /**
@@ -266,11 +317,7 @@ function resolveProjectRoot(start: string): string | null {
   let dir = path.resolve(start)
   for (;;) {
     const packageJson = path.join(dir, 'package.json')
-    if (fs.existsSync(packageJson) && !isSelf(dir)) {
-      for (const name of CONFIG_NAMES) {
-        if (fs.existsSync(path.join(dir, name))) return dir
-      }
-    }
+    if (fs.existsSync(packageJson) && !isSelf(dir)) return dir
     const parent = path.dirname(dir)
     if (parent === dir) return null
     dir = parent
