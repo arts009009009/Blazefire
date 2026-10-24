@@ -19,4 +19,21 @@ describe('createHotReloader', () => {
     expect(project.hmrEvents).toHaveBeenCalledTimes(1)
     await reloader.dispose()
   })
+
+  it('reports stream failures without creating unhandled rejections', async () => {
+    const streamError = new Error('native event stream failed')
+    const onError = jest.fn()
+    const project = {
+      entrypointEvents: async function* () {
+        throw streamError
+      },
+      updateInfoEvents: async function* () {},
+      hmrEvents: async function* () {},
+    } as unknown as FrostfastProject
+
+    await createHotReloader({ project, emit: () => undefined, onError })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(onError).toHaveBeenCalledWith(streamError)
+  })
 })

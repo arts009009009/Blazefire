@@ -60,7 +60,10 @@ export class FrostfastBindingError extends Error {
 export function defaultDeps(): LoadLadderDeps {
   return {
     env: (name) => process.env[name],
-    requireNative: (p) => createRequire(import.meta.url)(p) as unknown as FrostfastBinding,
+    // All ladder paths are absolute, so the require anchor only needs to be
+    // absolute too; avoid module-relative resolution for this native load.
+    requireNative: (p) =>
+      createRequire(join(process.cwd(), 'noop.js'))(p) as unknown as FrostfastBinding,
     resolveFrom: (baseDir, specifier) => {
       try {
         return createRequire(join(baseDir, 'noop.js')).resolve(specifier)

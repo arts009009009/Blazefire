@@ -26,7 +26,7 @@ export function runtimeEntryPath(): string {
   return join(PACKAGE_ROOT, 'dist', 'runtime', 'inject.js')
 }
 
-export default function blazefireLoader(
+export function blazefireLoader(
   this: LoaderContextLike,
   source: string
 ): string {
@@ -38,3 +38,5 @@ export default function blazefireLoader(
 
   return `import ${JSON.stringify(specifier)}; ${INJECT_MARKER}\n${source}`
 }
+
+export default blazefireLoader
