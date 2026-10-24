@@ -100,11 +100,18 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
             clearTimeout(defer)
             defer = undefined
           }
+          // Surface real diagnostics when the native side provides them,
+          // instead of always reporting a clean, empty build.
+          const value = (info.value ?? {}) as {
+            hash?: unknown
+            errors?: unknown
+            warnings?: unknown
+          }
           emit({
             type: 'built',
-            hash: '',
-            errors: [],
-            warnings: [],
+            hash: typeof value.hash === 'string' ? value.hash : '',
+            errors: Array.isArray(value.errors) ? (value.errors as string[]) : [],
+            warnings: Array.isArray(value.warnings) ? (value.warnings as string[]) : [],
           })
         }
       }
