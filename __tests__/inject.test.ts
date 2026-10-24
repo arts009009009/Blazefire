@@ -191,6 +191,11 @@ it('keeps portal observers for late overlay updates and disconnects on removal',
   } as unknown as ShadowRoot
   const portal = { shadowRoot: root } as unknown as Element
   let portalPresent = true
+  const doc = {
+    ...stubDocument(),
+    querySelectorAll: () => portalPresent ? [portal] : [],
+  } as unknown as Document
+
   const queryAll = jest.fn(() => (portalPresent ? [portal] : []))
   const doc = {
     ...stubDocument(),
@@ -202,6 +207,12 @@ it('keeps portal observers for late overlay updates and disconnects on removal',
     const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
     const runtime = installOverlayRuntime(true, doc)
     expect(runtime.observerCount()).toBe(2)
+    for (let i = 0; i < 5; i++) instances[0]!.trigger()
+    expect(runtime.observerCount()).toBe(2)
+    expect(instances[0]!.disconnected).toBe(false)
+
+    portalPresent = false
+    instances[1]!.trigger()
     expect(queryAll).toHaveBeenCalledTimes(1) // the synchronous initial scan
 
     // Shadow-root mutation bursts stay debounced and never disconnect anything.

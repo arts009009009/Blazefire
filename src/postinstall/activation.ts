@@ -90,6 +90,57 @@ function listWorkspaces(packageRoot: string): string[] {
       if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
         continue
       }
+      results.push(workspaceRoot)
+    }
+  }
+  return [...new Set(results)]
+}
+
+function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
+  const segments = pattern.split(/[\\/]+/).filter(Boolean)
+  const matches: string[] = []
+
+  const visit = (dir: string, index: number): void => {
+    if (index === segments.length) {
+      matches.push(dir)
+      return
+    }
+
+    const segment = segments[index]!
+    if (segment === '**') {
+      visit(dir, index + 1)
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) visit(path.join(dir, entry.name), index)
+      }
+      return
+    }
+
+    if (segment.includes('*') || segment.includes('?')) {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      const matcher = new RegExp(
+        `^${segment.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`
+      )
+      for (const entry of entries) {
+        if (entry.isDirectory() && matcher.test(entry.name)) {
+          visit(path.join(dir, entry.name), index + 1)
+        }
+      }
+      return
+    }
+
+    visit(path.join(dir, segment), index + 1)
+  }
       results.add(workspaceRoot)
     }
   }
@@ -239,6 +290,8 @@ export function ensureHook(packageRoot: string): HookStatus {
   if (!existing) {
     scripts.postinstall = HOOK_COMMAND
   } else if (!isLifecycleHook(existing)) {
+    // A host's own postinstall is not ours to clobber — chain ours after it.
+    scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
     // A host's own postinstall is not ours to clobber — chain ours after it,
     // grouped so a `;`, background `&` or trailing comment in the host's
     // script can never swallow or skip our hook (v1 chained bare and lost it).
@@ -495,7 +548,7 @@ export function restore(start = process.cwd()): boolean {
     try {
       entries = fs.readdirSync(backupRoot)
     } catch {
-      continue
+      continuehow 
     }
 
     const originals = entries
@@ -519,6 +572,13 @@ export function restore(start = process.cwd()): boolean {
         say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
         continue
       }
+
+      const content = fs.readFileSync(path.join(backupRoot, entry))
+      writeAtomicSync(target, content)
+      say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+      restoredProject = true
+    }
+
 
       const content = fs.readFileSync(path.join(backupRoot, entry))
       writeAtomicSync(target, content)

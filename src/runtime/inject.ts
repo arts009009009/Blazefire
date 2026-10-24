@@ -14,6 +14,7 @@
  *    are behind a build-time-inlined NODE_ENV check and are eliminated by
  *    define-inlining).
  *  - DEV: portal discovery and shadow-root observers exist only while their
+ *    overlay portal is mounted, then disconnect on portal removal.
  *    overlay portal is mounted, then disconnect on portal removal. Every
  *    observer callback is debounced (~100ms trailing), so a burst of DOM
  *    mutations coalesces into a single re-scan instead of one per mutation.
@@ -180,6 +181,11 @@ export function installOverlayRuntime(
 
     // Overlay contents can be mounted or replaced long after the portal's
     // first render; keep this dev-only observer until its portal is removed.
+    if (rootObservers.has(root)) return
+    const observer = new MutationObserver(() => {
+      if (disposed) return
+      // Writes remain conditional so this observer does not trigger a loop.
+      applyOverlayToRoot(root, doc)
     // Callbacks are debounced: a busy overlay must not re-scan per mutation.
     if (rootObservers.has(root)) return
     const observer = new MutationObserver(() => {
