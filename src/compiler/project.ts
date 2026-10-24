@@ -244,10 +244,10 @@ export class FrostfastProject {
     return this.#stream(
       (callback) => this.#binding.projectEntrypointsSubscribe(this.handle, callback),
       (payload) => {
-        const result = stripDiscardedIssues(
+        const result = (stripDiscardedIssues(
           payload as NapiEventResult<NapiEntrypoints | null>,
           this.issuePolicy
-        )
+        ) ?? { value: null }) as NapiEventResult<NapiEntrypoints | null>
         if (result.value && result.value.routes instanceof Map) return result.value
         if (
           result.value === null ||
@@ -272,6 +272,9 @@ export class FrostfastProject {
       (callback) =>
         this.#binding.projectUpdateInfoSubscribe(this.handle, aggregationMs, callback),
       (payload) => {
+        if (payload === null || payload === undefined) {
+          throw new Error('Frostfast emitted an empty update-info message')
+        }
         const message = payload as NapiUpdateMessage
         if (message.updateType !== 'start' && message.updateType !== 'end') {
           throw new Error(`Frostfast emitted an unknown update type: ${message.updateType}`)
@@ -309,8 +312,14 @@ export class FrostfastProject {
   /** Server-target HMR (fast refresh / restart instructions). */
   serverHmrEvents(signal?: AbortSignal): AsyncIterable<unknown> {
     return this.#stream(
-      (callback) => this.#binding.projectAllHmrEvents(this.handle, HmrTarget.Server, callback),
-      undefined,
+      (callback) =>
+        this.#binding.projectAllHmrEvents(
+          this.handle,
+          HmrTarget.Server,
+          shouldForwardIssues(this.issuePolicy),
+          callback
+        ),
+      (payload) => stripDiscardedIssues(payload as IssueBearingPayload, this.issuePolicy),
       signal
     )
   }
