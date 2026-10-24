@@ -6,6 +6,7 @@
  * is logged and swallowed with exit 0.
  */
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
 import { run } from './activation.js'
 
 export async function main(): Promise<void> {
@@ -24,7 +25,7 @@ export async function main(): Promise<void> {
 // never when imported by the CLI.
 const invokedDirectly =
   process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href.replace(/\\/g, '/')
+  import.meta.url === pathToFileURL(process.argv[1]).href
 
 if (invokedDirectly) {
   void main()

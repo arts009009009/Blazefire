@@ -82,6 +82,28 @@ describe('blazefireLoader', () => {
 })
 
 describe('installOverlayRuntime', () => {
+  it('reports same-length branding changes as DOM changes', () => {
+    const { applyOverlayToRoot } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const textNode = { nodeType: 3, data: 'Turbopack', nextSibling: null }
+    const label = {
+      firstChild: textNode,
+      getAttribute: () => null,
+      setAttribute: () => undefined,
+    }
+    const styles: StubElement[] = []
+    const root = {
+      getElementById: (id: string) => styles.find((style) => style.id === id) ?? null,
+      querySelectorAll: (selector: string) =>
+        selector === '.turbopack-text' ? [label] : [],
+      appendChild: (style: StubElement) => styles.push(style),
+    } as unknown as ShadowRoot
+
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(true)
+    expect(textNode.data).toBe('Frostfast')
+    expect(textNode.data).toHaveLength('Turbopack'.length)
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(false)
+  })
+
   it('constructs ZERO observers in production mode (dev=false)', () => {
     const created: unknown[] = []
     const RealMO = global.MutationObserver

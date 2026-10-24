@@ -235,7 +235,7 @@ export function undoHook(packageRoot: string): {
 }
 
 export function isLifecycleHook(value: string): boolean {
-  return /blazefire/.test(value)
+  return /(?:^|&&\s*)(?:npx\s+)?blazefire\s+(?:init|setup|activate)(?:\s|$)/.test(value)
 }
 
 function gitignoreHasEntry(contents: string, entry: string): boolean {
@@ -371,9 +371,14 @@ export function restore(start = process.cwd()): boolean {
     return false
   }
 
+  const firstBackupByConfig = new Map<string, string>()
   for (const entry of originals) {
     const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
-    if (!base) continue
+    if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
+  }
+
+  let restored = false
+  for (const [base, entry] of firstBackupByConfig) {
     const target = path.join(projectRoot, base)
     if (!fs.existsSync(target)) {
       say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
@@ -381,12 +386,12 @@ export function restore(start = process.cwd()): boolean {
     }
 
     const content = fs.readFileSync(path.join(backupRoot, entry))
-    fs.writeFileSync(target, content)
+    writeAtomicSync(target, content)
     say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-
-    undoHook(projectRoot)
+    restored = true
   }
 
+  if (restored) undoHook(projectRoot)
   say('restore complete')
-  return true
+  return restored
 }

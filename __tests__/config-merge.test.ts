@@ -44,8 +44,8 @@ describe('mergeConfigs', () => {
 
   it('concatenates redirects the same way', async () => {
     const merged = mergeConfigs(
-      { redirects: async () => [{ source: '/a', destination: '/b', permanent: false }] } as NextConfigLike,
-      { redirects: async () => [{ source: '/c', destination: '/d', permanent: true }] } as NextConfigLike
+      { redirects: async () => [{ source: '/a', destination: '/b', permanent: false }] },
+      { redirects: async () => [{ source: '/c', destination: '/d', permanent: true }] }
     )
     const redirects = await merged.redirects?.()
     expect(redirects).toHaveLength(2)
