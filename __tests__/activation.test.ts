@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   BACKUP_DIR,
   HOOK_COMMAND,
+  ensureHook,
   isLifecycleHook,
   restore,
 } from '../src/postinstall/activation'
@@ -64,5 +65,52 @@ describe('restore', () => {
     expect(isLifecycleHook('echo "blazefire is installed"')).toBe(false)
     expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall)
       .toBe('echo "blazefire is installed"')
+  })
+
+  it('chains the activation hook when the host script only mentions Blazefire', () => {
+    const packageJson = join(projectRoot, 'package.json')
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ scripts: { postinstall: 'echo "blazefire is installed"' } })
+    )
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    expect(JSON.parse(readFileSync(packageJson, 'utf8')).scripts.postinstall).toBe(
+      `echo "blazefire is installed" && ${HOOK_COMMAND}`
+    )
+    expect(isLifecycleHook('blazefire init')).toBe(false)
+    expect(isLifecycleHook(HOOK_COMMAND)).toBe(true)
+  })
+
+  it('restores backed-up configs and hooks in configured workspaces', () => {
+    const workspaceRoot = join(projectRoot, 'apps', 'web')
+    const configName = 'next.config.js'
+    const rootConfig = join(projectRoot, configName)
+    const workspaceConfig = join(workspaceRoot, configName)
+    mkdirSync(workspaceRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({
+      workspaces: ['apps/web'],
+      scripts: { postinstall: HOOK_COMMAND },
+    }))
+    writeFileSync(join(workspaceRoot, 'package.json'), JSON.stringify({
+      scripts: { postinstall: HOOK_COMMAND },
+    }))
+    writeFileSync(rootConfig, 'module.exports = blazefire({ root: true })\n')
+    writeFileSync(workspaceConfig, 'module.exports = blazefire({ workspace: true })\n')
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      'module.exports = { root: true }\n'
+    )
+    mkdirSync(join(workspaceRoot, BACKUP_DIR))
+    writeFileSync(
+      join(workspaceRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      'module.exports = { workspace: true }\n'
+    )
+
+    expect(restore(projectRoot)).toBe(true)
+    expect(readFileSync(rootConfig, 'utf8')).toBe('module.exports = { root: true }\n')
+    expect(readFileSync(workspaceConfig, 'utf8')).toBe('module.exports = { workspace: true }\n')
+    expect(JSON.parse(readFileSync(join(workspaceRoot, 'package.json'), 'utf8')).scripts.postinstall)
+      .toBeUndefined()
   })
 })

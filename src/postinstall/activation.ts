@@ -179,9 +179,7 @@ export function ensureHook(packageRoot: string): HookStatus {
   const existing = scripts.postinstall
   if (existing && !isLifecycleHook(existing)) {
     // A host's own postinstall is not ours to clobber — chain ours after it.
-    if (!/blazefire/.test(existing)) {
-      scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
-    }
+    scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
   } else {
     scripts.postinstall = HOOK_COMMAND
   }
@@ -235,7 +233,8 @@ export function undoHook(packageRoot: string): {
 }
 
 export function isLifecycleHook(value: string): boolean {
-  return /(?:^|&&\s*)(?:npx\s+)?blazefire\s+(?:init|setup|activate)(?:\s|$)/.test(value)
+  const escapedHook = HOOK_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|&&\\s*)${escapedHook}(?:\\s|$)`).test(value)
 }
 
 function gitignoreHasEntry(contents: string, entry: string): boolean {
@@ -291,6 +290,7 @@ export function run(start = process.cwd()): void {
   }
 
   let activated = 0
+  const hookRoots = new Set<string>()
   for (let i = 0; i < configs.length; i++) {
     const configPath = configs[i]!
     const projectRoot = packageRoots[i]!
@@ -306,6 +306,7 @@ export function run(start = process.cwd()): void {
     if (!result.ok) {
       if (/already wrapped/.test(result.reason)) {
         say(`skipped ${relative} — already activated`)
+        hookRoots.add(projectRoot)
         continue
       }
       say(`skipped ${relative} — ${result.reason}`)
@@ -313,6 +314,7 @@ export function run(start = process.cwd()): void {
       continue
     }
 
+    hookRoots.add(projectRoot)
     const backup = path.join(
       projectRoot,
       BACKUP_DIR,
@@ -333,7 +335,7 @@ export function run(start = process.cwd()): void {
     activated += 1
   }
 
-  for (const packageRoot of new Set(packageRoots)) {
+  for (const packageRoot of hookRoots) {
     const hook = ensureHook(packageRoot)
     if (hook.status === 'no-package-json') {
       say(
@@ -348,50 +350,58 @@ export function run(start = process.cwd()): void {
 }
 
 export function restore(start = process.cwd()): boolean {
-  const projectRoot = resolveProjectRoot(start) ?? path.resolve(start)
-  const backupRoot = path.join(projectRoot, BACKUP_DIR)
-  let entries: string[]
-  try {
-    entries = fs.readdirSync(backupRoot)
-  } catch {
-    say(`no backup found at ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-    return false
+  const { packageRoots } = locateCandidates(start)
+  const resolvedRoot = resolveProjectRoot(start)
+  if (resolvedRoot) {
+    packageRoots.push(resolvedRoot, ...listWorkspaces(resolvedRoot))
   }
+  if (packageRoots.length === 0) packageRoots.push(path.resolve(start))
 
-  const originals = entries
-    .filter(
-      (entry) =>
-        entry.endsWith('.original') &&
-        CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
-    )
-    .sort((a, b) => a.localeCompare(b))
-
-  if (originals.length === 0) {
-    say(`no backup found at ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-    return false
-  }
-
-  const firstBackupByConfig = new Map<string, string>()
-  for (const entry of originals) {
-    const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
-    if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
-  }
-
-  let restored = false
-  for (const [base, entry] of firstBackupByConfig) {
-    const target = path.join(projectRoot, base)
-    if (!fs.existsSync(target)) {
-      say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+  let restoredAny = false
+  for (const projectRoot of new Set(packageRoots)) {
+    const backupRoot = path.join(projectRoot, BACKUP_DIR)
+    let entries: string[]
+    try {
+      entries = fs.readdirSync(backupRoot)
+    } catch {
       continue
     }
 
-    const content = fs.readFileSync(path.join(backupRoot, entry))
-    writeAtomicSync(target, content)
-    say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-    restored = true
+    const originals = entries
+      .filter(
+        (entry) =>
+          entry.endsWith('.original') &&
+          CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
+      )
+      .sort((a, b) => a.localeCompare(b))
+
+    const firstBackupByConfig = new Map<string, string>()
+    for (const entry of originals) {
+      const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
+      if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
+    }
+
+    let restoredProject = false
+    for (const [base, entry] of firstBackupByConfig) {
+      const target = path.join(projectRoot, base)
+      if (!fs.existsSync(target)) {
+        say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+        continue
+      }
+
+      const content = fs.readFileSync(path.join(backupRoot, entry))
+      writeAtomicSync(target, content)
+      say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+      restoredProject = true
+    }
+
+    if (restoredProject) {
+      undoHook(projectRoot)
+      restoredAny = true
+    }
   }
 
-  if (restored) undoHook(projectRoot)
-  say('restore complete')
-  return restored
+  if (!restoredAny) say('no backup found for this project')
+  else say('restore complete')
+  return restoredAny
 }
