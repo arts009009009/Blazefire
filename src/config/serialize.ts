@@ -11,11 +11,15 @@
  *  - a content hash computed alongside, so project.update() can SKIP the
  *    send entirely when the config did not actually change,
  *  - functions zeroed (they cannot cross the boundary), Windows paths
- *    normalized — same normalization set as v1, minus the waste.
+ *    normalized — same normalization set as v1, minus the waste,
+ *  - RegExp/Date/Map/Set are decomposed deterministically so two
+ *    semantically different configs can never collide onto the same hash
+ *    (a RegExp field used to collapse to `{}` and silently swallow edits).
  */
 
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
+import { BlazefireConfigError } from './types.js'
 
 /** Decomposition of a RegExp — regexes cannot cross napi natively (v1 convention, kept). */
 export type SerializedPattern =
@@ -69,8 +73,10 @@ function normalizePathOnWindows(p: string): string {
 function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...nextConfig }
 
-  // Never read by Rust; functions are not serializable.
-  if ('exportPathMap' in out) out.exportPathMap = {}
+  // Never read by Rust; functions are not serializable. Guard on the VALUE so
+  // `exportPathMap: undefined` (or a legitimate non-function value) is not
+  // clobbered — matching the generateBuildId/webpack checks below.
+  if (typeof out.exportPathMap === 'function') out.exportPathMap = {}
   if (typeof out.generateBuildId === 'function') out.generateBuildId = {}
   if (typeof out.webpack === 'function') out.webpack = {}
 
@@ -87,9 +93,19 @@ function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string
   for (const [glob, rules] of Object.entries(turbopack?.rules ?? {})) {
     for (const rule of rules) {
       if (rule.options === undefined) continue
-      const round = JSON.parse(JSON.stringify(rule.options))
+      let round: unknown
+      try {
+        round = JSON.parse(JSON.stringify(rule.options))
+      } catch {
+        // A function/BigInt/symbol/circular options value: JSON.stringify
+        // throws or yields `undefined`. Report the ACTIONABLE error, not a
+        // cryptic SyntaxError about the token `u`.
+        throw new BlazefireConfigError(
+          `turbopack.rules["${glob}"] loader options are not JSON-serializable`
+        )
+      }
       if (!isDeepStrictEqual(rule.options, round)) {
-        throw new Error(
+        throw new BlazefireConfigError(
           `turbopack.rules["${glob}"] loader options are not JSON-serializable`
         )
       }
@@ -97,6 +113,74 @@ function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string
   }
 
   return out
+}
+
+/**
+ * Deterministic wire transform for `nextConfig`.
+ *
+ * RegExp/Date/Map/Set are decomposed into JSON-safe shapes so two different
+ * configs never collapse onto the same string (and therefore never onto the
+ * same sha256). Functions/symbols are dropped exactly as JSON.stringify would.
+ * BigInt and circular references raise an actionable BlazefireConfigError
+ * instead of a raw TypeError from deep inside JSON.stringify.
+ */
+function toWire(value: unknown, path: string, seen: Set<object>): unknown {
+  if (value === null) return null
+
+  switch (typeof value) {
+    case 'function':
+    case 'symbol':
+      return undefined // dropped, same as JSON.stringify
+    case 'bigint':
+      throw new BlazefireConfigError(
+        `nextConfig.${path} is a BigInt, which cannot cross the napi boundary. Convert it to a string or number.`
+      )
+    case 'object':
+      break
+    default:
+      return value // primitives
+  }
+
+  const obj = value as object
+
+  // Decompositions — the documented wire conventions.
+  if (obj instanceof RegExp) {
+    return { type: 'regex', value: { source: obj.source, flags: obj.flags } }
+  }
+  if (obj instanceof Date) {
+    return Number.isNaN(obj.getTime())
+      ? null
+      : obj.toISOString()
+  }
+
+  if (seen.has(obj)) {
+    throw new BlazefireConfigError(
+      `nextConfig.${path} contains a circular reference, which cannot cross the napi boundary.`
+    )
+  }
+  seen.add(obj)
+  try {
+    if (Array.isArray(obj)) {
+      return obj.map((entry, i) => toWire(entry, `${path}[${i}]`, seen))
+    }
+    if (obj instanceof Map) {
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of obj) out[String(k)] = toWire(v, path, seen)
+      return out
+    }
+    if (obj instanceof Set) {
+      return [...obj].map((entry, i) => toWire(entry, `${path}.set[${i}]`, seen))
+    }
+
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(obj)) {
+      const wired = toWire(v, `${path}.${k}`, seen)
+      if (wired !== undefined) out[k] = wired
+    }
+    return out
+  } finally {
+    seen.delete(obj)
+  }
 }
 
 export function serializeProjectConfig(
@@ -112,7 +196,11 @@ export function serializeProjectConfig(
     buildId: config.buildId,
     env: rustifyEnv(config.env),
     defineEnv: config.defineEnv,
-    nextConfig: normalizeNextConfig(config.nextConfig),
+    nextConfig: toWire(
+      normalizeNextConfig(config.nextConfig),
+      'nextConfig',
+      new Set<object>()
+    ),
   })
   const hash = createHash('sha256').update(json).digest('hex')
   return { json, hash }

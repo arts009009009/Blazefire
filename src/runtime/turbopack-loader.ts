@@ -12,29 +12,61 @@
  * matched by two rules is not double-injected.
  */
 
-import { dirname, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
+import { PACKAGE_ROOT } from '../package-root.js'
 
 export const INJECT_MARKER = '/* blazefire-injected */'
 
 export interface LoaderContextLike {
   resourcePath: string
+  /** webpack/turbopack async result channel (present in a real loader context). */
+  callback?: (error: Error | null, code?: string, map?: string) => void
 }
 
 /** Absolute path of the compiled client runtime entry. */
-export function runtimeEntryPath(loaderPath: string): string {
-  // loaderPath .../dist/runtime/turbopack-loader.js -> .../dist/runtime/inject.js
-  return resolve(dirname(loaderPath), 'inject.js')
+export function runtimeEntryPath(): string {
+  return join(PACKAGE_ROOT, 'dist', 'runtime', 'inject.js')
 }
 
-export default function blazefireLoader(
+/**
+ * Prepend a side-effect import of the client runtime to the matched source.
+ *
+ * When an input source map is present we shift it down one generated line via
+ * the async callback, so stack traces in the host bootstrap stay accurate.
+ */
+export function blazefireLoader(
   this: LoaderContextLike,
-  source: string
-): string {
+  source: string,
+  map?: string
+): string | void {
   if (source.includes(INJECT_MARKER)) return source
 
-  const inject = relative(dirname(this.resourcePath), runtimeEntryPath(this.resourcePath))
+  const inject = relative(dirname(this.resourcePath), runtimeEntryPath())
   // Normalize to POSIX separators for module specifiers on Windows.
-  const specifier = inject.split('\\').join('/')
+  let specifier = inject.split('\\').join('/')
+  // A bare relative specifier ('pkg/dist/…') needs an explicit './' or it is
+  // treated as a package import. A cross-drive relative() on Windows is
+  // already absolute and stays absolute — the one case that cannot be relativized.
+  if (!specifier.startsWith('.') && !isAbsolute(specifier)) specifier = `./${specifier}`
 
-  return `import ${JSON.stringify(specifier)}; ${INJECT_MARKER}\n${source}`
+  const code = `import ${JSON.stringify(specifier)}; ${INJECT_MARKER}\n${source}`
+
+  if (map && typeof this.callback === 'function') {
+    this.callback(null, code, shiftMapDownOneLine(map))
+    return
+  }
+  return code
 }
+
+/** Nudge a source-map v3 `mappings` field down by one generated line. */
+function shiftMapDownOneLine(map: string): string {
+  try {
+    const parsed = JSON.parse(map) as { mappings?: unknown }
+    if (typeof parsed.mappings === 'string') parsed.mappings = `;${parsed.mappings}`
+    return JSON.stringify(parsed)
+  } catch {
+    return map
+  }
+}
+
+export default blazefireLoader

@@ -65,7 +65,45 @@ describe('injectStyles', () => {
   })
 })
 
+describe('blazefireLoader', () => {
+  it('resolves the runtime from the package, not from the matched host file', () => {
+    const { dirname, relative } = require('node:path') as typeof import('node:path')
+    const {
+      blazefireLoader,
+      runtimeEntryPath,
+    } = require('../src/runtime/turbopack-loader') as typeof import('../src/runtime/turbopack-loader')
+    const resourcePath = '/host/node_modules/next/dist/client/app-next.js'
+    const expected = relative(dirname(resourcePath), runtimeEntryPath())
+
+    const result = blazefireLoader.call({ resourcePath }, 'export const app = true')
+    expect(result).toContain(`import "${expected}";`)
+    expect(result).toContain('export const app = true')
+  })
+})
+
 describe('installOverlayRuntime', () => {
+  it('reports same-length branding changes as DOM changes', () => {
+    const { applyOverlayToRoot } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const textNode = { nodeType: 3, data: 'Turbopack', nextSibling: null }
+    const label = {
+      firstChild: textNode,
+      getAttribute: () => null,
+      setAttribute: () => undefined,
+    }
+    const styles: StubElement[] = []
+    const root = {
+      getElementById: (id: string) => styles.find((style) => style.id === id) ?? null,
+      querySelectorAll: (selector: string) =>
+        selector === '.turbopack-text' ? [label] : [],
+      appendChild: (style: StubElement) => styles.push(style),
+    } as unknown as ShadowRoot
+
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(true)
+    expect(textNode.data).toBe('Frostfast')
+    expect(textNode.data).toHaveLength('Turbopack'.length)
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(false)
+  })
+
   it('constructs ZERO observers in production mode (dev=false)', () => {
     const created: unknown[] = []
     const RealMO = global.MutationObserver
@@ -119,6 +157,62 @@ describe('installOverlayRuntime', () => {
       global.MutationObserver = RealMO
     }
   })
+})
+
+it('keeps portal observers for late overlay updates and disconnects on removal', () => {
+  const instances: Array<{
+    callback: MutationCallback
+    disconnected: boolean
+    observe: () => void
+    disconnect: () => void
+    trigger: () => void
+  }> = []
+  const RealMO = global.MutationObserver
+  global.MutationObserver = class {
+    disconnected = false
+    callback: MutationCallback
+    constructor(callback: MutationCallback) {
+      this.callback = callback
+      instances.push(this)
+    }
+    observe() {}
+    disconnect() {
+      this.disconnected = true
+    }
+    trigger() {
+      this.callback([], this as unknown as MutationObserver)
+    }
+  } as unknown as typeof MutationObserver
+
+  const root = {
+    getElementById: () => null,
+    querySelectorAll: () => [],
+    appendChild: () => undefined,
+  } as unknown as ShadowRoot
+  const portal = { shadowRoot: root } as unknown as Element
+  let portalPresent = true
+  const doc = {
+    ...stubDocument(),
+    querySelectorAll: () => portalPresent ? [portal] : [],
+  } as unknown as Document
+
+  try {
+    const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const runtime = installOverlayRuntime(true, doc)
+    expect(runtime.observerCount()).toBe(2)
+    for (let i = 0; i < 5; i++) instances[0]!.trigger()
+    expect(runtime.observerCount()).toBe(2)
+    expect(instances[0]!.disconnected).toBe(false)
+
+    portalPresent = false
+    instances[1]!.trigger()
+    expect(runtime.observerCount()).toBe(1)
+    expect(instances[0]!.disconnected).toBe(true)
+    runtime.dispose()
+    expect(runtime.observerCount()).toBe(0)
+  } finally {
+    global.MutationObserver = RealMO
+  }
 })
 
 describe('installBlazefireRuntime', () => {

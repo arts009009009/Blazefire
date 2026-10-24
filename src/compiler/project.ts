@@ -11,9 +11,12 @@
 
 import type {
   FrostfastBinding,
+  NapiEventCallback,
+  NapiEventResult,
   NapiEntrypoints,
   NapiProjectOptions,
   NapiTurboEngineOptions,
+  NapiUpdateMessage,
   PartialProjectOptions,
   ProjectHandle,
   RootTaskHandle,
@@ -26,8 +29,16 @@ import {
   type RustifiedEnvVar,
   type SerializedProjectConfig,
 } from '../config/serialize.js'
-import { shouldForwardIssues, stripDiscardedIssues, type IssuePolicy } from './issues.js'
+import { shouldForwardIssues, stripDiscardedIssues, type IssueBearingPayload, type IssuePolicy } from './issues.js'
+import { ensureDefaultWorkerScheduler } from './bindings.js'
 import { FROSTFAST_VERSION } from '../version.js'
+
+/** CI is commonly `CI=1`/`CI=true`; treat any non-falsey value as CI. */
+function isCiEnv(): boolean {
+  const v = process.env.CI
+  if (v === undefined || v === '') return false
+  return !/^(false|0|no)$/i.test(v.trim())
+}
 
 export interface CreateProjectInput {
   binding: FrostfastBinding
@@ -83,13 +94,17 @@ function snapshot(input: {
   return { ...serialized, parsed: input }
 }
 
+export function getRouteNames(entrypoints: NapiEntrypoints): string[] {
+  return Array.from(entrypoints.routes.keys())
+}
+
 export class FrostfastProject {
   readonly handle: ProjectHandle
   readonly issuePolicy: IssuePolicy
   readonly #binding: FrostfastBinding
   readonly #gate = new ConfigChangeGate()
   #last: NormalizedSnapshot
-  #stopped = false
+  #shutdownPromise: Promise<void> | undefined
 
   private constructor(
     binding: FrostfastBinding,
@@ -117,7 +132,7 @@ export class FrostfastProject {
     })
 
     const engineOptions: NapiTurboEngineOptions = {
-      isCi: process.env.CI === 'true',
+      isCi: isCiEnv(),
       // Short sessions skip compaction; dev sessions stay resident.
       isShortSession: !input.dev,
       turbopackMemoryEviction: 'auto',
@@ -148,6 +163,23 @@ export class FrostfastProject {
       },
     })
 
+    // H-13: register the JS worker scheduler once per process so native
+    // worker-backed tasks can actually spawn threads. Idempotent; a binding
+    // without the hook (or a test mock) is skipped safely.
+    try {
+      ensureDefaultWorkerScheduler(input.binding)
+    } catch (error) {
+      try {
+        await input.binding.projectShutdown(handle)
+      } catch (shutdownError) {
+        throw new AggregateError(
+          [error, shutdownError],
+          'Frostfast worker scheduler registration failed and the project could not be shut down.'
+        )
+      }
+      throw error
+    }
+
     return new FrostfastProject(
       input.binding,
       handle,
@@ -164,34 +196,33 @@ export class FrostfastProject {
    * @returns true when a native update was issued, false when skipped.
    */
   async update(update: ProjectUpdate): Promise<boolean> {
+    const next = snapshot({
+      ...this.#last.parsed,
+      env: update.env ?? this.#last.parsed.env,
+      defineEnv: update.defineEnv ?? this.#last.parsed.defineEnv,
+      nextConfig: update.nextConfig ?? this.#last.parsed.nextConfig,
+      rootPath: update.rootPath ?? this.#last.parsed.rootPath,
+      projectPath: update.projectPath ?? this.#last.parsed.projectPath,
+    })
+
     const partial: PartialProjectOptions = {}
 
-    if (update.rootPath !== undefined) partial.rootPath = update.rootPath
-    if (update.projectPath !== undefined) partial.projectPath = update.projectPath
-
-    if (update.env || update.defineEnv || update.nextConfig) {
-      const next = snapshot({
-        ...this.#last.parsed,
-        env: update.env ?? this.#last.parsed.env,
-        defineEnv: update.defineEnv ?? this.#last.parsed.defineEnv,
-        nextConfig: update.nextConfig ?? this.#last.parsed.nextConfig,
-        rootPath: update.rootPath ?? this.#last.parsed.rootPath,
-        projectPath: update.projectPath ?? this.#last.parsed.projectPath,
-      })
-
-      if (this.#gate.changed(next)) {
-        partial.nextConfig = next.json
-        if (update.env) partial.env = rustifyEnv(update.env)
-        if (update.defineEnv) {
-          partial.defineEnv = Object.values(update.defineEnv).flat()
-        }
-        this.#last = next
-        this.#gate.remember(next)
+    // The WHOLE partial — including rootPath/projectPath — is hash-gated, so
+    // passing an UNCHANGED path never forces a native update (spec H-08).
+    if (this.#gate.changed(next)) {
+      partial.nextConfig = next.json
+      partial.rootPath = next.parsed.rootPath
+      partial.projectPath = next.parsed.projectPath
+      if (update.env) partial.env = rustifyEnv(update.env)
+      if (update.defineEnv) {
+        partial.defineEnv = Object.values(update.defineEnv).flat()
       }
     }
 
     if (Object.keys(partial).length === 0) return false
     await this.#binding.projectUpdate(this.handle, partial)
+    this.#last = next
+    this.#gate.remember(next)
     return true
   }
 
@@ -213,9 +244,14 @@ export class FrostfastProject {
 
   /** Flush the Rust-side graph state and release the handle. Idempotent. */
   async shutdown(): Promise<void> {
-    if (this.#stopped) return
-    this.#stopped = true
-    await this.#binding.projectShutdown(this.handle)
+    if (!this.#shutdownPromise) {
+      const shutdown = this.#binding.projectShutdown(this.handle)
+      this.#shutdownPromise = shutdown.catch((error: unknown) => {
+        this.#shutdownPromise = undefined
+        throw error
+      })
+    }
+    await this.#shutdownPromise
   }
 
   async onExit(): Promise<void> {
@@ -227,20 +263,48 @@ export class FrostfastProject {
   // -------------------------------------------------------------------------
 
   /** Route-graph changes. */
-  entrypointEvents(): AsyncIterable<NapiEntrypoints> {
+  entrypointEvents(signal?: AbortSignal): AsyncIterable<NapiEntrypoints> {
     return this.#stream(
-      () => this.#binding.projectEntrypointsSubscribe(this.handle),
-      (payload) =>
-        stripDiscardedIssues(payload as object, this.issuePolicy) as unknown as NapiEntrypoints
+      (callback) => this.#binding.projectEntrypointsSubscribe(this.handle, callback),
+      (payload) => {
+        const result = (stripDiscardedIssues(
+          payload as NapiEventResult<NapiEntrypoints | null>,
+          this.issuePolicy
+        ) ?? { value: null }) as NapiEventResult<NapiEntrypoints | null>
+        if (result.value && result.value.routes instanceof Map) return result.value
+        if (
+          result.value === null ||
+          (typeof result.value === 'object' &&
+            result.value !== null &&
+            Object.keys(result.value).length === 0)
+        ) {
+          return { routes: new Map() }
+        }
+        throw new Error('Frostfast entrypoint subscription returned an invalid payload')
+      },
+      signal
     )
   }
 
   /** Build-status ticks; aggregationMs bounds the chatter (spec H-10). */
   updateInfoEvents(
-    aggregationMs = 30
+    aggregationMs = 30,
+    signal?: AbortSignal
   ): AsyncIterable<{ type: 'start' | 'end'; value?: unknown }> {
-    return this.#stream(() =>
-      this.#binding.projectUpdateInfoSubscribe(this.handle, aggregationMs)
+    return this.#stream(
+      (callback) =>
+        this.#binding.projectUpdateInfoSubscribe(this.handle, aggregationMs, callback),
+      (payload) => {
+        if (payload === null || payload === undefined) {
+          throw new Error('Frostfast emitted an empty update-info message')
+        }
+        const message = payload as NapiUpdateMessage
+        if (message.updateType !== 'start' && message.updateType !== 'end') {
+          throw new Error(`Frostfast emitted an unknown update type: ${message.updateType}`)
+        }
+        return { type: message.updateType, value: message.value }
+      },
+      signal
     )
   }
 
@@ -249,62 +313,110 @@ export class FrostfastProject {
    * includeIssues gate tells Rust NOT to marshal discarded issues at all
    * (spec H-09) — the v1 waste never crosses the boundary.
    */
-  hmrEvents(chunkName: string, target: HmrTarget = HmrTarget.Client): AsyncIterable<unknown> {
+  hmrEvents(
+    chunkName: string,
+    target: HmrTarget = HmrTarget.Client,
+    signal?: AbortSignal
+  ): AsyncIterable<unknown> {
     return this.#stream(
-      () =>
+      (callback) =>
         this.#binding.projectHmrEvents(
           this.handle,
           chunkName,
           target,
-          shouldForwardIssues(this.issuePolicy)
+          shouldForwardIssues(this.issuePolicy),
+          callback
         ),
-      (payload) => stripDiscardedIssues(payload as object, this.issuePolicy)
+      (payload) => stripDiscardedIssues(payload as object, this.issuePolicy),
+      signal
     )
   }
 
   /** Server-target HMR (fast refresh / restart instructions). */
-  serverHmrEvents(): AsyncIterable<unknown> {
-    return this.#stream(() =>
-      this.#binding.projectAllHmrEvents(this.handle, HmrTarget.Server)
+  serverHmrEvents(signal?: AbortSignal): AsyncIterable<unknown> {
+    return this.#stream(
+      (callback) =>
+        this.#binding.projectAllHmrEvents(
+          this.handle,
+          HmrTarget.Server,
+          shouldForwardIssues(this.issuePolicy),
+          callback
+        ),
+      (payload) => stripDiscardedIssues(payload as IssueBearingPayload, this.issuePolicy),
+      signal
     )
   }
 
   async *#stream<T>(
-    subscribe: () => Promise<RootTaskHandle>,
-    map: (payload: unknown) => T = (p) => p as T
+    subscribe: (callback: NapiEventCallback<unknown>) => RootTaskHandle,
+    map: (payload: unknown) => T = (p) => p as T,
+    signal?: AbortSignal
   ): AsyncGenerator<T, void, undefined> {
-    const task = await subscribe()
+    const queue: StreamEvent[] = []
+    let waiting:
+      | {
+          resolve: (event: StreamEvent | typeof STREAM_ABORTED) => void
+        }
+      | undefined
+    let closed = false
+    const callback: NapiEventCallback<unknown> = (error, payload) => {
+      if (closed) return
+      const event = { error, payload }
+      if (waiting) {
+        const current = waiting
+        waiting = undefined
+        current.resolve(event)
+      } else {
+        queue.push(event)
+      }
+    }
+
+    const task = subscribe(callback)
     try {
-      // Each iteration awaits the next native task message; consumers that
-      // break/return/throw hit the finally and the RootTask is disposed.
       while (true) {
-        const payload = await recvNextTaskMessage(task)
-        if (payload === END_OF_STREAM) break
-        yield map(payload)
+        if (signal?.aborted) break
+        const event =
+          queue.length > 0
+            ? queue.shift()!
+            : await waitForEvent(signal, (next) => (waiting = next))
+        if (event === STREAM_ABORTED) break
+        if (event.error) throw event.error
+        yield map(event.payload)
       }
     } finally {
+      closed = true
+      waiting = undefined
       this.#binding.rootTaskDispose(task)
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// Task-message pump. In a full build these are the registered
-// recv/sendTaskMessage worker-channel exports; isolated behind one seam so
-// the pump contract is explicit and swappable (tests install a stub).
-// ---------------------------------------------------------------------------
+const STREAM_ABORTED: unique symbol = Symbol('frostfast.stream-aborted')
+type StreamEvent = { error: Error | null; payload: unknown }
 
-export const END_OF_STREAM: unique symbol = Symbol('frostfast.end-of-stream')
-
-export type TaskMessagePump = (task: RootTaskHandle) => Promise<unknown>
-
-let taskPump: TaskMessagePump = () =>
-  Promise.reject(new Error('No Frostfast task-message pump installed'))
-
-export function installTaskMessagePump(pump: TaskMessagePump): void {
-  taskPump = pump
-}
-
-function recvNextTaskMessage(task: RootTaskHandle): Promise<unknown> {
-  return taskPump(task)
+function waitForEvent(
+  signal: AbortSignal | undefined,
+  setWaiting: (
+    waiting:
+      | {
+          resolve: (event: StreamEvent | typeof STREAM_ABORTED) => void
+        }
+      | undefined
+  ) => void
+): Promise<StreamEvent | typeof STREAM_ABORTED> {
+  return new Promise((resolve) => {
+    const onAbort = (): void => {
+      signal?.removeEventListener('abort', onAbort)
+      setWaiting(undefined)
+      resolve(STREAM_ABORTED)
+    }
+    setWaiting({
+      resolve: (payload) => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve(payload)
+      },
+    })
+    if (signal?.aborted) onAbort()
+    else signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }

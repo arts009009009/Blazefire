@@ -10,12 +10,14 @@
  * never keep the process alive (spec H-10).
  */
 
-import type { FrostfastProject } from '../compiler/project.js'
+import { getRouteNames, type FrostfastProject } from '../compiler/project.js'
 import type { HmrMessage } from './hmr-protocol.js'
 
 export interface HotReloaderOptions {
   project: FrostfastProject
   emit: (message: HmrMessage) => void
+  /** Report errors from detached native event-stream consumers. */
+  onError?: (error: unknown) => void
   /** Defer 'building' so instant rebuilds don't flicker. */
   buildingDeferMs?: number
 }
@@ -30,16 +32,39 @@ export interface HotReloader {
 export async function createHotReloader(options: HotReloaderOptions): Promise<HotReloader> {
   const { project, emit } = options
   const buildingDeferMs = options.buildingDeferMs ?? 100
+  const onError =
+    options.onError ??
+    ((error: unknown) => console.error('[Blazefire] hot-reloader stream failed', error))
   const controller = new AbortController()
   const clientSubscriptions = new Map<string, Set<(payload: unknown) => void>>()
+  const streamTasks = new Set<Promise<void>>()
+
+  const reportError = (error: unknown): void => {
+    try {
+      onError(error)
+    } catch (callbackError) {
+      console.error('[Blazefire] hot-reloader error handler failed', callbackError)
+    }
+  }
+
+  const track = (task: Promise<void>): void => {
+    streamTasks.add(task)
+    void task.then(
+      () => streamTasks.delete(task),
+      (error: unknown) => {
+        streamTasks.delete(task)
+        if (!controller.signal.aborted) reportError(error)
+      }
+    )
+  }
 
   // --- route graph ---------------------------------------------------------
-  void (async () => {
+  track((async () => {
     let known = new Set<string>()
     try {
-      for await (const entrypoints of project.entrypointEvents()) {
+      for await (const entrypoints of project.entrypointEvents(controller.signal)) {
         if (controller.signal.aborted) return
-        const next = new Set(Object.keys(entrypoints.routes ?? {}))
+        const next = new Set(getRouteNames(entrypoints))
         for (const route of next) {
           if (!known.has(route)) emit({ type: 'route-added', pathname: route })
         }
@@ -49,34 +74,53 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         known = next
       }
     } catch (error) {
-      if (!controller.signal.aborted) throw error
+      if (!controller.signal.aborted) reportError(error)
     }
-  })()
+  })())
 
   // --- build status --------------------------------------------------------
-  void (async () => {
+  track((async () => {
     let defer: ReturnType<typeof setTimeout> | undefined
     try {
-      for await (const info of project.updateInfoEvents(30)) {
+      for await (const info of project.updateInfoEvents(30, controller.signal)) {
         if (controller.signal.aborted) return
         if (info.type === 'start') {
           // Debounce: only announce BUILDING if the tick hasn't ended fast.
-          defer = setTimeout(() => emit({ type: 'building', source: 'frostfast' }), buildingDeferMs)
+          if (defer) clearTimeout(defer)
+          defer = setTimeout(() => {
+            try {
+              emit({ type: 'building', source: 'frostfast' })
+            } catch (error) {
+              reportError(error)
+            }
+          }, buildingDeferMs)
           defer.unref?.()
         } else if (info.type === 'end') {
-          if (defer) clearTimeout(defer)
+          if (defer) {
+            clearTimeout(defer)
+            defer = undefined
+          }
+          // Surface real diagnostics when the native side provides them,
+          // instead of always reporting a clean, empty build.
+          const value = (info.value ?? {}) as {
+            hash?: unknown
+            errors?: unknown
+            warnings?: unknown
+          }
           emit({
             type: 'built',
-            hash: '',
-            errors: [],
-            warnings: [],
+            hash: typeof value.hash === 'string' ? value.hash : '',
+            errors: Array.isArray(value.errors) ? (value.errors as string[]) : [],
+            warnings: Array.isArray(value.warnings) ? (value.warnings as string[]) : [],
           })
         }
       }
     } catch (error) {
-      if (!controller.signal.aborted) throw error
+      if (!controller.signal.aborted) reportError(error)
+    } finally {
+      if (defer) clearTimeout(defer)
     }
-  })()
+  })())
 
   return {
     async subscribeClient(chunkName: string, listener?: (payload: unknown) => void) {
@@ -88,9 +132,13 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
 
       if (isNew) {
         // Own stream per chunk; consumed until dispose().
-        void (async () => {
+        track((async () => {
           try {
-            for await (const payload of project.hmrEvents(chunkName)) {
+            for await (const payload of project.hmrEvents(
+              chunkName,
+              undefined,
+              controller.signal
+            )) {
               if (controller.signal.aborted) return
               emit({ type: 'update', payload })
               for (const l of clientSubscriptions.get(chunkName) ?? []) {
@@ -98,20 +146,20 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
               }
             }
           } catch (error) {
-            if (!controller.signal.aborted) throw error
+            if (!controller.signal.aborted) reportError(error)
           }
-        })()
+        })())
       }
 
       return async () => {
         if (listener) listeners.delete(listener)
-        if (listeners.size === 0) clientSubscriptions.delete(chunkName)
       }
     },
 
     async dispose() {
       controller.abort()
       clientSubscriptions.clear()
+      await Promise.all(streamTasks)
     },
   }
 }

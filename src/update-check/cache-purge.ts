@@ -8,6 +8,7 @@
  * than aborting the update.
  */
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { PackageManager } from './pm.js'
 import { quoteForCmd } from './pm.js'
@@ -124,7 +125,11 @@ export function removeNpmLockEntry(file: string): boolean {
 
   if (changed) {
     try {
-      fs.writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`)
+      // Atomic: a crash mid-write must never leave a truncated lockfile that
+      // breaks `npm ci` until it is regenerated.
+      const temp = `${file}.${process.pid}.tmp`
+      fs.writeFileSync(temp, `${JSON.stringify(parsed, null, 2)}\n`)
+      fs.renameSync(temp, file)
     } catch {
       return false
     }
@@ -139,15 +144,82 @@ function purgeBun(projectRoot: string): string[] {
   return removed
 }
 
+// --- cache-only helpers (non-destructive pre-install purge) ----------------
+// These clear only the manager's EXTERNAL caches so a stale tarball is never
+// served, while leaving node_modules/blazefire and lockfiles fully intact.
+// That keeps a FAILED update non-destructive (the working install survives).
+
+function purgeYarnClassicCache(cacheDir: string): string[] {
+  return globRemove(cacheDir, (entry) => /^blazefire/i.test(entry))
+}
+
+function purgeYarnBerryCache(cacheDir: string): string[] {
+  return globRemove(cacheDir, (entry) => /^blazefire-npm-/i.test(entry))
+}
+
+function pnpmStoreDir(projectRoot: string): string | null {
+  try {
+    const result = spawnSync('pnpm', ['store', 'path'], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      timeout: 5000,
+      shell: process.platform === 'win32',
+    })
+    const dir = (result.stdout ?? '').trim()
+    if (dir) return dir
+  } catch {
+    // fall through
+  }
+  return null
+}
+
+function purgePnpmStore(projectRoot: string): string[] {
+  const store = pnpmStoreDir(projectRoot)
+  return store ? globRemove(store, (entry) => /blazefire/i.test(entry)) : []
+}
+
+function purgeBunCache(): string[] {
+  const dir = path.join(os.homedir(), '.bun', 'install', 'cache')
+  return globRemove(dir, (entry) => /blazefire/i.test(entry))
+}
+
+export interface PurgeOptions {
+  /**
+   * Clear only the manager's external caches (never node_modules or
+   * lockfiles). Used BEFORE an install so a failed update leaves the working
+   * tree untouched.
+   */
+  cachesOnly?: boolean
+}
+
 /**
  * Remove every cached copy of blazefire for `manager`. Returns the paths
  * removed (for logging); never throws.
  */
 export function purgeCachedInstall(
   manager: PackageManager,
-  projectRoot: string
+  projectRoot: string,
+  options: PurgeOptions = {}
 ): string[] {
   try {
+    if (options.cachesOnly) {
+      switch (manager) {
+        case 'yarn': {
+          const cacheDir = yarnCacheDir(projectRoot)
+          const isBerry = fs.existsSync(path.join(projectRoot, '.yarn'))
+          return isBerry ? purgeYarnBerryCache(cacheDir) : purgeYarnClassicCache(cacheDir)
+        }
+        case 'pnpm':
+          return purgePnpmStore(projectRoot)
+        case 'bun':
+          return purgeBunCache()
+        default:
+          // npm's cache is content-addressed; a new version always carries a
+          // fresh integrity, so there is nothing stale to purge non-destructively.
+          return []
+      }
+    }
+
     switch (manager) {
       case 'yarn': {
         const cacheDir = yarnCacheDir(projectRoot)

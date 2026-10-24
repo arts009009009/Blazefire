@@ -24,7 +24,10 @@ import {
 export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextConfigLike {
   if (!base || Object.keys(base).length === 0) return ours
 
-  if ('webpack' in base) {
+  // Only a REAL webpack hook is fatal. Testing the value (not key presence)
+  // means `webpack: undefined` — the common conditional idiom — and an
+  // inherited `webpack` property no longer refuse to build.
+  if (typeof (base as { webpack?: unknown }).webpack === 'function') {
     throw new BlazefireConfigError(
       'Blazefire v2 is Turbopack-only: the `webpack()` config hook is not supported. ' +
         'Remove it from your config (or migrate its transform to `turbopack.rules`).'
@@ -51,13 +54,15 @@ export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextCo
   // Shallow-merge so `turbopack.root` (etc.) survives; only `rules` needs a
   // deeper merge because both sides may define globs.
   if (base.turbopack || ours.turbopack) {
+    const rules = { ...(base.turbopack?.rules || {}) }
+    for (const [glob, oursRules] of Object.entries(ours.turbopack?.rules || {})) {
+      rules[glob] = [...(rules[glob] || []), ...oursRules]
+    }
+
     out.turbopack = {
       ...(base.turbopack || {}),
       ...(ours.turbopack || {}),
-      rules: {
-        ...(base.turbopack?.rules || {}),
-        ...(ours.turbopack?.rules || {}),
-      } as Record<string, TurbopackRule[]>,
+      rules: rules as Record<string, TurbopackRule[]>,
     }
   }
 

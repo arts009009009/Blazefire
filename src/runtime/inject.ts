@@ -13,9 +13,8 @@
  *    dev-only, so production bundles pay nothing (the observer code paths
  *    are behind a build-time-inlined NODE_ENV check and are eliminated by
  *    define-inlining).
- *  - DEV: observers exist only while the overlay can still appear, and each
- *    shadow-root observer SETTLES (disconnects after N consecutive no-op
- *    passes) instead of watching forever.
+ *  - DEV: portal discovery and shadow-root observers exist only while their
+ *    overlay portal is mounted, then disconnect on portal removal.
  *
  * SSR-safe: bails immediately when no document exists. Toggles travel as
  * static process.env.NEXT_PUBLIC_* member expressions so the bundler
@@ -32,9 +31,6 @@ import {
 const THEME_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_THEME !== 'false'
 const OVERLAY_ENABLED = process.env.NEXT_PUBLIC_BLAZEFIRE_OVERLAY !== 'false'
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
-
-/** Dev-only: how many consecutive no-op passes settle a shadow-root observer. */
-const SETTLE_AFTER_PASSES = 3
 
 export interface OverlayRuntime {
   /** Release every observer. Idempotent. */
@@ -53,6 +49,7 @@ export function injectStyles(doc: Document = document): HTMLStyleElement | null 
   const style = doc.createElement('style')
   style.id = 'blazefire-styles'
   style.setAttribute('data-blazefire', BLAZEFIRE_BRANDING.version)
+  applyCspNonce(style, doc)
   style.textContent = blazefireStyles()
 
   if (doc.head) {
@@ -73,13 +70,16 @@ export function injectStyles(doc: Document = document): HTMLStyleElement | null 
  * Fully idempotent: every write is conditional, so a settled pass performs
  * zero DOM writes (and therefore triggers no further mutations).
  */
-export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): void {
+export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): boolean {
+  let changed = false
   if (!root.getElementById('blazefire-overlay-styles')) {
     const style = doc.createElement('style')
     style.id = 'blazefire-overlay-styles'
     style.setAttribute('data-blazefire', 'overlay')
+    applyCspNonce(style, doc)
     style.textContent = blazefireOverlayStyles()
     root.appendChild(style)
+    changed = true
   }
 
   for (const label of BLAZEFIRE_BRANDING.labels) {
@@ -94,18 +94,23 @@ export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): 
       if (label.attribute) {
         const cur = el.getAttribute(label.attribute)
         if (cur !== null && label.match.test(cur)) {
-          setAttr(el, label.attribute, cur.replace(label.match, label.replace))
+          changed =
+            setAttr(el, label.attribute, cur.replace(label.match, label.replace)) || changed
         }
       } else {
         const text = textChild(el)
         if (text && label.match.test(text.data)) {
           const next = text.data.replace(label.match, label.replace)
-          if (next !== text.data) text.data = next
+          if (next !== text.data) {
+            text.data = next
+            changed = true
+          }
         }
       }
-      if (label.title) setAttr(el, 'title', label.title)
+      if (label.title) changed = setAttr(el, 'title', label.title) || changed
     }
   }
+  return changed
 }
 
 /**
@@ -117,7 +122,8 @@ export function installOverlayRuntime(
   dev: boolean,
   doc: Document = document
 ): OverlayRuntime {
-  const observers: MutationObserver[] = []
+  const observers = new Set<MutationObserver>()
+  const rootObservers = new Map<ShadowRoot, MutationObserver>()
   let disposed = false
 
   const rebrand = (root: ShadowRoot): void => {
@@ -127,37 +133,39 @@ export function installOverlayRuntime(
 
   const scanPortals = (): void => {
     if (disposed) return
+    const activeRoots = new Set<ShadowRoot>()
     for (const portal of doc.querySelectorAll('nextjs-portal, blazefire-portal')) {
-      if (portal.shadowRoot) rebrandPortal(portal.shadowRoot)
+      if (portal.shadowRoot) {
+        activeRoots.add(portal.shadowRoot)
+        rebrandPortal(portal.shadowRoot)
+      }
+    }
+    for (const [root, observer] of rootObservers) {
+      if (!activeRoots.has(root)) {
+        observer.disconnect()
+        observers.delete(observer)
+        rootObservers.delete(root)
+      }
     }
   }
 
   const rebrandPortal = (root: ShadowRoot): void => {
     rebrand(root)
-    if (!dev || disposed) return // PRODUCTION: one-shot, no observer, ever.
+    if (!dev || disposed || typeof MutationObserver === 'undefined') {
+      return // Production: one-shot, no observer.
+    }
 
-    // Mutations inside a shadow root never reach document observers, so each
-    // themed root gets its own — which then SETTLES instead of watching
-    // forever (the v1 leak).
-    if ((root as unknown as { __blazefireObserved?: boolean }).__blazefireObserved) return
-    ;(root as unknown as { __blazefireObserved?: boolean }).__blazefireObserved = true
-
-    let cleanPasses = 0
+    // Overlay contents can be mounted or replaced long after the portal's
+    // first render; keep this dev-only observer until its portal is removed.
+    if (rootObservers.has(root)) return
     const observer = new MutationObserver(() => {
       if (disposed) return
-      // applyOverlayToRoot only writes when something differs; a pass with
-      // no writes means the overlay has settled.
-      const before = root.innerHTML.length
+      // Writes remain conditional so this observer does not trigger a loop.
       applyOverlayToRoot(root, doc)
-      const after = root.innerHTML.length
-      cleanPasses = before === after ? cleanPasses + 1 : 0
-      if (cleanPasses >= SETTLE_AFTER_PASSES) {
-        observer.disconnect()
-        observers.splice(observers.indexOf(observer), 1)
-      }
     })
     observer.observe(root, { childList: true, subtree: true, characterData: true })
-    observers.push(observer)
+    observers.add(observer)
+    rootObservers.set(root, observer)
   }
 
   scanPortals()
@@ -169,19 +177,19 @@ export function installOverlayRuntime(
   if (dev && !disposed && typeof MutationObserver !== 'undefined') {
     portalObserver = new MutationObserver(() => scanPortals())
     portalObserver.observe(doc.documentElement, { childList: true, subtree: true })
-    observers.push(portalObserver)
+    observers.add(portalObserver)
   }
 
   return {
     dispose() {
       if (disposed) return
       disposed = true
-      portalObserver?.disconnect()
-      for (const o of observers) o.disconnect()
-      observers.length = 0
+      for (const observer of observers) observer.disconnect()
+      observers.clear()
+      rootObservers.clear()
     },
     observerCount() {
-      return observers.length
+      return observers.size
     },
   }
 }
@@ -205,6 +213,24 @@ if (typeof document !== 'undefined') {
 
 // --- micro-DOM helpers ------------------------------------------------------
 
+/**
+ * Copy a CSP nonce onto an injected <style> so it survives a nonce-based
+ * Content-Security-Policy. Reads the nonce from an existing [nonce] element
+ * (the IDL `.nonce` still holds it even though the content attribute is
+ * hidden). Best-effort; a missing/odd document just skips the nonce.
+ */
+function applyCspNonce(style: HTMLStyleElement, doc: Document): void {
+  try {
+    const el = doc.querySelector('[nonce]') as
+      | (Element & { nonce?: string })
+      | null
+    const nonce = el?.nonce || el?.getAttribute('nonce') || undefined
+    if (nonce) style.nonce = nonce
+  } catch {
+    // no querySelector / no nonce present — nothing to copy
+  }
+}
+
 function textChild(el: Element): Text | null {
   let node = el.firstChild
   while (node) {
@@ -216,6 +242,8 @@ function textChild(el: Element): Text | null {
   return null
 }
 
-function setAttr(el: Element, name: string, value: string): void {
-  if (el.getAttribute(name) !== value) el.setAttribute(name, value)
+function setAttr(el: Element, name: string, value: string): boolean {
+  if (el.getAttribute(name) === value) return false
+  el.setAttribute(name, value)
+  return true
 }

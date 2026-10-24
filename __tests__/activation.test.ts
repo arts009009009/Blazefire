@@ -1,0 +1,133 @@
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  BACKUP_DIR,
+  HOOK_COMMAND,
+  ensureHook,
+  isLifecycleHook,
+  locateCandidates,
+  restore,
+} from '../src/postinstall/activation'
+
+describe('restore', () => {
+  let projectRoot: string
+
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'blazefire-restore-'))
+    mkdirSync(join(projectRoot, BACKUP_DIR))
+  })
+
+  afterEach(() => {
+    rmSync(projectRoot, { recursive: true, force: true })
+  })
+
+  it('restores config filenames that contain multiple dots', () => {
+    const configName = 'next.config.js'
+    const liveConfig = join(projectRoot, configName)
+    const original = 'module.exports = { reactStrictMode: true }\n'
+    writeFileSync(liveConfig, 'module.exports = blazefire({ reactStrictMode: true })\n')
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({
+      scripts: { postinstall: HOOK_COMMAND },
+    }))
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, `${configName}.2026-10-24T11-00-00-000Z.original`),
+      original
+    )
+
+    expect(restore(projectRoot)).toBe(true)
+    expect(readFileSync(liveConfig, 'utf8')).toBe(original)
+    expect(existsSync(join(projectRoot, 'package.json'))).toBe(true)
+    expect(
+      JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall
+    ).toBeUndefined()
+  })
+
+  it('restores the earliest pristine backup and removes only a real Blazefire hook', () => {
+    const liveConfig = join(projectRoot, 'next.config.js')
+    const original = 'module.exports = { reactStrictMode: true }\n'
+    const previouslyWrapped = 'module.exports = blazefire({ reactStrictMode: true })\n'
+    writeFileSync(liveConfig, previouslyWrapped)
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ scripts: { postinstall: 'echo "blazefire is installed"' } })
+    )
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      original
+    )
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-02-01T00-00-00-000Z.original'),
+      previouslyWrapped
+    )
+
+    expect(restore(projectRoot)).toBe(true)
+    expect(readFileSync(liveConfig, 'utf8')).toBe(original)
+    expect(isLifecycleHook('echo "blazefire is installed"')).toBe(false)
+    expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall)
+      .toBe('echo "blazefire is installed"')
+  })
+
+  it('chains the activation hook when the host script only mentions Blazefire', () => {
+    const packageJson = join(projectRoot, 'package.json')
+    writeFileSync(
+      packageJson,
+      JSON.stringify({ scripts: { postinstall: 'echo "blazefire is installed"' } })
+    )
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    expect(JSON.parse(readFileSync(packageJson, 'utf8')).scripts.postinstall).toBe(
+      `echo "blazefire is installed" && ${HOOK_COMMAND}`
+    )
+    expect(isLifecycleHook('blazefire init')).toBe(false)
+    expect(isLifecycleHook(HOOK_COMMAND)).toBe(true)
+  })
+
+  it('restores backed-up configs and hooks in configured workspaces', () => {
+    const workspaceRoot = join(projectRoot, 'apps', 'web')
+    const configName = 'next.config.js'
+    const rootConfig = join(projectRoot, configName)
+    const workspaceConfig = join(workspaceRoot, configName)
+    mkdirSync(workspaceRoot, { recursive: true })
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({
+      workspaces: ['apps/web'],
+      scripts: { postinstall: HOOK_COMMAND },
+    }))
+    writeFileSync(join(workspaceRoot, 'package.json'), JSON.stringify({
+      scripts: { postinstall: HOOK_COMMAND },
+    }))
+    writeFileSync(rootConfig, 'module.exports = blazefire({ root: true })\n')
+    writeFileSync(workspaceConfig, 'module.exports = blazefire({ workspace: true })\n')
+    writeFileSync(
+      join(projectRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      'module.exports = { root: true }\n'
+    )
+    mkdirSync(join(workspaceRoot, BACKUP_DIR))
+    writeFileSync(
+      join(workspaceRoot, BACKUP_DIR, 'next.config.js.2026-01-01T00-00-00-000Z.original'),
+      'module.exports = { workspace: true }\n'
+    )
+
+    expect(restore(projectRoot)).toBe(true)
+    expect(readFileSync(rootConfig, 'utf8')).toBe('module.exports = { root: true }\n')
+    expect(readFileSync(workspaceConfig, 'utf8')).toBe('module.exports = { workspace: true }\n')
+    expect(JSON.parse(readFileSync(join(workspaceRoot, 'package.json'), 'utf8')).scripts.postinstall)
+      .toBeUndefined()
+  })
+
+  it('discovers Next.js configs in globbed workspaces without a root config', () => {
+    const workspaceRoot = join(projectRoot, 'apps', 'web')
+    mkdirSync(workspaceRoot, { recursive: true })
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ workspaces: ['apps/*'] })
+    )
+    writeFileSync(join(workspaceRoot, 'package.json'), '{}')
+    writeFileSync(join(workspaceRoot, 'next.config.js'), 'module.exports = {}\n')
+
+    expect(locateCandidates(projectRoot)).toEqual({
+      configs: [join(workspaceRoot, 'next.config.js')],
+      packageRoots: [workspaceRoot],
+    })
+  })
+})

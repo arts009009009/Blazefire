@@ -17,18 +17,46 @@
 
 import { createRequire } from 'node:module'
 import { arch, platform } from 'node:process'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import type { FrostfastBinding } from './native-contract.js'
 import { FROSTFAST_VERSION } from '../version.js'
+import { PACKAGE_ROOT } from '../package-root.js'
 
-/** napi platformArchABI, e.g. linux-x64-gnu, darwin-arm64, win32-x64-msvc. */
+/** napi platformArchABI, e.g. linux-x64-gnu, linux-x64-musl, darwin-arm64. */
 export function platformArchABI(): string {
   const os = platform
   const cpu = arch
   if (os === 'darwin') return `${os}-${cpu}`
   if (os === 'win32') return `${os}-${cpu}-msvc`
-  if (os === 'linux') return `${os}-${cpu}-gnu`
+  if (os === 'linux') return `${os}-${cpu}-${detectLinuxLibc()}`
   return `${os}-${cpu}`
+}
+
+/**
+ * musl (Alpine — extremely common in Docker) vs glibc. napi publishes
+ * SEPARATE `*-musl` and `*-gnu` packages, so hard-coding `-gnu` hard-failed
+ * every musl host even with a correct musl binary installed.
+ */
+function detectLinuxLibc(): 'musl' | 'gnu' {
+  try {
+    const report = (
+      process as unknown as {
+        report?: { getReport?: () => { header?: { glibcVersionRuntime?: string } } }
+      }
+    ).report
+    const header = report?.getReport?.()?.header
+    // glibc reports a runtime version; musl reports none.
+    return header?.glibcVersionRuntime ? 'gnu' : 'musl'
+  } catch {
+    return 'gnu'
+  }
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  const out: string[] = []
+  for (const v of values) if (v && !out.includes(v)) out.push(v)
+  return out
 }
 
 export interface LoadLadderDeps {
@@ -60,7 +88,10 @@ export class FrostfastBindingError extends Error {
 export function defaultDeps(): LoadLadderDeps {
   return {
     env: (name) => process.env[name],
-    requireNative: (p) => createRequire(import.meta.url)(p) as unknown as FrostfastBinding,
+    // All ladder paths are absolute, so the require anchor only needs to be
+    // absolute too; avoid module-relative resolution for this native load.
+    requireNative: (p) =>
+      createRequire(join(process.cwd(), 'noop.js'))(p) as unknown as FrostfastBinding,
     resolveFrom: (baseDir, specifier) => {
       try {
         return createRequire(join(baseDir, 'noop.js')).resolve(specifier)
@@ -89,12 +120,28 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
   const attempts: LadderAttempt[] = []
   const cwd = deps.env('INIT_CWD') ?? process.cwd()
 
+  // Candidate anchors for package resolution, most-specific first: this
+  // package's own location (blazefire's deps live here), the running
+  // process's cwd, and the directory the package manager was invoked from
+  // (INIT_CWD). Anchoring on a single dir broke monorepos.
+  const bases = uniqueStrings([PACKAGE_ROOT, process.cwd(), deps.env('INIT_CWD')])
+  const resolveAny = (specifier: string): string | null => {
+    for (const base of bases) {
+      const hit = deps.resolveFrom(base, specifier)
+      if (hit) return hit
+    }
+    return null
+  }
+
   const candidates: Array<{ source: string; path: string | null }> = [
     {
       source: 'FROSTFAST_NATIVE_PATH',
       path: (() => {
         const p = deps.env('FROSTFAST_NATIVE_PATH')
-        return p && isAbsolute(p) ? p : null
+        if (!p) return null
+        // Resolve a relative override against the project dir instead of
+        // silently dropping it and misreporting "not configured".
+        return isAbsolute(p) ? p : resolve(cwd, p)
       })(),
     },
     {
@@ -106,11 +153,11 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
     },
     {
       source: '@frostfast/native',
-      path: deps.resolveFrom(cwd, `@frostfast/native/native/frostfast.${abi}.node`),
+      path: resolveAny(`@frostfast/native/native/frostfast.${abi}.node`),
     },
     {
       source: `@frostfast/${abi}`,
-      path: deps.resolveFrom(cwd, `@frostfast/${abi}/frostfast.${abi}.node`),
+      path: resolveAny(`@frostfast/${abi}/frostfast.${abi}.node`),
     },
   ]
 
@@ -179,8 +226,14 @@ export async function loadFrostfastBinding(
     loadedBindings = binding
     return { binding, source }
   })
-  const { binding } = await pendingBindings
-  return binding
+  const pending = pendingBindings
+  try {
+    const { binding } = await pending
+    return binding
+  } catch (error) {
+    if (pendingBindings === pending) pendingBindings = undefined
+    throw error
+  }
 }
 
 /**
@@ -222,9 +275,43 @@ export function ensureWorkerScheduler(
   terminate: (termination: { id: number }) => void
 ): boolean {
   if (workerSchedulerRegistered) return false
+  // A binding (or a test mock) without the hook has nothing to register.
+  if (typeof binding.registerWorkerScheduler !== 'function') return false
   binding.registerWorkerScheduler(create, terminate)
   workerSchedulerRegistered = true
   return true
+}
+
+// --- default JS worker scheduler (spec H-13) ------------------------------
+// Rust schedules JS workers through this global hook. v2 wires it to real
+// node:worker_threads so Frostfast's worker-backed features actually run —
+// and registers it exactly ONCE per process (never re-overwritten per project).
+const activeWorkers = new Map<number, Worker>()
+let nextWorkerId = 1
+
+function createJsWorker(creation: { options: { filename: string; cwd: string } }): number {
+  const id = nextWorkerId++
+  const filename = isAbsolute(creation.options.filename)
+    ? creation.options.filename
+    : resolve(creation.options.cwd, creation.options.filename)
+  const worker = new Worker(filename)
+  worker.unref() // an idle scheduled worker must never keep the process alive
+  worker.once('exit', () => activeWorkers.delete(id))
+  worker.once('error', () => activeWorkers.delete(id))
+  activeWorkers.set(id, worker)
+  return id
+}
+
+function terminateJsWorker(termination: { id: number }): void {
+  const worker = activeWorkers.get(termination.id)
+  if (!worker) return
+  activeWorkers.delete(termination.id)
+  void worker.terminate()
+}
+
+/** Register the default node:worker_threads scheduler once per process (H-13). */
+export function ensureDefaultWorkerScheduler(binding: FrostfastBinding): boolean {
+  return ensureWorkerScheduler(binding, createJsWorker, terminateJsWorker)
 }
 
 /** Test-only: clear the scheduler registration latch. */

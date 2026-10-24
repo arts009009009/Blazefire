@@ -45,11 +45,15 @@ Blazefire
 /**
  * The engine call — the same as the postinstall. Returns an exit code:
  * 0 = activated (or already active), 1 = skipped/failed.
+ *
+ * Passes ignoreSkipEnv so the documented manual fallback works even in the
+ * locked-down environments that set BLAZEFIRE_SKIP_AUTO=1 (the opt-out is for
+ * the AUTOMATIC postinstall, not an explicit `npx blazefire init`).
  */
 function init(): number {
   try {
-    run()
-    return 0
+    const outcome = run(process.cwd(), { ignoreSkipEnv: true })
+    return outcome === 'skipped' ? 1 : 0
   } catch (error) {
     process.stderr.write(
       `[Blazefire] activation failed: ${(error as Error)?.message ?? error}\n`
