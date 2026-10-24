@@ -17,18 +17,46 @@
 
 import { createRequire } from 'node:module'
 import { arch, platform } from 'node:process'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import type { FrostfastBinding } from './native-contract.js'
 import { FROSTFAST_VERSION } from '../version.js'
+import { PACKAGE_ROOT } from '../package-root.js'
 
-/** napi platformArchABI, e.g. linux-x64-gnu, darwin-arm64, win32-x64-msvc. */
+/** napi platformArchABI, e.g. linux-x64-gnu, linux-x64-musl, darwin-arm64. */
 export function platformArchABI(): string {
   const os = platform
   const cpu = arch
   if (os === 'darwin') return `${os}-${cpu}`
   if (os === 'win32') return `${os}-${cpu}-msvc`
-  if (os === 'linux') return `${os}-${cpu}-gnu`
+  if (os === 'linux') return `${os}-${cpu}-${detectLinuxLibc()}`
   return `${os}-${cpu}`
+}
+
+/**
+ * musl (Alpine — extremely common in Docker) vs glibc. napi publishes
+ * SEPARATE `*-musl` and `*-gnu` packages, so hard-coding `-gnu` hard-failed
+ * every musl host even with a correct musl binary installed.
+ */
+function detectLinuxLibc(): 'musl' | 'gnu' {
+  try {
+    const report = (
+      process as unknown as {
+        report?: { getReport?: () => { header?: { glibcVersionRuntime?: string } } }
+      }
+    ).report
+    const header = report?.getReport?.()?.header
+    // glibc reports a runtime version; musl reports none.
+    return header?.glibcVersionRuntime ? 'gnu' : 'musl'
+  } catch {
+    return 'gnu'
+  }
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  const out: string[] = []
+  for (const v of values) if (v && !out.includes(v)) out.push(v)
+  return out
 }
 
 export interface LoadLadderDeps {
