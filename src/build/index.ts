@@ -10,13 +10,13 @@
  * finally — the graph cache is always flushed before the process moves on.
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
 import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
 import type { RustifiedEnvVar } from '../config/serialize.js'
-import { BLAZEFIRE_VERSION } from '../version.js'
 
 export interface BuildInput {
   dir: string
@@ -37,7 +37,9 @@ export interface BuildResult {
 export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const started = Date.now()
   const distDir = input.distDir ?? join(input.dir, '.blazefire')
-  const buildId = input.buildId ?? BLAZEFIRE_VERSION
+  // Unique per build so successive builds are distinguishable (deployment
+  // ID / cache keys). A version-derived default made every build identical.
+  const buildId = input.buildId ?? randomUUID()
   const env = input.env ?? {}
 
   const binding = await loadFrostfastBinding()
