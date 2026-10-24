@@ -38,7 +38,7 @@ const OPTION_TYPES: Record<keyof BlazefireOptions, string> = {
 const DUAL_MEANING_KEYS = new Set(['headers', 'compiler'])
 
 /** Unambiguous boolean toggles we accept a string 'true'/'false' for (env interpolation). */
-const BOOLEAN_OPTION_KEYS = new set_(['theme', 'overlay'])
+const BOOLEAN_OPTION_KEYS = new Set(['theme', 'overlay'])
 
 export function isOurOption(key: string, value: unknown): boolean {
   const expected = OPTION_TYPES[key as keyof BlazefireOptions]
