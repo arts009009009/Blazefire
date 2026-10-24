@@ -16,6 +16,8 @@ import type { HmrMessage } from './hmr-protocol.js'
 export interface HotReloaderOptions {
   project: FrostfastProject
   emit: (message: HmrMessage) => void
+  /** Report errors from detached native event-stream consumers. */
+  onError?: (error: unknown) => void
   /** Defer 'building' so instant rebuilds don't flicker. */
   buildingDeferMs?: number
 }
@@ -30,6 +32,9 @@ export interface HotReloader {
 export async function createHotReloader(options: HotReloaderOptions): Promise<HotReloader> {
   const { project, emit } = options
   const buildingDeferMs = options.buildingDeferMs ?? 100
+  const onError =
+    options.onError ??
+    ((error: unknown) => console.error('[Blazefire] hot-reloader stream failed', error))
   const controller = new AbortController()
   const clientSubscriptions = new Map<string, Set<(payload: unknown) => void>>()
 
@@ -49,7 +54,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         known = next
       }
     } catch (error) {
-      if (!controller.signal.aborted) throw error
+      if (!controller.signal.aborted) onError(error)
     }
   })()
 
@@ -74,7 +79,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         }
       }
     } catch (error) {
-      if (!controller.signal.aborted) throw error
+      if (!controller.signal.aborted) onError(error)
     }
   })()
 
@@ -98,7 +103,7 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
               }
             }
           } catch (error) {
-            if (!controller.signal.aborted) throw error
+            if (!controller.signal.aborted) onError(error)
           }
         })()
       }

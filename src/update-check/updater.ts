@@ -6,10 +6,15 @@
  *   2. never block (the dev-time check is fire-and-forget)
  *   3. never nag (TTY-only, non-CI, one prompt per 24h window)
  */
-import { spawn, spawnSync } from 'node:child_process'
-import { purgeCachedInstall } from './cache-purge.js'
+import { spawnSync } from 'node:child_process'
 import { checkForUpdate } from './feed.js'
-import { detectPackageManager, isSafeSpec, resolveProjectRoot, updateCommand } from './pm.js'
+import {
+  detectPackageManager,
+  isSafeSpec,
+  readInstalledSpec,
+  resolveProjectRoot,
+  updateCommand,
+} from './pm.js'
 import { recentlyChecked, writeState } from './state.js'
 
 const SKIP_ENV = 'BLAZEFIRE_SKIP_UPDATE_CHECK'
@@ -28,23 +33,20 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
     const projectRoot = options.projectRoot ?? resolveProjectRoot() ?? process.cwd()
     const log = options.onLog ?? ((message: string) => process.stdout.write(`${message}\n`))
 
+    const projectSpec = readInstalledSpec(projectRoot)
+    if (projectSpec && !isSafeSpec(projectSpec)) {
+      log(`refusing to overwrite the pinned spec "${projectSpec}"`)
+      return 1
+    }
+
     const { latest, current } = await checkForUpdate()
     if (!latest) {
       log('could not reach the release feed — try again shortly')
       return 1
     }
-    if (isSafeSpec(current) && !isSafeSpec(latest)) {
-      log(`refusing to overwrite the pinned spec "${current}"`)
-      return 1
-    }
 
     const manager = detectPackageManager(projectRoot)
     log(`updating blazefire ${current} → ${latest} with ${manager}`)
-
-    const removed = purgeCachedInstall(manager, projectRoot)
-    if (removed.length > 0) {
-      log(`cleared ${removed.length} cached cop${removed.length === 1 ? 'y' : 'ies'}`)
-    }
 
     const { command, args } = updateCommand(manager, latest)
     const result = spawnSync(command, args, {
@@ -58,7 +60,7 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
       writeState({ lastCheck: Date.now(), latestVersion: latest })
       log('updated — restart your dev server to pick it up')
     } else {
-      log(`update failed (exit ${code}); nothing was left half-installed`)
+      log(`update failed (exit ${code})`)
     }
     return code
   } catch {
