@@ -69,7 +69,7 @@ accessor never loads (native-only contract). Version checks compare against
 | H-02 | Triple HMR stack (turbopack/webpack/rspack) | One pipeline: `dev/hot-reloader.ts` over graph streams |
 | H-03 | Pages router subsystem | Deleted; App Router only |
 | H-04 | Mirrored .js/.tsx pairs | Single TS source; `tsc` to `dist/`; structural guard test |
-| H-05 | Production document-wide MutationObserver | Prod = one-shot, zero observers; dev observers settle after N no-op passes and are disposed |
+| H-05 | Production document-wide MutationObserver | Prod = one-shot, zero observers; dev observers track mounted portals and are disposed when portals are removed |
 | H-06 | Build-trace/worker pools | Rust does tracing; JS worker usage reduced to the napi scheduler (idempotent) |
 | H-07 | JS watchers regardless of bundler | Driven by the graph's entrypoints/file-event streams |
 | H-08 | Pretty-printed config re-sent every update | Compact JSON + sha256 gate; `project.update()` skips unchanged configs (returns `false`) |
@@ -95,9 +95,9 @@ accessor never loads (native-only contract). Version checks compare against
   browser as a no-op — the v1 bug that made the toggles unswitchable).
 - `NODE_ENV === 'production'`: `installOverlayRuntime(dev=false)` performs a
   single scan and constructs **zero** MutationObservers.
-- Dev: one portal-discovery observer plus one per shadow root; each
-  shadow-root observer disconnects after `SETTLE_AFTER_PASSES`
-  consecutive no-op passes. `dispose()` releases everything.
+- Dev: one portal-discovery observer plus one per mounted shadow root;
+  shadow-root observers disconnect when their portal is removed.
+  `dispose()` releases everything.
 - `applyOverlayToRoot` is idempotent (every write is conditional), so a
   settled pass performs zero DOM writes.
 
