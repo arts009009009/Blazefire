@@ -166,7 +166,19 @@ export class FrostfastProject {
     // H-13: register the JS worker scheduler once per process so native
     // worker-backed tasks can actually spawn threads. Idempotent; a binding
     // without the hook (or a test mock) is skipped safely.
-    ensureDefaultWorkerScheduler(input.binding)
+    try {
+      ensureDefaultWorkerScheduler(input.binding)
+    } catch (error) {
+      try {
+        await input.binding.projectShutdown(handle)
+      } catch (shutdownError) {
+        throw new AggregateError(
+          [error, shutdownError],
+          'Frostfast worker scheduler registration failed and the project could not be shut down.'
+        )
+      }
+      throw error
+    }
 
     return new FrostfastProject(
       input.binding,

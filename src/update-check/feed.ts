@@ -113,10 +113,10 @@ export async function checkForUpdate(): Promise<CheckResult> {
 /** We only hit the network when the window is cold OR we never cached a version. */
 function recentlyCheckedWithLatest(): boolean {
   const state = readState()
-  return (
-    typeof state.lastCheck === 'number' &&
-    Date.now() - state.lastCheck < 24 * 60 * 60 * 1000 &&
-    typeof state.latestVersion === 'string' &&
-    isValidVersion(state.latestVersion)
-  )
+  if (typeof state.lastCheck !== 'number') return false
+  // A FUTURE lastCheck (clock set backward after a check) must not freeze
+  // updates until wall-clock catches up — treat it as a cold window.
+  const age = Date.now() - state.lastCheck
+  if (age < 0 || age >= 24 * 60 * 60 * 1000) return false
+  return typeof state.latestVersion === 'string' && isValidVersion(state.latestVersion)
 }

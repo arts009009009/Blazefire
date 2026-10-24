@@ -9,6 +9,7 @@
 import { spawnSync } from 'node:child_process'
 import { checkForUpdate } from './feed.js'
 import { isValidVersion } from './semver.js'
+import { purgeCachedInstall } from './cache-purge.js'
 import {
   detectPackageManager,
   isSafeSpec,
@@ -40,7 +41,7 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
       return 1
     }
 
-    const { latest, current } = await checkForUpdate()
+    const { latest, current, updateAvailable } = await checkForUpdate()
     if (!latest) {
       log('could not reach the release feed — try again shortly')
       return 1
@@ -49,9 +50,20 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
       log(`refusing to install invalid release version "${latest}"`)
       return 1
     }
+    // Never downgrade: the feed/cache can lag behind an already-newer install
+    // (a prerelease installed by tag, or a stale cached latest).
+    if (!updateAvailable) {
+      log(`blazefire ${current} is already up to date (${latest})`)
+      return 0
+    }
 
     const manager = detectPackageManager(projectRoot)
     log(`updating blazefire ${current} → ${latest} with ${manager}`)
+
+    // Cache-purging update (README): clear the manager's external caches so a
+    // stale tarball is never served. CACHE-ONLY — node_modules and lockfiles
+    // stay intact, so a failed install leaves the working tree untouched.
+    purgeCachedInstall(manager, projectRoot, { cachesOnly: true })
 
     const { command, args } = updateCommand(manager, latest)
     const result = spawnSync(command, args, {
@@ -75,11 +87,22 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
   }
 }
 
+/**
+ * CI is commonly `CI=1`/`CI=true`, but a plain truthy check misreads the
+ * well-known `CI=false` idiom (used to disable CI-only behavior locally) as
+ * being in CI, which silently suppressed the update prompt.
+ */
+function isCiEnv(): boolean {
+  const v = process.env.CI
+  if (v === undefined || v === '') return false
+  return !/^(false|0|no)$/i.test(v.trim())
+}
+
 function canPrompt(): boolean {
   return (
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true &&
-    !process.env.CI &&
+    !isCiEnv() &&
     process.env[SKIP_ENV] !== '1'
   )
 }

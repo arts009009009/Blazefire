@@ -228,12 +228,15 @@ export function ensureHook(packageRoot: string): HookStatus {
   const scripts = { ...(parsed.scripts ?? {}) }
 
   const existing = scripts.postinstall
-  if (existing && !isLifecycleHook(existing)) {
+  if (!existing) {
+    scripts.postinstall = HOOK_COMMAND
+  } else if (!isLifecycleHook(existing)) {
     // A host's own postinstall is not ours to clobber — chain ours after it.
     scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
-  } else {
-    scripts.postinstall = HOOK_COMMAND
   }
+  // else: our hook is already present (pure, or chained after a host prefix).
+  // Leave it exactly as-is — overwriting here silently deleted the host's own
+  // command (e.g. "husky") on every re-install.
 
   if (JSON.stringify(scripts) === JSON.stringify(parsed.scripts ?? {})) {
     return { status: 'already-active' }
@@ -324,19 +327,31 @@ function resolveProjectRoot(start: string): string | null {
   }
 }
 
-export function run(start = process.cwd()): void {
-  if (process.env[SKIP_ENV] === '1') {
+export type RunOutcome = 'activated' | 'already-active' | 'skipped'
+
+export interface RunOptions {
+  /**
+   * Ignore BLAZEFIRE_SKIP_AUTO. The postinstall honors the opt-out; the
+   * explicit CLI (`npx blazefire init`) is the documented manual fallback for
+   * locked-down environments that set it, so it passes true.
+   */
+  ignoreSkipEnv?: boolean
+}
+
+export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome {
+  if (process.env[SKIP_ENV] === '1' && !options.ignoreSkipEnv) {
     say(`skipped — ${SKIP_ENV}=1`)
-    return
+    return 'skipped'
   }
 
   const { configs, packageRoots } = locateCandidates(start)
   if (configs.length === 0) {
     say('skipped — no next.config.* found in this project')
-    return
+    return 'skipped'
   }
 
   let activated = 0
+  let alreadyActive = 0
   const hookRoots = new Set<string>()
   for (let i = 0; i < configs.length; i++) {
     const configPath = configs[i]!
@@ -354,6 +369,7 @@ export function run(start = process.cwd()): void {
       if (/already wrapped/.test(result.reason)) {
         say(`skipped ${relative} — already activated`)
         hookRoots.add(projectRoot)
+        alreadyActive += 1
         continue
       }
       say(`skipped ${relative} — ${result.reason}`)
@@ -393,7 +409,9 @@ export function run(start = process.cwd()): void {
 
   if (activated > 0) {
     say(`done — activated ${activated} config${activated === 1 ? '' : 's'}`)
+    return 'activated'
   }
+  return alreadyActive > 0 ? 'already-active' : 'skipped'
 }
 
 export function restore(start = process.cwd()): boolean {
