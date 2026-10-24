@@ -191,26 +191,36 @@ it('keeps portal observers for late overlay updates and disconnects on removal',
   } as unknown as ShadowRoot
   const portal = { shadowRoot: root } as unknown as Element
   let portalPresent = true
+  const queryAll = jest.fn(() => (portalPresent ? [portal] : []))
   const doc = {
     ...stubDocument(),
-    querySelectorAll: () => portalPresent ? [portal] : [],
+    querySelectorAll: queryAll,
   } as unknown as Document
 
+  jest.useFakeTimers()
   try {
     const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
     const runtime = installOverlayRuntime(true, doc)
     expect(runtime.observerCount()).toBe(2)
+    expect(queryAll).toHaveBeenCalledTimes(1) // the synchronous initial scan
+
+    // A burst of mutations must coalesce into ONE debounced re-scan.
     for (let i = 0; i < 5; i++) instances[0]!.trigger()
+    expect(queryAll).toHaveBeenCalledTimes(1) // nothing yet — still debouncing
+    jest.advanceTimersByTime(150)
+    expect(queryAll).toHaveBeenCalledTimes(2) // the whole burst ran once
     expect(runtime.observerCount()).toBe(2)
     expect(instances[0]!.disconnected).toBe(false)
 
     portalPresent = false
     instances[1]!.trigger()
+    jest.advanceTimersByTime(150) // trailing scan sees the portal gone
     expect(runtime.observerCount()).toBe(1)
     expect(instances[0]!.disconnected).toBe(true)
     runtime.dispose()
     expect(runtime.observerCount()).toBe(0)
   } finally {
+    jest.useRealTimers()
     global.MutationObserver = RealMO
   }
 })

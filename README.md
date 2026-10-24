@@ -61,6 +61,19 @@ npm test           # jest
 npm run typecheck  # tsc --noEmit
 ```
 
+## Install
+
+> ⚠️ **The name `blazefire` on npm is an unrelated, squatted package.**
+> `npm install blazefire` does **not** install this framework — it installs
+> a different package someone else owns. Install from GitHub (or from a
+> vendored checkout) instead:
+
+```bash
+npm install github:arts009009009/Blazefire
+# or from a vendored/local copy:
+npm install ../path/to/Blazefire
+```
+
 ## Usage
 
 ```ts

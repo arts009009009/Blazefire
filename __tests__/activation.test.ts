@@ -4,10 +4,12 @@ import { join } from 'node:path'
 import {
   BACKUP_DIR,
   HOOK_COMMAND,
+  chainAfterHost,
   ensureHook,
   isLifecycleHook,
   locateCandidates,
   restore,
+  undoHook,
 } from '../src/postinstall/activation'
 
 describe('restore', () => {
@@ -149,5 +151,70 @@ describe('restore', () => {
       configs: [join(webRoot, 'next.config.js')],
       packageRoots: [webRoot],
     })
+  })
+})
+
+describe('hook chaining (v1 bug: bare `&&` let host separators swallow the hook)', () => {
+  let projectRoot: string
+
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'blazefire-chain-'))
+  })
+
+  afterEach(() => {
+    rmSync(projectRoot, { recursive: true, force: true })
+  })
+
+  const writeHost = (postinstall: string): string => {
+    const packageJson = join(projectRoot, 'package.json')
+    writeFileSync(packageJson, JSON.stringify({ scripts: { postinstall } }))
+    return packageJson
+  }
+
+  const currentPostinstall = (packageJson: string): string =>
+    (JSON.parse(readFileSync(packageJson, 'utf8')) as { scripts: { postinstall: string } })
+      .scripts.postinstall
+
+  it('chains plain one-shot host scripts flat, byte-identical to v1', () => {
+    const packageJson = writeHost('next build')
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    expect(currentPostinstall(packageJson)).toBe(`next build && ${HOOK_COMMAND}`)
+  })
+
+  it('groups hosts carrying `;`, background `&`, comments or newlines', () => {
+    for (const host of ['a; b', 'node watcher &', 'echo hi # note', 'a\nb']) {
+      const packageJson = writeHost(host)
+      expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+      const chained = currentPostinstall(packageJson)
+      expect(chained).toBe(`(${host}\n) && ${HOOK_COMMAND}`)
+      // Re-running install must NOT append the hook a second time.
+      expect(isLifecycleHook(chained)).toBe(true)
+      expect(ensureHook(projectRoot)).toEqual({ status: 'already-active' })
+      expect(currentPostinstall(packageJson)).toBe(chained)
+    }
+  })
+
+  it('undoHook restores a grouped host script byte-for-byte', () => {
+    const host = 'lint; format # keep order'
+    const packageJson = writeHost(host)
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    expect(currentPostinstall(packageJson)).toBe(`(${host}\n) && ${HOOK_COMMAND}`)
+
+    expect(undoHook(projectRoot)).toEqual({ changed: true })
+    expect(currentPostinstall(packageJson)).toBe(host)
+  })
+
+  it('round-trips a host script that already ends with a newline', () => {
+    const host = 'build &\n'
+    const packageJson = writeHost(host)
+    ensureHook(projectRoot)
+    undoHook(projectRoot)
+    expect(currentPostinstall(packageJson)).toBe(host)
+  })
+
+  it('never wraps a mid-script subshell back into the host', () => {
+    // Not something chainAfterHost produces, but undoHook must still be safe.
+    expect(chainAfterHost('plain')).toBe(`plain && ${HOOK_COMMAND}`)
+    expect(chainAfterHost('a; b')).toBe(`(a; b\n) && ${HOOK_COMMAND}`)
   })
 })
