@@ -104,7 +104,7 @@ export class FrostfastProject {
   readonly #binding: FrostfastBinding
   readonly #gate = new ConfigChangeGate()
   #last: NormalizedSnapshot
-  #stopped = false
+  #shutdownPromise: Promise<void> | undefined
 
   private constructor(
     binding: FrostfastBinding,
@@ -232,9 +232,14 @@ export class FrostfastProject {
 
   /** Flush the Rust-side graph state and release the handle. Idempotent. */
   async shutdown(): Promise<void> {
-    if (this.#stopped) return
-    this.#stopped = true
-    await this.#binding.projectShutdown(this.handle)
+    if (!this.#shutdownPromise) {
+      const shutdown = this.#binding.projectShutdown(this.handle)
+      this.#shutdownPromise = shutdown.catch((error: unknown) => {
+        this.#shutdownPromise = undefined
+        throw error
+      })
+    }
+    await this.#shutdownPromise
   }
 
   async onExit(): Promise<void> {

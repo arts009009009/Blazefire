@@ -11,6 +11,7 @@ function makeProjectUpdateMock() {
   const binding = {
     projectNew: jest.fn().mockResolvedValue(handle),
     projectUpdate: jest.fn().mockResolvedValue(undefined),
+    projectShutdown: jest.fn().mockResolvedValue(undefined),
   } as unknown as FrostfastBinding
 
   return { binding, handle }
@@ -66,6 +67,29 @@ describe('FrostfastProject.update', () => {
     await expect(project.update(update)).rejects.toThrow('native update failed')
     await expect(project.update(update)).resolves.toBe(true)
     expect(binding.projectUpdate).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('FrostfastProject.shutdown', () => {
+  it('retries native shutdown after a failed attempt', async () => {
+    const { binding } = makeProjectUpdateMock()
+    const project = await createProject(binding)
+    const shutdown = binding.projectShutdown as jest.Mock
+    shutdown.mockRejectedValueOnce(new Error('shutdown failed')).mockResolvedValueOnce(undefined)
+
+    await expect(project.shutdown()).rejects.toThrow('shutdown failed')
+    await expect(project.shutdown()).resolves.toBeUndefined()
+
+    expect(shutdown).toHaveBeenCalledTimes(2)
+  })
+
+  it('shares one native shutdown among concurrent callers', async () => {
+    const { binding } = makeProjectUpdateMock()
+    const project = await createProject(binding)
+
+    await Promise.all([project.shutdown(), project.shutdown()])
+
+    expect(binding.projectShutdown).toHaveBeenCalledTimes(1)
   })
 })
 
