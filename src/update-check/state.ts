@@ -39,9 +39,9 @@ export function writeState(state: UpdateState): void {
 
 export function recentlyChecked(): boolean {
   const { lastCheck } = readState()
-  return (
-    typeof lastCheck === 'number' &&
-    Number.isFinite(lastCheck) &&
-    Date.now() - lastCheck < CHECK_INTERVAL_MS
-  )
+  if (typeof lastCheck !== 'number' || !Number.isFinite(lastCheck)) return false
+  // A FUTURE lastCheck (clock set backward after a check) must not suppress
+  // all checks until wall-clock catches up — treat it as a cold window.
+  const age = Date.now() - lastCheck
+  return age >= 0 && age < CHECK_INTERVAL_MS
 }

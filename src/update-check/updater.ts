@@ -6,10 +6,17 @@
  *   2. never block (the dev-time check is fire-and-forget)
  *   3. never nag (TTY-only, non-CI, one prompt per 24h window)
  */
-import { spawn, spawnSync } from 'node:child_process'
-import { purgeCachedInstall } from './cache-purge.js'
+import { spawnSync } from 'node:child_process'
 import { checkForUpdate } from './feed.js'
-import { detectPackageManager, isSafeSpec, resolveProjectRoot, updateCommand } from './pm.js'
+import { isValidVersion } from './semver.js'
+import { purgeCachedInstall } from './cache-purge.js'
+import {
+  detectPackageManager,
+  isSafeSpec,
+  readInstalledSpec,
+  resolveProjectRoot,
+  updateCommand,
+} from './pm.js'
 import { recentlyChecked, writeState } from './state.js'
 
 const SKIP_ENV = 'BLAZEFIRE_SKIP_UPDATE_CHECK'
@@ -24,27 +31,39 @@ export interface RunUpdateOptions {
  * Resolves with the exit code (0 = updated); never throws.
  */
 export async function runUpdate(options: RunUpdateOptions = {}): Promise<number> {
+  const log = options.onLog ?? ((message: string) => process.stdout.write(`${message}\n`))
   try {
     const projectRoot = options.projectRoot ?? resolveProjectRoot() ?? process.cwd()
-    const log = options.onLog ?? ((message: string) => process.stdout.write(`${message}\n`))
 
-    const { latest, current } = await checkForUpdate()
+    const projectSpec = readInstalledSpec(projectRoot)
+    if (projectSpec && !isSafeSpec(projectSpec)) {
+      log(`refusing to overwrite the pinned spec "${projectSpec}"`)
+      return 1
+    }
+
+    const { latest, current, updateAvailable } = await checkForUpdate()
     if (!latest) {
       log('could not reach the release feed — try again shortly')
       return 1
     }
-    if (isSafeSpec(current) && !isSafeSpec(latest)) {
-      log(`refusing to overwrite the pinned spec "${current}"`)
+    if (!isValidVersion(latest)) {
+      log(`refusing to install invalid release version "${latest}"`)
       return 1
+    }
+    // Never downgrade: the feed/cache can lag behind an already-newer install
+    // (a prerelease installed by tag, or a stale cached latest).
+    if (!updateAvailable) {
+      log(`blazefire ${current} is already up to date (${latest})`)
+      return 0
     }
 
     const manager = detectPackageManager(projectRoot)
     log(`updating blazefire ${current} → ${latest} with ${manager}`)
 
-    const removed = purgeCachedInstall(manager, projectRoot)
-    if (removed.length > 0) {
-      log(`cleared ${removed.length} cached cop${removed.length === 1 ? 'y' : 'ies'}`)
-    }
+    // Cache-purging update (README): clear the manager's external caches so a
+    // stale tarball is never served. CACHE-ONLY — node_modules and lockfiles
+    // stay intact, so a failed install leaves the working tree untouched.
+    purgeCachedInstall(manager, projectRoot, { cachesOnly: true })
 
     const { command, args } = updateCommand(manager, latest)
     const result = spawnSync(command, args, {
@@ -58,19 +77,32 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
       writeState({ lastCheck: Date.now(), latestVersion: latest })
       log('updated — restart your dev server to pick it up')
     } else {
-      log(`update failed (exit ${code}); nothing was left half-installed`)
+      const detail = result.error ? `: ${result.error.message}` : ''
+      log(`update failed (exit ${code})${detail}`)
     }
     return code
-  } catch {
+  } catch (error) {
+    log(`update failed: ${error instanceof Error ? error.message : String(error)}`)
     return 1
   }
+}
+
+/**
+ * CI is commonly `CI=1`/`CI=true`, but a plain truthy check misreads the
+ * well-known `CI=false` idiom (used to disable CI-only behavior locally) as
+ * being in CI, which silently suppressed the update prompt.
+ */
+function isCiEnv(): boolean {
+  const v = process.env.CI
+  if (v === undefined || v === '') return false
+  return !/^(false|0|no)$/i.test(v.trim())
 }
 
 function canPrompt(): boolean {
   return (
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true &&
-    !process.env.CI &&
+    !isCiEnv() &&
     process.env[SKIP_ENV] !== '1'
   )
 }

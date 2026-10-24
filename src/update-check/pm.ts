@@ -21,20 +21,32 @@ const LOCKFILES: Array<{ file: string; manager: PackageManager }> = [
   { file: 'npm-shrinkwrap.json', manager: 'npm' },
 ]
 
-export function detectPackageManager(start = process.cwd()): PackageManager {
-  const ua = process.env.npm_config_user_agent ?? ''
-  const fromUa = /^(npm|yarn|pnpm|bun)\//.exec(ua)
-  if (fromUa) return fromUa[1] as PackageManager
-
+/** The first lockfile found walking up from `start`, if any. */
+function lockfileManager(start: string): PackageManager | null {
   let dir = path.resolve(start)
   for (;;) {
     for (const { file, manager } of LOCKFILES) {
       if (fs.existsSync(path.join(dir, file))) return manager
     }
     const parent = path.dirname(dir)
-    if (parent === dir) return 'npm'
+    if (parent === dir) return null
     dir = parent
   }
+}
+
+export function detectPackageManager(start = process.cwd()): PackageManager {
+  const ua = process.env.npm_config_user_agent ?? ''
+  const fromUa = /^(npm|yarn|pnpm|bun)\//.exec(ua)
+  const fromLockfile = lockfileManager(start)
+  if (fromUa) {
+    const uaManager = fromUa[1] as PackageManager
+    // `npx blazefire update` always reports an npm user agent, but a project
+    // lockfile naming a different manager is the stronger signal — otherwise
+    // we'd run npm inside a pnpm/yarn project and fork its lockfile.
+    if (uaManager === 'npm' && fromLockfile && fromLockfile !== 'npm') return fromLockfile
+    return uaManager
+  }
+  return fromLockfile ?? 'npm'
 }
 
 /** Project root: nearest directory walking up with a package.json. */
@@ -80,7 +92,8 @@ export function updateCommand(
   manager: PackageManager,
   spec: string
 ): { command: string; args: string[] } {
-  const target = quoteForCmd(manager, spec)
+  // `spec` reaches here only after isValidVersion() (feed gates the release),
+  // so it can never carry shell metacharacters — no per-call quoting needed.
   switch (manager) {
     case 'yarn':
       return { command: 'yarn', args: ['add', '-D', `blazefire@${spec}`] }

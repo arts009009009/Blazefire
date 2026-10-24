@@ -11,6 +11,9 @@
   "bin": {
     "blazefire": "./dist/cli.js"
   },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -43,7 +46,8 @@
     "./components": {
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",

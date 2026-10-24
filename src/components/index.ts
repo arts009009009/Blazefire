@@ -3,8 +3,11 @@
  * error-overlay pieces as components). Pure presentation: no framework
  * internals, safe to import from any App Router component tree.
  */
-export { BlazefireLogo } from './blazefire-logo.js'
-export type { BlazefireLogoProps } from './blazefire-logo.js'
+export { BlazefireLogo, BlazefireDevToolsIndicator } from './blazefire-logo.js'
+export type {
+  BlazefireLogoProps,
+  BlazefireDevToolsIndicatorProps,
+} from './blazefire-logo.js'
 export {
   BlazefireErrorHeader,
   BlazefireErrorOverlay,

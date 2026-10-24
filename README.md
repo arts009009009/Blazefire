@@ -17,7 +17,7 @@ TypeScript.
 | H-02 triple HMR stack | **One** event-stream pipeline (`src/dev/hot-reloader.ts`) |
 | H-03 pages router | **Gone.** App Router only |
 | H-04 mirrored .js/.tsx pairs | **Gone.** One TS source per module; compiled to `dist/` |
-| H-05 production MutationObserver | **One-shot in production** (zero observers); dev observers settle |
+| H-05 production MutationObserver | **One-shot in production** (zero observers); dev observers live only while overlay portals are mounted |
 | H-08 pretty-printed config re-serialization | Compact JSON + sha256 change gate; unchanged configs are never re-sent |
 | H-09 discarded issue marshalling | Suppressed **at the Rust source** via the subscription gate |
 | H-13 worker-scheduler re-registration | Idempotent, once per process |
@@ -61,6 +61,19 @@ npm test           # jest
 npm run typecheck  # tsc --noEmit
 ```
 
+## Install
+
+> ⚠️ **The name `blazefire` on npm is an unrelated, squatted package.**
+> `npm install blazefire` does **not** install this framework — it installs
+> a different package someone else owns. Install from GitHub (or from a
+> vendored checkout) instead:
+
+```bash
+npm install github:arts009009009/Blazefire
+# or from a vendored/local copy:
+npm install ../path/to/Blazefire
+```
+
 ## Usage
 
 ```ts
@@ -77,6 +90,21 @@ behavior): the original is backed up to `Blazefire Backup/` (never
 overwritten), the config is wrapped, and a self-perpetuating
 `postinstall` hook is chained into the host `package.json`. Opt out with
 `BLAZEFIRE_SKIP_AUTO=1`.
+
+### Frostfast native binary
+
+Blazefire's compiler and dev event streams require a Frostfast N-API `.node`
+binary. This repository does not bundle that binary or publish an
+`@frostfast/native` package. Provide a compatible binary before invoking the
+compiler/build APIs:
+
+```bash
+FROSTFAST_NATIVE_PATH=/absolute/path/to/frostfast.<platform-abi>.node
+```
+
+Alternatively set `FROSTFAST_NATIVE_DIR` to the directory containing that
+file. The loader reports each attempted location when no binding is found;
+installing this JavaScript package alone does not provide the native compiler.
 
 Verified on all four package managers — the framework switch itself is
 always automatic (no `next.config` edits), with two package-manager-level

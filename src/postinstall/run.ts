@@ -6,6 +6,8 @@
  * is logged and swallowed with exit 0.
  */
 import process from 'node:process'
+import { realpathSync } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 import { run } from './activation.js'
 
 export async function main(): Promise<void> {
@@ -21,11 +23,18 @@ export async function main(): Promise<void> {
 }
 
 // Self-execute only when run directly (node dist/postinstall/run.js),
-// never when imported by the CLI.
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href.replace(/\\/g, '/')
+// never when imported by the CLI. argv[1] may be a symlink while
+// import.meta.url is the resolved realpath — check both forms.
+function invokedDirectly(): boolean {
+  if (process.argv[1] === undefined) return false
+  if (import.meta.url === pathToFileURL(process.argv[1]).href) return true
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
 
-if (invokedDirectly) {
+if (invokedDirectly()) {
   void main()
 }

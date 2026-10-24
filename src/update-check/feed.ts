@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../package-root.js'
-import { compareVersions } from './semver.js'
+import { compareVersions, isValidVersion } from './semver.js'
 import { readState, writeState } from './state.js'
 
 const REQUEST_TIMEOUT_MS = 4000
@@ -72,7 +72,7 @@ export async function fetchLatestVersion(): Promise<string | null> {
     if (!response.ok) return null
     const payload = (await response.json()) as { tag_name?: string }
     const version = (payload.tag_name ?? '').replace(/^v/, '').trim()
-    return version || null
+    return isValidVersion(version) ? version : null
   } catch {
     return null
   } finally {
@@ -100,7 +100,9 @@ export async function checkForUpdate(): Promise<CheckResult> {
   }
 
   const { latestVersion } = readState()
-  if (!latestVersion) return { current, latest: null, updateAvailable: false }
+  if (!latestVersion || !isValidVersion(latestVersion)) {
+    return { current, latest: null, updateAvailable: false }
+  }
   return {
     current,
     latest: latestVersion,
@@ -111,10 +113,10 @@ export async function checkForUpdate(): Promise<CheckResult> {
 /** We only hit the network when the window is cold OR we never cached a version. */
 function recentlyCheckedWithLatest(): boolean {
   const state = readState()
-  return (
-    typeof state.lastCheck === 'number' &&
-    Date.now() - state.lastCheck < 24 * 60 * 60 * 1000 &&
-    typeof state.latestVersion === 'string' &&
-    state.latestVersion.length > 0
-  )
+  if (typeof state.lastCheck !== 'number') return false
+  // A FUTURE lastCheck (clock set backward after a check) must not freeze
+  // updates until wall-clock catches up — treat it as a cold window.
+  const age = Date.now() - state.lastCheck
+  if (age < 0 || age >= 24 * 60 * 60 * 1000) return false
+  return typeof state.latestVersion === 'string' && isValidVersion(state.latestVersion)
 }

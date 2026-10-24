@@ -73,8 +73,11 @@ export function createCompiler(binding?: FrostfastBinding): CompilerInstance {
 function isModuleSource(code: string, options?: TransformOptions): boolean {
   if (options?.jsc?.parser?.syntax === 'typescript') return true
   if (options?.module?.type) return true
-  // Heuristics kept minimal: the native side parses when unsure.
-  return /^\s*(import|export)\s/m.test(code)
+  // Heuristics kept minimal: only a LEADING import/export counts (no `m`
+  // flag, so a match inside a comment or template literal on a later line
+  // can never misclassify a script as a module). The native side parses
+  // when unsure.
+  return /^\s*(?:import|export)\b/.test(code)
 }
 
 export { loadFrostfastBinding, loadFrostfastBindingSync }

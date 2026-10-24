@@ -7,7 +7,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   CHECK_INTERVAL_MS,
+  checkForUpdate,
   compareVersions,
+  isValidVersion,
   isSafeSpec,
   purgeCachedInstall,
   readState,
@@ -40,6 +42,20 @@ describe('compareVersions', () => {
   it('treats unparseable versions as equal (never nag on garbage)', () => {
     expect(compareVersions('canary', '1.0.0')).toBe(0)
     expect(compareVersions('', '')).toBe(0)
+    expect(compareVersions('1.2.3-not-a-version!', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3suffix', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3-..', '1.2.4')).toBe(0)
+    expect(compareVersions('1.2.3+build.5', '1.2.3')).toBe(0)
+    expect(
+      compareVersions('999999999999999999999.0.0', '1000000000000000000000.0.0')
+    ).toBeLessThan(0)
+  })
+
+  it('validates release tags before they are cached or installed', () => {
+    expect(isValidVersion('v2.0.0')).toBe(true)
+    expect(isValidVersion('2.0.0-rc.1+build.3')).toBe(true)
+    expect(isValidVersion('2.0')).toBe(false)
+    expect(isValidVersion('2.0.0/other')).toBe(false)
   })
 })
 
@@ -64,6 +80,23 @@ describe('throttle state', () => {
   it('corrupt state reads as empty instead of throwing', () => {
     writeFileSync(stateFile(), 'not json{{{')
     expect(readState()).toEqual({})
+  })
+
+  it('refreshes malformed cached release versions', async () => {
+    writeState({ lastCheck: Date.now(), latestVersion: '2.1.0/invalid' })
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ tag_name: 'v2.2.0' }),
+    } as Response)
+
+    try {
+      await expect(checkForUpdate()).resolves.toMatchObject({
+        latest: '2.2.0',
+        updateAvailable: true,
+      })
+    } finally {
+      fetchSpy.mockRestore()
+    }
   })
 
   afterAll(() => {

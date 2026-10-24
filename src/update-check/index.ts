@@ -5,7 +5,7 @@
  *   runUpdate()     the re-install the CLI and the prompt both run
  *   checkForUpdate() throttled feed check for `blazefire check`
  */
-export { compareVersions } from './semver.js'
+export { compareVersions, isValidVersion } from './semver.js'
 export {
   CHECK_INTERVAL_MS,
   stateFile,

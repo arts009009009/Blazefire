@@ -82,17 +82,76 @@ function listWorkspaces(packageRoot: string): string[] {
     ? packageJson.workspaces
     : (packageJson.workspaces?.packages ?? [])
 
-  const results: string[] = []
+  const results = new Set<string>()
   for (const pattern of patterns) {
-    if (typeof pattern !== 'string' || pattern.includes('*')) continue
-    const workspaceRoot = path.resolve(packageRoot, pattern)
-    if (!fs.existsSync(path.join(workspaceRoot, 'package.json'))) continue
-    if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
-      continue
+    if (typeof pattern !== 'string' || pattern.startsWith('!')) continue
+    for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern)) {
+      if (!fs.existsSync(path.join(workspaceRoot, 'package.json'))) continue
+      if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
+        continue
+      }
+      results.add(workspaceRoot)
     }
-    results.push(workspaceRoot)
   }
-  return results
+
+  for (const pattern of patterns) {
+    if (typeof pattern !== 'string' || !pattern.startsWith('!')) continue
+    for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern.slice(1))) {
+      results.delete(workspaceRoot)
+    }
+  }
+
+  return [...results]
+}
+
+function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
+  const segments = pattern.split(/[\\/]+/).filter(Boolean)
+  const matches: string[] = []
+
+  const visit = (dir: string, index: number): void => {
+    if (index === segments.length) {
+      matches.push(dir)
+      return
+    }
+
+    const segment = segments[index]!
+    if (segment === '**') {
+      visit(dir, index + 1)
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        if (entry.isDirectory()) visit(path.join(dir, entry.name), index)
+      }
+      return
+    }
+
+    if (segment.includes('*') || segment.includes('?')) {
+      let entries: fs.Dirent[]
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
+      const matcher = new RegExp(
+        `^${segment.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`
+      )
+      for (const entry of entries) {
+        if (entry.isDirectory() && matcher.test(entry.name)) {
+          visit(path.join(dir, entry.name), index + 1)
+        }
+      }
+      return
+    }
+
+    visit(path.join(dir, segment), index + 1)
+  }
+
+  visit(path.resolve(packageRoot), 0)
+  return matches
 }
 
 /**
@@ -116,7 +175,7 @@ function hasInstalledNext(projectRoot: string): boolean {
   return false
 }
 
-function writeAtomicSync(target: string, contents: string): void {
+function writeAtomicSync(target: string, contents: string | Buffer): void {
   const temp = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.tmp`
@@ -177,14 +236,17 @@ export function ensureHook(packageRoot: string): HookStatus {
   const scripts = { ...(parsed.scripts ?? {}) }
 
   const existing = scripts.postinstall
-  if (existing && !isLifecycleHook(existing)) {
-    // A host's own postinstall is not ours to clobber — chain ours after it.
-    if (!/blazefire/.test(existing)) {
-      scripts.postinstall = `${existing} && ${HOOK_COMMAND}`
-    }
-  } else {
+  if (!existing) {
     scripts.postinstall = HOOK_COMMAND
+  } else if (!isLifecycleHook(existing)) {
+    // A host's own postinstall is not ours to clobber — chain ours after it,
+    // grouped so a `;`, background `&` or trailing comment in the host's
+    // script can never swallow or skip our hook (v1 chained bare and lost it).
+    scripts.postinstall = chainAfterHost(existing)
   }
+  // else: our hook is already present (pure, or chained after a host prefix).
+  // Leave it exactly as-is — overwriting here silently deleted the host's own
+  // command (e.g. "husky") on every re-install.
 
   if (JSON.stringify(scripts) === JSON.stringify(parsed.scripts ?? {})) {
     return { status: 'already-active' }
@@ -222,9 +284,9 @@ export function undoHook(packageRoot: string): {
   const eol = contents.includes('\r\n') ? '\r\n' : '\n'
 
   const escaped = HOOK_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const withoutHost = postinstall
-    .replace(new RegExp(`\\s*&&\\s*${escaped}`), '')
-    .trim()
+  const withoutHost = unwrapGroup(
+    postinstall.replace(new RegExp(`\\s*&&\\s*${escaped}`), '').trim()
+  )
   if (!withoutHost || withoutHost === HOOK_COMMAND) delete scripts.postinstall
   else scripts.postinstall = withoutHost
 
@@ -235,7 +297,64 @@ export function undoHook(packageRoot: string): {
 }
 
 export function isLifecycleHook(value: string): boolean {
-  return /blazefire/.test(value)
+  const escapedHook = HOOK_COMMAND.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`(?:^|&&\\s*)${escapedHook}(?:\\s|$)`).test(value)
+}
+
+/**
+ * Shell operators that would swallow or mis-scope a blindly-appended
+ * `&& <hook>`: `;` and newlines start a NEW statement, a single background
+ * `&` is a statement terminator (and makes a bare `x & && y` a syntax
+ * error), and a `#` comment swallows the rest of the line. `&&`, `||` and
+ * `|` are left-associative at equal/tighter precedence and already bind the
+ * appended hook correctly, so scripts carrying only those stay untouched.
+ */
+const NEEDS_GROUPING = /(^|[^&])&([^&]|$)|;|#|\n/
+
+/**
+ * Append our lifecycle hook to a host script.
+ *
+ * Plain one-shot commands chain flat (byte-identical to v1, and the only
+ * form cmd.exe consumers ever see). Scripts with statement separators get a
+ * subshell group so `&& <hook>` binds to the WHOLE script, not just its last
+ * sub-command — v1's bare chaining let `;`/`&`/comments skip the hook, and a
+ * trailing `# …` comment would eat a same-line `)`, so the group always
+ * closes on its own line (which `unwrapGroup` reverses exactly).
+ */
+export function chainAfterHost(host: string): string {
+  if (!NEEDS_GROUPING.test(host)) return `${host} && ${HOOK_COMMAND}`
+  return `(${host}\n) && ${HOOK_COMMAND}`
+}
+
+/**
+ * Drop the grouping parens chainAfterHost added — but only when they wrap
+ * the ENTIRE value (a mid-script subshell is never ours). Removes exactly
+ * the one newline chainAfterHost added, so the host script is restored
+ * byte-for-byte.
+ */
+function unwrapGroup(value: string): string {
+  if (!value.startsWith('(')) return value
+  let depth = 0
+  let quote: string | null = null
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i]!
+    if (quote) {
+      if (c === '\\') i += 1
+      else if (c === quote) quote = null
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') quote = c
+    else if (c === '(') depth += 1
+    else if (c === ')') {
+      depth -= 1
+      if (depth === 0) {
+        if (i !== value.length - 1) return value // wrapper isn't outermost
+        const inner = value.slice(1, -1)
+        return inner.endsWith('\n') ? inner.slice(0, -1) : inner
+      }
+    }
+  }
+  return value
 }
 
 function gitignoreHasEntry(contents: string, entry: string): boolean {
@@ -267,30 +386,39 @@ function resolveProjectRoot(start: string): string | null {
   let dir = path.resolve(start)
   for (;;) {
     const packageJson = path.join(dir, 'package.json')
-    if (fs.existsSync(packageJson) && !isSelf(dir)) {
-      for (const name of CONFIG_NAMES) {
-        if (fs.existsSync(path.join(dir, name))) return dir
-      }
-    }
+    if (fs.existsSync(packageJson) && !isSelf(dir)) return dir
     const parent = path.dirname(dir)
     if (parent === dir) return null
     dir = parent
   }
 }
 
-export function run(start = process.cwd()): void {
-  if (process.env[SKIP_ENV] === '1') {
+export type RunOutcome = 'activated' | 'already-active' | 'skipped'
+
+export interface RunOptions {
+  /**
+   * Ignore BLAZEFIRE_SKIP_AUTO. The postinstall honors the opt-out; the
+   * explicit CLI (`npx blazefire init`) is the documented manual fallback for
+   * locked-down environments that set it, so it passes true.
+   */
+  ignoreSkipEnv?: boolean
+}
+
+export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome {
+  if (process.env[SKIP_ENV] === '1' && !options.ignoreSkipEnv) {
     say(`skipped — ${SKIP_ENV}=1`)
-    return
+    return 'skipped'
   }
 
   const { configs, packageRoots } = locateCandidates(start)
   if (configs.length === 0) {
     say('skipped — no next.config.* found in this project')
-    return
+    return 'skipped'
   }
 
   let activated = 0
+  let alreadyActive = 0
+  const hookRoots = new Set<string>()
   for (let i = 0; i < configs.length; i++) {
     const configPath = configs[i]!
     const projectRoot = packageRoots[i]!
@@ -306,6 +434,8 @@ export function run(start = process.cwd()): void {
     if (!result.ok) {
       if (/already wrapped/.test(result.reason)) {
         say(`skipped ${relative} — already activated`)
+        hookRoots.add(projectRoot)
+        alreadyActive += 1
         continue
       }
       say(`skipped ${relative} — ${result.reason}`)
@@ -313,6 +443,7 @@ export function run(start = process.cwd()): void {
       continue
     }
 
+    hookRoots.add(projectRoot)
     const backup = path.join(
       projectRoot,
       BACKUP_DIR,
@@ -333,7 +464,7 @@ export function run(start = process.cwd()): void {
     activated += 1
   }
 
-  for (const packageRoot of new Set(packageRoots)) {
+  for (const packageRoot of hookRoots) {
     const hook = ensureHook(packageRoot)
     if (hook.status === 'no-package-json') {
       say(
@@ -344,47 +475,64 @@ export function run(start = process.cwd()): void {
 
   if (activated > 0) {
     say(`done — activated ${activated} config${activated === 1 ? '' : 's'}`)
+    return 'activated'
   }
+  return alreadyActive > 0 ? 'already-active' : 'skipped'
 }
 
-export function restore(): boolean {
-  const backupRoot = path.join(process.cwd(), BACKUP_DIR)
-  let entries: string[]
-  try {
-    entries = fs.readdirSync(backupRoot)
-  } catch {
-    say(`no backup found at ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-    return false
+export function restore(start = process.cwd()): boolean {
+  const { packageRoots } = locateCandidates(start)
+  const resolvedRoot = resolveProjectRoot(start)
+  if (resolvedRoot) {
+    packageRoots.push(resolvedRoot, ...listWorkspaces(resolvedRoot))
   }
+  if (packageRoots.length === 0) packageRoots.push(path.resolve(start))
 
-  const originals = entries
-    .filter((entry) => entry.endsWith('.original'))
-    .sort((a, b) => a.localeCompare(b))
-
-  if (originals.length === 0) {
-    say(`no backup found at ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-    return false
-  }
-
-  for (const entry of originals) {
-    // Backup names are `<config-name>.<ISO-timestamp>.original`; the ISO
-    // stamp has its dots replaced, so the LAST dot in the stem separates
-    // the timestamp from the (dot-containing) config name.
-    const stem = entry.slice(0, -'.original'.length)
-    const base = stem.slice(0, stem.lastIndexOf('.'))
-    const target = path.join(process.cwd(), base)
-    if (!fs.existsSync(target)) {
-      say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+  let restoredAny = false
+  for (const projectRoot of new Set(packageRoots)) {
+    const backupRoot = path.join(projectRoot, BACKUP_DIR)
+    let entries: string[]
+    try {
+      entries = fs.readdirSync(backupRoot)
+    } catch {
       continue
     }
 
-    const content = fs.readFileSync(path.join(backupRoot, entry))
-    fs.writeFileSync(target, content)
-    say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+    const originals = entries
+      .filter(
+        (entry) =>
+          entry.endsWith('.original') &&
+          CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
+      )
+      .sort((a, b) => a.localeCompare(b))
 
-    undoHook(process.cwd())
+    const firstBackupByConfig = new Map<string, string>()
+    for (const entry of originals) {
+      const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
+      if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
+    }
+
+    let restoredProject = false
+    for (const [base, entry] of firstBackupByConfig) {
+      const target = path.join(projectRoot, base)
+      if (!fs.existsSync(target)) {
+        say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+        continue
+      }
+
+      const content = fs.readFileSync(path.join(backupRoot, entry))
+      writeAtomicSync(target, content)
+      say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+      restoredProject = true
+    }
+
+    if (restoredProject) {
+      undoHook(projectRoot)
+      restoredAny = true
+    }
   }
 
-  say('restore complete')
-  return true
+  if (!restoredAny) say('no backup found for this project')
+  else say('restore complete')
+  return restoredAny
 }

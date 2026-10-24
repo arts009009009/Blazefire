@@ -27,8 +27,12 @@ import { maybeNotify } from './update-check/index.js'
  * v1 parity: during `next dev`, offer the update once per 24h. Strictly
  * fire-and-forget — config evaluation never awaits it, so a slow GitHub
  * API cannot stall startup, and any failure is swallowed inside.
+ *
+ * Gated on NODE_ENV === 'development' so an interactive `next build` can
+ * never trigger a network fetch or an update prompt mid-build.
  */
 function notifyAboutUpdate(): void {
+  if (process.env.NODE_ENV !== 'development') return
   void maybeNotify()
 }
 

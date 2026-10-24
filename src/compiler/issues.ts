@@ -27,11 +27,16 @@ export interface IssueBearingPayload {
  * Defensive strip: drop issue/diagnostic payloads that no JS consumer will
  * use. Returns the SAME object when the policy forwards issues (zero cost on
  * the passthrough path).
+ *
+ * A null/undefined payload is legal per the native IDL (`NapiEventResult`
+ * carries `unknown`), so it is passed through untouched rather than being
+ * dereferenced.
  */
 export function stripDiscardedIssues<T extends IssueBearingPayload>(
-  payload: T,
+  payload: T | null | undefined,
   policy: IssuePolicy
-): T {
+): T | null | undefined {
+  if (payload === null || payload === undefined) return payload
   if (shouldForwardIssues(policy)) return payload
   if (payload.issues !== undefined || payload.diagnostics !== undefined) {
     const { issues: _i, diagnostics: _d, ...rest } = payload

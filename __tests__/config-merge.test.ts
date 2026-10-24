@@ -44,8 +44,8 @@ describe('mergeConfigs', () => {
 
   it('concatenates redirects the same way', async () => {
     const merged = mergeConfigs(
-      { redirects: async () => [{ source: '/a', destination: '/b', permanent: false }] } as NextConfigLike,
-      { redirects: async () => [{ source: '/c', destination: '/d', permanent: true }] } as NextConfigLike
+      { redirects: async () => [{ source: '/a', destination: '/b', permanent: false }] },
+      { redirects: async () => [{ source: '/c', destination: '/d', permanent: true }] }
     )
     const redirects = await merged.redirects?.()
     expect(redirects).toHaveLength(2)
@@ -59,6 +59,26 @@ describe('mergeConfigs', () => {
     expect(Object.keys(merged.turbopack?.rules ?? {})).toEqual(
       expect.arrayContaining(['**/host.ts', '**/next*.js'])
     )
+  })
+
+  it('preserves host loaders when both configs use the same turbopack glob', () => {
+    const merged = mergeConfigs(
+      {
+        turbopack: {
+          rules: { '**/next*.js': [{ loader: '/host-loader.js' }] },
+        },
+      } as NextConfigLike,
+      {
+        turbopack: {
+          rules: { '**/next*.js': [{ loader: '/blazefire-loader.js' }] },
+        },
+      } as NextConfigLike
+    )
+
+    expect(merged.turbopack?.rules?.['**/next*.js']).toEqual([
+      { loader: '/host-loader.js' },
+      { loader: '/blazefire-loader.js' },
+    ])
   })
 
   it('wraps when the blazefire half replaces a scalar with the same value', () => {

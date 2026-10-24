@@ -11,6 +11,7 @@
  * init/restore run the SAME engine as the postinstall (src/postinstall) —
  * there is deliberately one implementation of the rewrite, not two.
  */
+import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { BLAZEFIRE_BRANDING } from './branding.js'
 import { run, restore } from './postinstall/index.js'
@@ -45,11 +46,15 @@ Blazefire
 /**
  * The engine call — the same as the postinstall. Returns an exit code:
  * 0 = activated (or already active), 1 = skipped/failed.
+ *
+ * Passes ignoreSkipEnv so the documented manual fallback works even in the
+ * locked-down environments that set BLAZEFIRE_SKIP_AUTO=1 (the opt-out is for
+ * the AUTOMATIC postinstall, not an explicit `npx blazefire init`).
  */
 function init(): number {
   try {
-    run()
-    return 0
+    const outcome = run(process.cwd(), { ignoreSkipEnv: true })
+    return outcome === 'skipped' ? 1 : 0
   } catch (error) {
     process.stderr.write(
       `[Blazefire] activation failed: ${(error as Error)?.message ?? error}\n`
@@ -123,12 +128,20 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 export { maybeNotify }
 
 // Run only when executed directly — importing this module (tests, the
-// postinstall engine) must never consume argv.
-const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+// postinstall engine) must never consume argv. argv[1] may be an npm .bin
+// SYMLINK while import.meta.url is the resolved realpath (npx blazefire
+// init goes through exactly that symlink), so compare realpaths.
+function isDirectRun(): boolean {
+  if (process.argv[1] === undefined) return false
+  if (import.meta.url === pathToFileURL(process.argv[1]).href) return true
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
 
-if (isDirectRun) {
+if (isDirectRun()) {
   main()
     .then((code) => {
       process.exitCode = code
