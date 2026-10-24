@@ -100,7 +100,9 @@ export async function checkForUpdate(): Promise<CheckResult> {
   }
 
   const { latestVersion } = readState()
-  if (!latestVersion) return { current, latest: null, updateAvailable: false }
+  if (!latestVersion || !isValidVersion(latestVersion)) {
+    return { current, latest: null, updateAvailable: false }
+  }
   return {
     current,
     latest: latestVersion,
@@ -115,6 +117,6 @@ function recentlyCheckedWithLatest(): boolean {
     typeof state.lastCheck === 'number' &&
     Date.now() - state.lastCheck < 24 * 60 * 60 * 1000 &&
     typeof state.latestVersion === 'string' &&
-    state.latestVersion.length > 0
+    isValidVersion(state.latestVersion)
   )
 }

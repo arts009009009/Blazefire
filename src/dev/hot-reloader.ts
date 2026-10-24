@@ -87,7 +87,13 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         if (info.type === 'start') {
           // Debounce: only announce BUILDING if the tick hasn't ended fast.
           if (defer) clearTimeout(defer)
-          defer = setTimeout(() => emit({ type: 'building', source: 'frostfast' }), buildingDeferMs)
+          defer = setTimeout(() => {
+            try {
+              emit({ type: 'building', source: 'frostfast' })
+            } catch (error) {
+              reportError(error)
+            }
+          }, buildingDeferMs)
           defer.unref?.()
         } else if (info.type === 'end') {
           if (defer) {
