@@ -116,7 +116,7 @@ function hasInstalledNext(projectRoot: string): boolean {
   return false
 }
 
-function writeAtomicSync(target: string, contents: string): void {
+function writeAtomicSync(target: string, contents: string | Buffer): void {
   const temp = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.tmp`
