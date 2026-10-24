@@ -76,6 +76,7 @@ export function applyOverlayToRoot(root: ShadowRoot, doc: Document = document): 
     const style = doc.createElement('style')
     style.id = 'blazefire-overlay-styles'
     style.setAttribute('data-blazefire', 'overlay')
+    applyCspNonce(style, doc)
     style.textContent = blazefireOverlayStyles()
     root.appendChild(style)
     changed = true
@@ -211,6 +212,24 @@ if (typeof document !== 'undefined') {
 }
 
 // --- micro-DOM helpers ------------------------------------------------------
+
+/**
+ * Copy a CSP nonce onto an injected <style> so it survives a nonce-based
+ * Content-Security-Policy. Reads the nonce from an existing [nonce] element
+ * (the IDL `.nonce` still holds it even though the content attribute is
+ * hidden). Best-effort; a missing/odd document just skips the nonce.
+ */
+function applyCspNonce(style: HTMLStyleElement, doc: Document): void {
+  try {
+    const el = doc.querySelector('[nonce]') as
+      | (Element & { nonce?: string })
+      | null
+    const nonce = el?.nonce || el?.getAttribute('nonce') || undefined
+    if (nonce) style.nonce = nonce
+  } catch {
+    // no querySelector / no nonce present — nothing to copy
+  }
+}
 
 function textChild(el: Element): Text | null {
   let node = el.firstChild
