@@ -30,6 +30,7 @@ import {
   type SerializedProjectConfig,
 } from '../config/serialize.js'
 import { shouldForwardIssues, stripDiscardedIssues, type IssueBearingPayload, type IssuePolicy } from './issues.js'
+import { ensureDefaultWorkerScheduler } from './bindings.js'
 import { FROSTFAST_VERSION } from '../version.js'
 
 /** CI is commonly `CI=1`/`CI=true`; treat any non-falsey value as CI. */
@@ -161,6 +162,11 @@ export class FrostfastProject {
         throw new Error(`Frostfast internal error: ${error.message}`)
       },
     })
+
+    // H-13: register the JS worker scheduler once per process so native
+    // worker-backed tasks can actually spawn threads. Idempotent; a binding
+    // without the hook (or a test mock) is skipped safely.
+    ensureDefaultWorkerScheduler(input.binding)
 
     return new FrostfastProject(
       input.binding,
