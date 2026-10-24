@@ -82,7 +82,7 @@ function listWorkspaces(packageRoot: string): string[] {
     ? packageJson.workspaces
     : (packageJson.workspaces?.packages ?? [])
 
-  const results: string[] = []
+  const results = new Set<string>()
   for (const pattern of patterns) {
     if (typeof pattern !== 'string' || pattern.startsWith('!')) continue
     for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern)) {
@@ -90,10 +90,18 @@ function listWorkspaces(packageRoot: string): string[] {
       if (!CONFIG_NAMES.some((name) => fs.existsSync(path.join(workspaceRoot, name)))) {
         continue
       }
-      results.push(workspaceRoot)
+      results.add(workspaceRoot)
     }
   }
-  return [...new Set(results)]
+
+  for (const pattern of patterns) {
+    if (typeof pattern !== 'string' || !pattern.startsWith('!')) continue
+    for (const workspaceRoot of expandWorkspacePattern(packageRoot, pattern.slice(1))) {
+      results.delete(workspaceRoot)
+    }
+  }
+
+  return [...results]
 }
 
 function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {

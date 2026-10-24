@@ -130,4 +130,24 @@ describe('restore', () => {
       packageRoots: [workspaceRoot],
     })
   })
+
+  it('excludes workspaces matched by negated patterns', () => {
+    const webRoot = join(projectRoot, 'apps', 'web')
+    const legacyRoot = join(projectRoot, 'apps', 'legacy')
+    mkdirSync(webRoot, { recursive: true })
+    mkdirSync(legacyRoot, { recursive: true })
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ workspaces: ['apps/*', '!apps/legacy'] })
+    )
+    for (const workspaceRoot of [webRoot, legacyRoot]) {
+      writeFileSync(join(workspaceRoot, 'package.json'), '{}')
+      writeFileSync(join(workspaceRoot, 'next.config.js'), 'module.exports = {}\n')
+    }
+
+    expect(locateCandidates(projectRoot)).toEqual({
+      configs: [join(webRoot, 'next.config.js')],
+      packageRoots: [webRoot],
+    })
+  })
 })
