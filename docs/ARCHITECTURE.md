@@ -42,7 +42,7 @@ the runtime binds the Frostfast binary directly. There is **no**
 | Env tuples | `[{name, value}]` flat arrays, never recursive marshalling |
 | RegExp | Decomposed to `{type:'regex', value:{source,flags}}` |
 | Handles | `Project`/`Endpoint`/`RootTask`/`Lockfile` are opaque; JS only passes them back |
-| Event streams | Return a `RootTask`; `FrostfastProject.#stream` disposes it in `finally` — unbreakable |
+| Event streams | Native callback + `RootTask`; `FrostfastProject.#stream` adapts callbacks to async iteration, disposes the task in `finally`, and honors abort signals |
 | Transform | `(source, isModule, Buffer.from(JSON.stringify(options)))` |
 | Issue gate | `projectHmrEvents(..., includeIssues)` — with the default `suppress` policy Rust never marshals discarded issues (H-09) |
 
@@ -54,7 +54,9 @@ the runtime binds the Frostfast binary directly. There is **no**
 4. `@frostfast/<platformArchABI>` — per-platform package
 
 Missing binary = one hard error listing every attempt (nothing swallowed,
-spec H-20). The per-process memo coalesces concurrent loads; the sync
+spec H-20). The native package is not bundled or published from this repository; consumers
+must provide a compatible binary through `FROSTFAST_NATIVE_PATH` or
+`FROSTFAST_NATIVE_DIR`. The per-process memo coalesces concurrent loads; the sync
 accessor never loads (native-only contract). Version checks compare against
 `src/version.ts` — a value that is actually injected (v1 read
 `__NEXT_VERSION`, which was never set, and warned spuriously, spec H-18).

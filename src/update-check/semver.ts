@@ -26,6 +26,10 @@ function parse(version: string): {
   }
 }
 
+export function isValidVersion(version: string): boolean {
+  return parse(version) !== null
+}
+
 function comparePrerelease(a: string[], b: string[]): number {
   if (a.length === 0 && b.length === 0) return 0
   if (a.length === 0) return 1 // release > pre-release

@@ -8,6 +8,7 @@
  */
 import { spawnSync } from 'node:child_process'
 import { checkForUpdate } from './feed.js'
+import { isValidVersion } from './semver.js'
 import {
   detectPackageManager,
   isSafeSpec,
@@ -29,9 +30,9 @@ export interface RunUpdateOptions {
  * Resolves with the exit code (0 = updated); never throws.
  */
 export async function runUpdate(options: RunUpdateOptions = {}): Promise<number> {
+  const log = options.onLog ?? ((message: string) => process.stdout.write(`${message}\n`))
   try {
     const projectRoot = options.projectRoot ?? resolveProjectRoot() ?? process.cwd()
-    const log = options.onLog ?? ((message: string) => process.stdout.write(`${message}\n`))
 
     const projectSpec = readInstalledSpec(projectRoot)
     if (projectSpec && !isSafeSpec(projectSpec)) {
@@ -42,6 +43,10 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
     const { latest, current } = await checkForUpdate()
     if (!latest) {
       log('could not reach the release feed — try again shortly')
+      return 1
+    }
+    if (!isValidVersion(latest)) {
+      log(`refusing to install invalid release version "${latest}"`)
       return 1
     }
 
@@ -60,10 +65,12 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
       writeState({ lastCheck: Date.now(), latestVersion: latest })
       log('updated — restart your dev server to pick it up')
     } else {
-      log(`update failed (exit ${code})`)
+      const detail = result.error ? `: ${result.error.message}` : ''
+      log(`update failed (exit ${code})${detail}`)
     }
     return code
-  } catch {
+  } catch (error) {
+    log(`update failed: ${error instanceof Error ? error.message : String(error)}`)
     return 1
   }
 }

@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../package-root.js'
-import { compareVersions } from './semver.js'
+import { compareVersions, isValidVersion } from './semver.js'
 import { readState, writeState } from './state.js'
 
 const REQUEST_TIMEOUT_MS = 4000
@@ -72,7 +72,7 @@ export async function fetchLatestVersion(): Promise<string | null> {
     if (!response.ok) return null
     const payload = (await response.json()) as { tag_name?: string }
     const version = (payload.tag_name ?? '').replace(/^v/, '').trim()
-    return version || null
+    return isValidVersion(version) ? version : null
   } catch {
     return null
   } finally {

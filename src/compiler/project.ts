@@ -241,6 +241,14 @@ export class FrostfastProject {
           this.issuePolicy
         )
         if (result.value && result.value.routes instanceof Map) return result.value
+        if (
+          result.value === null ||
+          (typeof result.value === 'object' &&
+            result.value !== null &&
+            Object.keys(result.value).length === 0)
+        ) {
+          return { routes: new Map() }
+        }
         throw new Error('Frostfast entrypoint subscription returned an invalid payload')
       },
       signal
@@ -304,40 +312,36 @@ export class FrostfastProject {
     map: (payload: unknown) => T = (p) => p as T,
     signal?: AbortSignal
   ): AsyncGenerator<T, void, undefined> {
-    const queue: unknown[] = []
+    const queue: StreamEvent[] = []
     let waiting:
       | {
-          resolve: (payload: unknown | typeof STREAM_ABORTED) => void
-          reject: (error: Error) => void
+          resolve: (event: StreamEvent | typeof STREAM_ABORTED) => void
         }
       | undefined
-    let streamError: Error | undefined
     let closed = false
     const callback: NapiEventCallback<unknown> = (error, payload) => {
       if (closed) return
-      if (error) {
-        streamError = error
-        waiting?.reject(error)
-        waiting = undefined
-      } else if (waiting) {
+      const event = { error, payload }
+      if (waiting) {
         const current = waiting
         waiting = undefined
-        current.resolve(payload)
+        current.resolve(event)
       } else {
-        queue.push(payload)
+        queue.push(event)
       }
     }
+
     const task = subscribe(callback)
     try {
       while (true) {
         if (signal?.aborted) break
-        if (streamError) throw streamError
-        const payload =
+        const event =
           queue.length > 0
-            ? queue.shift()
+            ? queue.shift()!
             : await waitForEvent(signal, (next) => (waiting = next))
-        if (payload === STREAM_ABORTED) break
-        yield map(payload)
+        if (event === STREAM_ABORTED) break
+        if (event.error) throw event.error
+        yield map(event.payload)
       }
     } finally {
       closed = true
@@ -348,19 +352,19 @@ export class FrostfastProject {
 }
 
 const STREAM_ABORTED: unique symbol = Symbol('frostfast.stream-aborted')
+type StreamEvent = { error: Error | null; payload: unknown }
 
 function waitForEvent(
   signal: AbortSignal | undefined,
   setWaiting: (
     waiting:
       | {
-          resolve: (payload: unknown | typeof STREAM_ABORTED) => void
-          reject: (error: Error) => void
+          resolve: (event: StreamEvent | typeof STREAM_ABORTED) => void
         }
       | undefined
   ) => void
-): Promise<unknown | typeof STREAM_ABORTED> {
-  return new Promise((resolve, reject) => {
+): Promise<StreamEvent | typeof STREAM_ABORTED> {
+  return new Promise((resolve) => {
     const onAbort = (): void => {
       signal?.removeEventListener('abort', onAbort)
       setWaiting(undefined)
@@ -370,10 +374,6 @@ function waitForEvent(
       resolve: (payload) => {
         signal?.removeEventListener('abort', onAbort)
         resolve(payload)
-      },
-      reject: (error) => {
-        signal?.removeEventListener('abort', onAbort)
-        reject(error)
       },
     })
     if (signal?.aborted) onAbort()

@@ -78,6 +78,21 @@ overwritten), the config is wrapped, and a self-perpetuating
 `postinstall` hook is chained into the host `package.json`. Opt out with
 `BLAZEFIRE_SKIP_AUTO=1`.
 
+### Frostfast native binary
+
+Blazefire's compiler and dev event streams require a Frostfast N-API `.node`
+binary. This repository does not bundle that binary or publish an
+`@frostfast/native` package. Provide a compatible binary before invoking the
+compiler/build APIs:
+
+```bash
+FROSTFAST_NATIVE_PATH=/absolute/path/to/frostfast.<platform-abi>.node
+```
+
+Alternatively set `FROSTFAST_NATIVE_DIR` to the directory containing that
+file. The loader reports each attempted location when no binding is found;
+installing this JavaScript package alone does not provide the native compiler.
+
 Verified on all four package managers — the framework switch itself is
 always automatic (no `next.config` edits), with two package-manager-level
 script approvals required first where their global security policies block

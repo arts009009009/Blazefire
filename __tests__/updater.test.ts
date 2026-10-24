@@ -41,6 +41,18 @@ describe('runUpdate', () => {
     expect(spawnSync).not.toHaveBeenCalled()
   })
 
+  it('refuses malformed release versions before invoking the package manager', async () => {
+    ;(checkForUpdate as jest.Mock).mockResolvedValue({
+      current: '2.0.0',
+      latest: '2.1.0/other',
+      updateAvailable: true,
+    })
+
+    await expect(runUpdate({ projectRoot, onLog: () => undefined })).resolves.toBe(1)
+
+    expect(spawnSync).not.toHaveBeenCalled()
+  })
+
   it('preserves the installed package and lockfile when installation fails', async () => {
     const installedPackage = join(projectRoot, 'node_modules', 'blazefire')
     const lockfile = join(projectRoot, 'package-lock.json')
