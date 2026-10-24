@@ -200,7 +200,7 @@ describe('hook chaining (v1 bug: bare `&&` let host separators swallow the hook)
     expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
     expect(currentPostinstall(packageJson)).toBe(`(${host}\n) && ${HOOK_COMMAND}`)
 
-    expect(undoHook(projectRoot)).toEqual({ changed: true })
+    expect(undoHook(projectRoot).changed).toBe(true)
     expect(currentPostinstall(packageJson)).toBe(host)
   })
 

@@ -204,13 +204,18 @@ it('keeps portal observers for late overlay updates and disconnects on removal',
     expect(runtime.observerCount()).toBe(2)
     expect(queryAll).toHaveBeenCalledTimes(1) // the synchronous initial scan
 
-    // A burst of mutations must coalesce into ONE debounced re-scan.
+    // Shadow-root mutation bursts stay debounced and never disconnect anything.
     for (let i = 0; i < 5; i++) instances[0]!.trigger()
+    jest.advanceTimersByTime(150)
+    expect(runtime.observerCount()).toBe(2)
+    expect(instances[0]!.disconnected).toBe(false)
+
+    // A burst of PORTAL mutations coalesces into ONE debounced re-scan.
+    for (let i = 0; i < 5; i++) instances[1]!.trigger()
     expect(queryAll).toHaveBeenCalledTimes(1) // nothing yet — still debouncing
     jest.advanceTimersByTime(150)
     expect(queryAll).toHaveBeenCalledTimes(2) // the whole burst ran once
-    expect(runtime.observerCount()).toBe(2)
-    expect(instances[0]!.disconnected).toBe(false)
+    expect(instances[0]!.disconnected).toBe(false) // portal still present
 
     portalPresent = false
     instances[1]!.trigger()
