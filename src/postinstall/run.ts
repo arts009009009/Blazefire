@@ -23,10 +23,6 @@ export async function main(): Promise<void> {
 }
 
 // Self-execute only when run directly (node dist/postinstall/run.js),
-// never when imported by the CLI.
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
 // never when imported by the CLI. argv[1] may be a symlink while
 // import.meta.url is the resolved realpath — check both forms.
 function invokedDirectly(): boolean {
