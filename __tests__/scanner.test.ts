@@ -193,4 +193,17 @@ module.exports = { reactStrictMode: true }
     expect(result.code).toContain('module.exports = blazefire({ reactStrictMode: true })')
     expect(result.code).not.toContain('blazefire(.loadConfig')
   })
+
+  it('keeps a UTF-8 BOM in front of the wrapped config', () => {
+    const result = rewrite('\uFEFFexport default { a: 1 }\n')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code.startsWith('\uFEFF')).toBe(true)
+    expect(result.code).toContain('export default blazefire({ a: 1 })')
+  })
+
+  it('refuses an empty or comment-only config with a clear reason', () => {
+    expect(rewrite('').ok).toBe(false)
+    expect(rewrite('// nothing here yet\n').ok).toBe(false)
+  })
 })

@@ -285,6 +285,23 @@ describe('bulletproofing (malformed hosts, unreadable configs, `**` workspaces)'
     expect(JSON.parse(out).scripts.postinstall).toBe(HOOK_COMMAND)
   })
 
+  it('hooks a BOM-prefixed package.json and keeps the BOM', () => {
+    // npm tolerates a UTF-8 BOM; JSON.parse alone does not. Windows-authored
+    // package.json files must not silently lose their hook.
+    const original = '\uFEFF{\n  "name": "bom-demo",\n  "scripts": {}\n}\n'
+    writeFileSync(join(projectRoot, 'package.json'), original)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    const out = readFileSync(join(projectRoot, 'package.json'), 'utf8')
+    expect(out.charCodeAt(0)).toBe(0xfeff)
+    expect(JSON.parse(out.slice(1)).scripts.postinstall).toBe(HOOK_COMMAND)
+
+    expect(undoHook(projectRoot).changed).toBe(true)
+    const undone = readFileSync(join(projectRoot, 'package.json'), 'utf8')
+    expect(undone.charCodeAt(0)).toBe(0xfeff)
+    expect(JSON.parse(undone.slice(1)).scripts.postinstall).toBeUndefined()
+  })
+
   it('never treats a dependency as a workspace through a `**` pattern', () => {
     writeFileSync(
       join(projectRoot, 'package.json'),
