@@ -1,11 +1,12 @@
 /**
  * Package-manager detection — v1 port.
  *
- * Detection order (kept from v1): npm_config_user_agent wins when it names a
- * manager, otherwise the first lockfile found walking up from the project
- * root. Only npm / yarn / pnpm / bun are ever shelled out to, and only with
- * fixed argument shapes (no interpolated user input beyond package names and
- * registry URLs, which are shell-quoted).
+ * Detection order: the first lockfile found walking up from the project root
+ * wins when it names a manager (a lockfile is the ground truth of what
+ * installs there); otherwise npm_config_user_agent, otherwise npm. Only npm /
+ * yarn / pnpm / bun are ever shelled out to, and only with fixed argument
+ * shapes (no interpolated user input beyond package names and registry URLs,
+ * which are shell-quoted).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -40,10 +41,12 @@ export function detectPackageManager(start = process.cwd()): PackageManager {
   const fromLockfile = lockfileManager(start)
   if (fromUa) {
     const uaManager = fromUa[1] as PackageManager
-    // `npx blazefire update` always reports an npm user agent, but a project
-    // lockfile naming a different manager is the stronger signal — otherwise
-    // we'd run npm inside a pnpm/yarn project and fork its lockfile.
-    if (uaManager === 'npm' && fromLockfile && fromLockfile !== 'npm') return fromLockfile
+    // A project lockfile naming a different manager is the stronger signal in
+    // BOTH directions: `npx` reports an npm UA inside pnpm/yarn projects, and
+    // `pnpm dlx` / `bunx` report their own UA inside npm projects. Running the
+    // UA's manager against the other lockfile forks it (pnpm rewrites
+    // node_modules to store layout; npm ci then fails "out of sync").
+    if (fromLockfile && fromLockfile !== uaManager) return fromLockfile
     return uaManager
   }
   return fromLockfile ?? 'npm'

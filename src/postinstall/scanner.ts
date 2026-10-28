@@ -167,7 +167,12 @@ function startsNewStatement(src: string, i: number): boolean {
 function statementEnd(src: string, start: number): number {
   let i = start
   let depth = 0
-  let atLineStart = true
+  // `start` sits mid-line (just after `export default` / `module.exports =`),
+  // so the expression's FIRST token must never be tested as a new statement —
+  // doing so made `export default function nextConfig() {}` match `function\s`
+  // and end the statement at its own start (empty expression, false
+  // "could not locate the config expression").
+  let atLineStart = false
   while (i < src.length) {
     const c = src[i]!
     if (c === '"' || c === "'" || c === '`') {

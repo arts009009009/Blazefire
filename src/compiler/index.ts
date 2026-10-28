@@ -73,11 +73,39 @@ export function createCompiler(binding?: FrostfastBinding): CompilerInstance {
 function isModuleSource(code: string, options?: TransformOptions): boolean {
   if (options?.jsc?.parser?.syntax === 'typescript') return true
   if (options?.module?.type) return true
-  // Heuristics kept minimal: only a LEADING import/export counts (no `m`
-  // flag, so a match inside a comment or template literal on a later line
-  // can never misclassify a script as a module). The native side parses
-  // when unsure.
-  return /^\s*(?:import|export)\b/.test(code)
+  // Only a LEADING import/export counts (no `m` flag, so a match on a later
+  // line can never misclassify a script as a module) — but "leading" means
+  // after the file's leading trivia. A shebang, license banner or lint
+  // directive before the first `import` is ESM too, and passing isModule=false
+  // for it makes the native parser reject top-level import/export.
+  return /^(?:import|export)\b/.test(stripLeadingTrivia(code))
+}
+
+/** Drop leading whitespace, shebang lines, line comments, and block comments. */
+function stripLeadingTrivia(code: string): string {
+  let i = 0
+  for (;;) {
+    while (i < code.length && /\s/.test(code[i]!)) i += 1
+    if (code[i] === '#' && code[i + 1] === '!') {
+      const eol = code.indexOf('\n', i)
+      if (eol === -1) return ''
+      i = eol + 1
+      continue
+    }
+    if (code[i] === '/' && code[i + 1] === '/') {
+      const eol = code.indexOf('\n', i)
+      if (eol === -1) return ''
+      i = eol + 1
+      continue
+    }
+    if (code[i] === '/' && code[i + 1] === '*') {
+      const end = code.indexOf('*/', i + 2)
+      if (end === -1) return ''
+      i = end + 2
+      continue
+    }
+    return code.slice(i)
+  }
 }
 
 export { loadFrostfastBinding, loadFrostfastBindingSync }

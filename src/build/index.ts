@@ -12,11 +12,12 @@
 
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
 import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
 import type { RustifiedEnvVar } from '../config/serialize.js'
+import { BlazefireConfigError } from '../config/types.js'
 
 export interface BuildInput {
   dir: string
@@ -41,6 +42,16 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const distDir = isAbsolute(configuredDistDir)
     ? configuredDistDir
     : resolve(dir, configuredDistDir)
+  // cleanDistDir() recursively deletes the whole dist dir, so a distDir that
+  // IS or CONTAINS the project root would wipe the source tree (one typo like
+  // `distDir: '.'` away from `rm -rf <project>`). Out-of-tree dirs are fine;
+  // anything that swallows the project is refused before a single rm.
+  const insideProject = relative(distDir, dir)
+  if (insideProject === '' || (!insideProject.startsWith('..') && !isAbsolute(insideProject))) {
+    throw new BlazefireConfigError(
+      `distDir (${configuredDistDir}) resolves to ${distDir}, which is the project root or one of its parents — refusing to clean it. Choose a dedicated output directory inside the project (default: .blazefire).`
+    )
+  }
   // Unique per build so successive builds are distinguishable (deployment
   // ID / cache keys). A version-derived default made every build identical.
   const buildId = input.buildId ?? randomUUID()

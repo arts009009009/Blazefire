@@ -358,8 +358,14 @@ export function isLifecycleHook(value: string): boolean {
  * error), and a `#` comment swallows the rest of the line. `&&`, `||` and
  * `|` are left-associative at equal/tighter precedence and already bind the
  * appended hook correctly, so scripts carrying only those stay untouched.
+ *
+ * FD redirections (`2>&1`, `&>log`, `>&2`) carry a bare `&` too, but it is
+ * an OPERATOR, not a statement separator: it binds tighter than `&&` in both
+ * cmd.exe and POSIX sh, so flat chaining is safe there — and grouping a
+ * cmd-compatible script would emit `(...)` parens cmd.exe cannot parse at
+ * all (npm runs scripts through cmd.exe on Windows by default).
  */
-const NEEDS_GROUPING = /(^|[^&])&([^&]|$)|;|#|\n/
+const NEEDS_GROUPING = /(^|[^&<>])&([^&>]|$)|;|#|\n/
 
 /**
  * Append our lifecycle hook to a host script.
@@ -501,6 +507,10 @@ export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome
         continue
       }
 
+      // Only claim the host's package.json AFTER the config write succeeds:
+      // a failed backup/write leaves nothing to activate, and restore() can
+      // only undo the hook when a backup exists — claiming the root early
+      // would install an unremovable postinstall hook.
       hookRoots.add(projectRoot)
       const backup = path.join(
         projectRoot,

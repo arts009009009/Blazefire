@@ -96,7 +96,16 @@ export async function checkForUpdate(): Promise<CheckResult> {
   if (!recentlyCheckedWithLatest()) {
     const latest = await fetchLatestVersion()
     if (!latest) return { current, latest: null, updateAvailable: false }
+    // Use the fetched value DIRECTLY: writeState is best-effort (it swallows
+    // every error — unwritable state files are common in shared /tmp), and a
+    // failed write must only cost an extra fetch later, never throw away a
+    // successful result or report a stale version.
     writeState({ lastCheck: Date.now(), latestVersion: latest })
+    return {
+      current,
+      latest,
+      updateAvailable: compareVersions(current, latest) < 0,
+    }
   }
 
   const { latestVersion } = readState()

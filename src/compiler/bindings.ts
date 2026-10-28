@@ -148,7 +148,11 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
       source: 'FROSTFAST_NATIVE_DIR',
       path: (() => {
         const dir = deps.env('FROSTFAST_NATIVE_DIR')
-        return dir ? join(dir, `frostfast.${abi}.node`) : null
+        if (!dir) return null
+        // Resolve against the project dir like the PATH rung above: a bare
+        // relative specifier would be resolved by require() as an npm
+        // PACKAGE name (node_modules lookup), not as the path it is.
+        return join(isAbsolute(dir) ? dir : resolve(cwd, dir), `frostfast.${abi}.node`)
       })(),
     },
     {

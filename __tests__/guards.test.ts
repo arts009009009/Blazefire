@@ -63,7 +63,11 @@ describe('mandate 1 — no legacy bundler bloat', () => {
   })
 
   it('has no pages-router surface', () => {
-    const offenders = sourceFiles.filter((f) => /getServerSideProps|\/pages\//.test(f))
+    const offenders = sourceFiles.filter(
+      (f) =>
+        /getServerSideProps|getStaticProps/.test(readFileSync(f, 'utf8')) ||
+        /\/pages\//.test(f)
+    )
     expect(offenders.map(relative)).toEqual([])
   })
 })
