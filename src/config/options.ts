@@ -93,7 +93,17 @@ export function omitOptions(x: unknown): Record<string, unknown> {
  */
 export function isNextConfig(x: unknown): boolean {
   if (!x || typeof x !== 'object') return false
-  return Object.keys(x).some(
-    (key) => !isOurOption(key, (x as Record<string, unknown>)[key])
-  )
+  if (
+    Object.keys(x).some((key) => !isOurOption(key, (x as Record<string, unknown>)[key]))
+  ) {
+    return true
+  }
+  // A class instance carries its shape on the PROTOTYPE, where methods and
+  // getters are non-enumerable — Object.keys sees nothing. Guessing "options
+  // bag" here would replace the user's entire config with our defaults, so
+  // anything whose prototype is not the plain object prototype is a config.
+  // (An options bag still partitions correctly: pickOptions/omitOptions key
+  // off option NAMES, which survive the classification.)
+  const proto = Object.getPrototypeOf(x)
+  return proto !== null && proto !== Object.prototype
 }

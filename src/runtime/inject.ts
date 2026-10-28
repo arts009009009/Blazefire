@@ -194,6 +194,15 @@ export function installOverlayRuntime(
 
   scanPortals()
 
+  // PRODUCTION: the loader prepends this module ahead of application code, so
+  // the synchronous scan above provably runs before any portal exists — one
+  // shot at module init would rebrand nothing. Re-scan once at DOM ready
+  // (portals mount during initial render). Still strictly zero observers:
+  // this is a single event, not a watch (H-05 holds).
+  if (!dev && !disposed && doc.readyState === 'loading') {
+    doc.addEventListener('DOMContentLoaded', () => scanPortals(), { once: true })
+  }
+
   // DEV only: watch for the overlay portal being (re)mounted. Scoped to
   // childList on documentElement — never a characterData-heavy scan, and
   // compiled out of production bundles entirely.

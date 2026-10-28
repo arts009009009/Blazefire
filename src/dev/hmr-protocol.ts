@@ -25,4 +25,11 @@ export type HmrMessage =
   | ConnectedMessage
   | { type: 'update'; payload: unknown }
 
+/**
+ * Every message the pipeline emits carries a monotonic per-session `id`, so a
+ * (re)connecting client can detect gaps and replay from `Last-Event-ID` —
+ * the transport contract the deferred SSE/WebSocket wiring builds on.
+ */
+export type StampedMessage = HmrMessage & { id: number }
+
 export const HMR_ENDPOINT = '/_next/hmr'

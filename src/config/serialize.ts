@@ -21,6 +21,21 @@ import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { BlazefireConfigError } from './types.js'
 
+/**
+ * Own-property write that bypasses the `__proto__` setter on Object.prototype.
+ * Plain `obj[key] = value` with key `__proto__` swaps the object's prototype
+ * instead of adding a key, so the value would silently vanish from what
+ * crosses into Rust (or corrupt a merged rules map).
+ */
+export function defineOwn<T>(target: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
+}
+
 /** Decomposition of a RegExp — regexes cannot cross napi natively (v1 convention, kept). */
 export type SerializedPattern =
   | { type: 'regex'; value: { source: string; flags: string } }
@@ -165,7 +180,7 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     }
     if (obj instanceof Map) {
       const out: Record<string, unknown> = {}
-      for (const [k, v] of obj) out[String(k)] = toWire(v, path, seen)
+      for (const [k, v] of obj) defineOwn(out, String(k), toWire(v, path, seen))
       return out
     }
     if (obj instanceof Set) {
@@ -175,7 +190,7 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(obj)) {
       const wired = toWire(v, `${path}.${k}`, seen)
-      if (wired !== undefined) out[k] = wired
+      if (wired !== undefined) defineOwn(out, k, wired)
     }
     return out
   } finally {
