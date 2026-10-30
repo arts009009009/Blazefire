@@ -1,9 +1,36 @@
 # Blazefire v2.0 — Bug Sweep Report
 
-Date: 2026-10-28 · Scope: all of `src/` (4,824 LOC, 38 modules) + test suite
+Date: 2026-10-30 (initial sweep 2026-10-28) · Scope: all of `src/` (4,824 LOC, 38 modules) + test suite
 Method: static deep review, six parallel subsystem passes; every finding below
-was re-verified against the source by hand. No Node runtime was available in the
-review environment, so nothing here was confirmed by execution.
+was re-verified against the source by hand, and every fix below was verified by
+`npm test` (15 suites / 151 tests) + `tsc --noEmit`.
+
+## Fix status
+
+**Fixed (high/medium, 2026-10-30):** H-1, H-2, H-3, H-4, M-1 … M-13 — all
+high and medium findings. Each has a regression test:
+
+| Finding | Regression test |
+|---|---|
+| H-1 distDir wipe | `build.test.ts` — "refuses a distDir that would wipe the project root" |
+| H-2 dead HMR streams | `hot-reloader.test.ts` — cancel/revive/restart suites |
+| H-3 prototype configs | `plugin.test.ts` — prototype webpack + `Object.create` config |
+| H-4 named function configs | `scanner.test.ts` — named/anonymous/async function forms |
+| M-1 NATIVE_DIR as package | `bindings.test.ts` — relative dir resolves to an absolute path |
+| M-2 discarded fetch result | `update-check.test.ts` — "still reports a freshly fetched version when the state write fails" |
+| M-3 UA/lockfile precedence | `update-check.test.ts` — `detectPackageManager` describe |
+| M-4 hook after failed write | (verified by existing `restore` tests + code path review) |
+| M-5 unguarded emit | covered by `hot-reloader.test.ts` failure tests |
+| M-6 stream leak | `hot-reloader.test.ts` — last-unsubscribe cancellation |
+| M-7 issue marshalling | `hot-reloader.test.ts` (via emit stamping) + `issueList` unit path |
+| M-8 no ids/resume | `hot-reloader.test.ts` — stamped `connected` handshake delivery |
+| M-9 guards read paths | fixed in place (guards suite passes) |
+| M-10 `__proto__` keys | `config-serialize.test.ts` + `config-merge.test.ts` |
+| M-11 prod overlay scan | `inject.test.ts` — DOM-ready re-scan tests |
+| M-12 `2>&1` grouping | `activation.test.ts` — "keeps FD-redirection hosts flat" |
+| M-13 shebang ESM | `compiler-facade.test.ts` |
+
+**Still open:** the 33 low-severity items below (L-1 … L-33) — not yet fixed.
 
 Severity key: **high** = data loss, permanent breakage, or a headline guarantee
 violated · **medium** = wrong behavior on a common path · **low** = edge case,

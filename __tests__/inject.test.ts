@@ -127,6 +127,44 @@ describe('installOverlayRuntime', () => {
     }
   })
 
+  it('re-scans once at DOM ready in production (the init scan runs before any portal exists)', () => {
+    const handlers = new Map<string, () => void>()
+    let scans = 0
+    const doc = {
+      ...stubDocument(),
+      readyState: 'loading',
+      addEventListener: (type: string, cb: () => void) => handlers.set(type, cb),
+      querySelectorAll: () => {
+        scans += 1
+        return []
+      },
+    } as unknown as Document
+
+    const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const runtime = installOverlayRuntime(false, doc)
+    expect(scans).toBe(1) // module-init scan (provably empty at that point)
+
+    handlers.get('DOMContentLoaded')?.()
+    expect(scans).toBe(2) // the one-shot re-scan that can actually see portals
+    expect(runtime.observerCount()).toBe(0) // still ZERO observers (H-05)
+    runtime.dispose()
+  })
+
+  it('registers no DOM-ready listener when the document is already parsed', () => {
+    const handlers = new Map<string, () => void>()
+    const doc = {
+      ...stubDocument(),
+      readyState: 'complete',
+      addEventListener: (type: string, cb: () => void) => handlers.set(type, cb),
+      querySelectorAll: () => [],
+    } as unknown as Document
+
+    const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const runtime = installOverlayRuntime(false, doc)
+    expect(handlers.has('DOMContentLoaded')).toBe(false)
+    runtime.dispose()
+  })
+
   it('creates a portal observer in dev mode and releases it on dispose', () => {
     const instances: Array<{ disconnected: boolean; observe: () => void }> = []
     const RealMO = global.MutationObserver
