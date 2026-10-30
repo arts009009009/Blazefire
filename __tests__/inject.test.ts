@@ -238,6 +238,30 @@ describe('installOverlayRuntime', () => {
     expect(applyOverlayToRoot(root, stubDocument())).toBe(false)
   })
 
+  it('rebrands a whitespace-padded label and keeps its padding (L-11)', () => {
+    const { applyOverlayToRoot } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    // textChild hands back RAW data while the label regex is anchored
+    // (^Turbopack$): the padded node used to pass the gate, fail the regex,
+    // and never rebrand. The trimmed core must match, padding re-applied.
+    const textNode = { nodeType: 3, data: ' Turbopack ', nextSibling: null }
+    const label = {
+      firstChild: textNode,
+      getAttribute: () => null,
+      setAttribute: () => undefined,
+    }
+    const styles: StubElement[] = []
+    const root = {
+      getElementById: (id: string) => styles.find((style) => style.id === id) ?? null,
+      querySelectorAll: (selector: string) =>
+        selector === '.turbopack-text' ? [label] : [],
+      appendChild: (style: StubElement) => styles.push(style),
+    } as unknown as ShadowRoot
+
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(true)
+    expect(textNode.data).toBe(' Frostfast ') // core rebranded, lead/trail intact
+    expect(applyOverlayToRoot(root, stubDocument())).toBe(false) // still idempotent
+  })
+
   it('constructs ZERO observers in production mode (dev=false)', () => {
     const created: unknown[] = []
     const RealMO = global.MutationObserver
