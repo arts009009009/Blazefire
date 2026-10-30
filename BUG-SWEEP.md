@@ -3,7 +3,7 @@
 Date: 2026-10-30 (initial sweep 2026-10-28) · Scope: all of `src/` (4,824 LOC, 38 modules) + test suite
 Method: static deep review, six parallel subsystem passes; every finding below
 was re-verified against the source by hand, and every fix below was verified by
-`npm test` (15 suites / 151 tests) + `tsc --noEmit`.
+`npm test` (15 suites / 152 tests) + `tsc --noEmit`.
 
 ## Fix status
 
