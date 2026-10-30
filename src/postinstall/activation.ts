@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { PACKAGE_ROOT } from '../package-root.js'
-import { rewrite, SNIPPET } from './scanner.js'
+import { CJS_REQUIRE, rewrite, SNIPPET } from './scanner.js'
 
 export const CONFIG_NAMES = [
   'next.config.js',
@@ -519,7 +519,10 @@ export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome
           continue
         }
         say(`skipped ${relative} — ${result.reason}`)
-        say(`add this next to your config manually:\n  ${SNIPPET}`)
+        // Provide the appropriate snippet based on the config file extension
+        const isEsm = /\.(m?ts|m?js)$/.test(configPath) && !/\.cjs$/.test(configPath)
+        const snippet = isEsm ? SNIPPET : CJS_REQUIRE + '\nmodule.exports = blazefire(nextConfig)'
+        say(`add this next to your config manually:\n  ${snippet}`)
         continue
       }
 
