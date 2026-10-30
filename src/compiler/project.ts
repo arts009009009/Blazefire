@@ -4,8 +4,12 @@
  * Responsibilities (and nothing more — no wrapper cruft, mandate 3):
  *  - construct the native project with compact, hash-keyed config (H-08)
  *  - expose the incremental graph's event streams as AsyncIterables that
- *    ALWAYS dispose their RootTask (v1 required manual disposal in every
- *    consumer's finally; here it cannot be forgotten)
+ *    dispose their RootTask: deterministically on every explicit path
+ *    (completion, throw, .return(), abort) and best-effort at GC via a
+ *    FinalizationRegistry backstop when a consumer abandons an iterator
+ *    mid-iteration without calling .return() (v1 required manual disposal
+ *    in every consumer's finally; here it cannot be forgotten on the
+ *    explicit paths, and leaked only if the iterator itself is dropped)
  *  - strip discarded issues before any JS consumer sees them (H-09)
  */
 
@@ -302,7 +306,9 @@ export class FrostfastProject {
   }
 
   // -------------------------------------------------------------------------
-  // Event streams: AsyncIterables that dispose their RootTask unconditionally.
+  // Event streams: AsyncIterables that dispose their RootTask —
+  // deterministically on explicit completion/throw/.return()/abort, and
+  // best-effort at GC for abandoned iterators (L-22, see #stream).
   // -------------------------------------------------------------------------
 
   /** Route-graph changes. */
@@ -345,13 +351,13 @@ export class FrostfastProject {
         // null/undefined passthrough means the empty-payload guard below
         // still fires after stripping.
         const stripped = stripDiscardedIssues(
-          payload as NapiUpdateMessage,
+          payload as NapiUpdateMessage & IssueBearingPayload,
           this.issuePolicy
         )
         if (stripped === null || stripped === undefined) {
           throw new Error('Frostfast emitted an empty update-info message')
         }
-        const message = stripped
+        const message: NapiUpdateMessage = stripped
         if (message.updateType !== 'start' && message.updateType !== 'end') {
           throw new Error(`Frostfast emitted an unknown update type: ${message.updateType}`)
         }
@@ -434,6 +440,23 @@ export class FrostfastProject {
     }
 
     const task = subscribe(callback)
+    // Idempotent disposal: the finally below and the GC backstop must never
+    // double-dispose the native RootTask.
+    let disposed = false
+    const dispose = (): void => {
+      if (disposed) return
+      disposed = true
+      this.#binding.rootTaskDispose(task)
+    }
+    // GC backstop (L-22): a consumer that obtains this iterator and drops it
+    // mid-iteration WITHOUT calling .return() parks this generator at `yield`
+    // forever — the native RootTask and the callback's closure into this
+    // frame would leak. The token below is captured only by this frame, so
+    // it becomes garbage exactly when the abandoned frame does; the registry
+    // then disposes the task. Explicit paths unregister first, so their
+    // disposal stays deterministic and the backstop never fires twice.
+    const gcToken = {}
+    abandonedStreamCleanup.register(gcToken, dispose, gcToken)
     try {
       while (true) {
         if (signal?.aborted) break
@@ -446,12 +469,22 @@ export class FrostfastProject {
         yield map(event.payload)
       }
     } finally {
+      abandonedStreamCleanup.unregister(gcToken)
       closed = true
       waiting = undefined
-      this.#binding.rootTaskDispose(task)
+      dispose()
     }
   }
 }
+
+/**
+ * Last-resort cleanup for ABANDONED stream iterators (L-22). The callback
+ * runs only after the parked generator frame is collected; explicit
+ * consumption paths unregister before disposing, so this never races them.
+ */
+const abandonedStreamCleanup = new FinalizationRegistry<() => void>((dispose) =>
+  dispose()
+)
 
 const STREAM_ABORTED: unique symbol = Symbol('frostfast.stream-aborted')
 type StreamEvent = { error: Error | null; payload: unknown }

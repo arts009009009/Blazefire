@@ -1,10 +1,19 @@
 import { FrostfastProject, getRouteNames } from '../src/compiler/project'
+import type { CreateProjectInput } from '../src/compiler/project'
+import { resetWorkerSchedulerForTests } from '../src/compiler/bindings'
 import type {
   FrostfastBinding,
   NapiEntrypoints,
   ProjectHandle,
   RootTaskHandle,
 } from '../src/compiler/native-contract'
+
+// The worker-scheduler registration latch (spec H-13) is module-level state.
+// Without this reset the registration-FAILURE tests below are only correct
+// while `workerSchedulerRegistered` happens to be false — any earlier
+// successful registration in this file would latch it forever and silently
+// neuter their assertions (L-32).
+beforeEach(() => resetWorkerSchedulerForTests())
 
 function makeProjectUpdateMock() {
   const handle = {} as ProjectHandle
@@ -30,7 +39,10 @@ describe('getRouteNames', () => {
   })
 })
 
-async function createProject(binding: FrostfastBinding): Promise<FrostfastProject> {
+async function createProject(
+  binding: FrostfastBinding,
+  overrides: Partial<Omit<CreateProjectInput, 'binding'>> = {}
+): Promise<FrostfastProject> {
   return FrostfastProject.create({
     binding,
     rootPath: '/old',
@@ -41,6 +53,7 @@ async function createProject(binding: FrostfastBinding): Promise<FrostfastProjec
     env: {},
     defineEnv: {},
     nextConfig: {},
+    ...overrides,
   })
 }
 
@@ -67,6 +80,25 @@ describe('FrostfastProject.update', () => {
     await expect(project.update(update)).rejects.toThrow('native update failed')
     await expect(project.update(update)).resolves.toBe(true)
     expect(binding.projectUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('never lets in-place mutation of a caller-owned config leak into a later update (L-29)', async () => {
+    const { binding } = makeProjectUpdateMock()
+    // The caller keeps a live reference to the config it passed in; snapshot
+    // must NOT alias it, or mutating this object would silently flow into
+    // the next serialization as a phantom native update.
+    const nextConfig = { experimental: { scope: 'original' } }
+    const project = await createProject(binding, { nextConfig })
+
+    nextConfig.experimental.scope = 'mutated-out-of-band'
+
+    // An UNRELATED change forces an update; its payload must carry the
+    // ORIGINAL captured value, not the out-of-band mutation.
+    await project.update({ rootPath: '/new' })
+    const update = (binding.projectUpdate as jest.Mock).mock.calls[0]![1]
+    expect(JSON.parse(update.nextConfig).nextConfig).toEqual({
+      experimental: { scope: 'original' },
+    })
   })
 })
 
@@ -194,5 +226,85 @@ describe('FrostfastProject event streams', () => {
     await expect(events.next()).resolves.toEqual({ done: false, value: { type: 'start' } })
     await expect(events.next()).rejects.toThrow('native subscription failed')
     expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
+  })
+
+  it('disposes the native task when the consumer returns an in-flight iterator (L-22)', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectEntrypointsSubscribe: jest.fn((_handle, callback) => {
+        callback(null, { value: { routes: new Map() } })
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding)
+    const events = project.entrypointEvents()[Symbol.asyncIterator]()
+
+    // One event consumed; the iterator is now parked mid-iteration.
+    await events.next()
+    await events.return?.()
+    await events.return?.() // idempotent — never a double native dispose
+
+    // .return() is the DETERMINISTIC disposal path; the FinalizationRegistry
+    // backstop exists only for iterators abandoned without it (which GC
+    // timing makes non-deterministic to assert here). Normal completion
+    // disposal is covered by the empty-entrypoint test above.
+    expect(binding.rootTaskDispose).toHaveBeenCalledTimes(1)
+    expect(binding.rootTaskDispose).toHaveBeenCalledWith(task)
+  })
+
+  it('strips discarded issues from update-info payloads under the suppress policy (H-09)', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectUpdateInfoSubscribe: jest.fn((_handle, _aggregationMs, callback) => {
+        callback(null, {
+          updateType: 'end',
+          issues: [{ severity: 'error', message: 'discarded wrapper issue' }],
+          value: {
+            hash: 'abc',
+            issues: [{ severity: 'warning', message: 'discarded value issue' }],
+          },
+        })
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding, { issuePolicy: 'suppress' })
+    const events = project.updateInfoEvents()[Symbol.asyncIterator]()
+
+    await expect(events.next()).resolves.toEqual({
+      done: false,
+      value: { type: 'end', value: { hash: 'abc' } },
+    })
+    await events.return?.()
+  })
+
+  it('keeps update-info issues under the passthrough policy', async () => {
+    const handle = {} as ProjectHandle
+    const task = {} as RootTaskHandle
+    const issues = [{ severity: 'error' as const, message: 'kept' }]
+    const binding = {
+      projectNew: jest.fn().mockResolvedValue(handle),
+      projectUpdateInfoSubscribe: jest.fn((_handle, _aggregationMs, callback) => {
+        callback(null, {
+          updateType: 'end',
+          value: { hash: 'abc', issues },
+        })
+        return task
+      }),
+      rootTaskDispose: jest.fn(),
+    } as unknown as FrostfastBinding
+    const project = await createProject(binding, { issuePolicy: 'passthrough' })
+    const events = project.updateInfoEvents()[Symbol.asyncIterator]()
+
+    await expect(events.next()).resolves.toEqual({
+      done: false,
+      value: { type: 'end', value: { hash: 'abc', issues } },
+    })
+    await events.return?.()
   })
 })

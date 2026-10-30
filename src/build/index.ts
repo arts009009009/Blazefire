@@ -74,7 +74,11 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     isPersistentCachingEnabled: true,
   })
 
-  let buildError: unknown
+  // An explicit boolean, NOT the error value: napi promises can reject with
+  // ANY value, and a falsy rejection (`undefined`, `''`) would leave
+  // `buildError` falsy — letting the finally throw the shutdown error INSTEAD
+  // of the real failure that got us here.
+  let failed = false
   try {
     // Rust writes every output file; JS only consumes manifests (v1 truth,
     // preserved — this is where the framework stays out of the hot path).
@@ -94,7 +98,7 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
 
     return { distDir, routes, durationMs: Date.now() - started }
   } catch (error) {
-    buildError = error
+    failed = true
     throw error
   } finally {
     // Always flush + release the graph, even on failure — but never let a
@@ -102,7 +106,7 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     try {
       await project.shutdown()
     } catch (shutdownError) {
-      if (!buildError) throw shutdownError
+      if (!failed) throw shutdownError
     }
   }
 }

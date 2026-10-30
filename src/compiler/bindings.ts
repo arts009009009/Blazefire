@@ -110,6 +110,12 @@ export function defaultDeps(): LoadLadderDeps {
  *   2. FROSTFAST_NATIVE_DIR        — local Rust build: <dir>/frostfast.<abi>.node
  *   3. @frostfast/native           — meta package: native/frostfast.<abi>.node
  *   4. @frostfast/<platformArchABI>— per-platform npm package
+ *
+ * On Linux every `abi`-bearing rung enqueues BOTH libc triples — the
+ * detected one first, the other second (L-23): libc detection reads
+ * `process.report`, which is unavailable in bare Docker/scratch images, and
+ * one wrong guess must degrade to a second attempt instead of a permanent
+ * "not found" pointing the user at the wrong package forever.
  */
 export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
   binding: FrostfastBinding
@@ -117,6 +123,12 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
   attempts: LadderAttempt[]
 } {
   const abi = platformArchABI()
+  // Non-Linux triples carry no libc suffix and stay single-candidate.
+  const abis = abi.endsWith('-gnu')
+    ? [abi, abi.replace(/-gnu$/, '-musl')]
+    : abi.endsWith('-musl')
+      ? [abi, abi.replace(/-musl$/, '-gnu')]
+      : [abi]
   const attempts: LadderAttempt[] = []
   const cwd = deps.env('INIT_CWD') ?? process.cwd()
 
@@ -133,6 +145,9 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
     return null
   }
 
+  // Rung-major, abi-minor: the DIR rung stays preferred over the npm
+  // packages regardless of libc, and within a rung the detected libc's
+  // candidate is attempted before the cross-try.
   const candidates: Array<{ source: string; path: string | null }> = [
     {
       source: 'FROSTFAST_NATIVE_PATH',
@@ -144,7 +159,7 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
         return isAbsolute(p) ? p : resolve(cwd, p)
       })(),
     },
-    {
+    ...abis.map((candidateAbi) => ({
       source: 'FROSTFAST_NATIVE_DIR',
       path: (() => {
         const dir = deps.env('FROSTFAST_NATIVE_DIR')
@@ -152,17 +167,20 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
         // Resolve against the project dir like the PATH rung above: a bare
         // relative specifier would be resolved by require() as an npm
         // PACKAGE name (node_modules lookup), not as the path it is.
-        return join(isAbsolute(dir) ? dir : resolve(cwd, dir), `frostfast.${abi}.node`)
+        return join(
+          isAbsolute(dir) ? dir : resolve(cwd, dir),
+          `frostfast.${candidateAbi}.node`
+        )
       })(),
-    },
-    {
+    })),
+    ...abis.map((candidateAbi) => ({
       source: '@frostfast/native',
-      path: resolveAny(`@frostfast/native/native/frostfast.${abi}.node`),
-    },
-    {
-      source: `@frostfast/${abi}`,
-      path: resolveAny(`@frostfast/${abi}/frostfast.${abi}.node`),
-    },
+      path: resolveAny(`@frostfast/native/native/frostfast.${candidateAbi}.node`),
+    })),
+    ...abis.map((candidateAbi) => ({
+      source: `@frostfast/${candidateAbi}`,
+      path: resolveAny(`@frostfast/${candidateAbi}/frostfast.${candidateAbi}.node`),
+    })),
   ]
 
   for (const candidate of candidates) {
@@ -183,12 +201,14 @@ export function loadFromLadder(deps: LoadLadderDeps = defaultDeps()): {
     }
   }
 
+  // Name every triple that was probed (L-23) — a single guessed libc must
+  // never be reported as THE platform when both were tried.
   throw new FrostfastBindingError(
-    `Frostfast native binding not found for ${abi}. ` +
+    `Frostfast native binding not found for ${abi} (tried ${abis.join(' and ')}). ` +
       'Install @frostfast/native, or point FROSTFAST_NATIVE_PATH / ' +
-      'FROSTFAST_NATIVE_DIR at a built frostfast.' +
-      abi +
-      '.node.\nAttempts:\n' +
+      'FROSTFAST_NATIVE_DIR at a built ' +
+      abis.map((candidateAbi) => `frostfast.${candidateAbi}.node`).join(' or ') +
+      '.\nAttempts:\n' +
       attempts.map((a) => `  - ${a.source}: ${a.detail}`).join('\n'),
     attempts
   )

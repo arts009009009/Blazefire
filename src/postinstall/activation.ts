@@ -191,7 +191,18 @@ function writeAtomicSync(target: string, contents: string | Buffer): void {
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.tmp`
   )
+  // Preserve the original file mode by copying it before writing
+  let originalMode: number | undefined
+  try {
+    const stat = fs.statSync(target)
+    originalMode = stat.mode
+  } catch {
+    // File doesn't exist yet, use default mode
+  }
   fs.writeFileSync(temp, contents)
+  if (originalMode !== undefined) {
+    fs.chmodSync(temp, originalMode)
+  }
   fs.renameSync(temp, target)
 }
 
@@ -291,9 +302,14 @@ export function ensureHook(packageRoot: string): HookStatus {
   }
 
   const trailingNewline = contents.endsWith('\n')
+  // Preserve indentation style: detect tabs vs spaces from the original file
+  // by checking if it contains tabs before any content
+  const hasTabs = /^[^\S\n]*\t/.test(contents)
+  const indentSize = hasTabs ? undefined : 2
+  
   // `.replace(/\n/g, eol)` normalises stringify's structural newlines so a
   // CRLF package.json comes back as CRLF throughout (never mixed).
-  const body = JSON.stringify({ ...parsed, scripts }, null, 2).replace(/\n/g, eol)
+  const body = JSON.stringify({ ...parsed, scripts }, null, indentSize).replace(/\n/g, eol)
   const next = `${hadBom ? '\uFEFF' : ''}${body}${trailingNewline ? eol : ''}`
   writeAtomicSync(packageJsonPath, next)
   say(`activated the host hook in ${path.relative(process.cwd(), packageJsonPath) || packageJsonPath}`)

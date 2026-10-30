@@ -1,5 +1,5 @@
 import React, { useId } from 'react';
-import { BLAZEFIRE_BRANDING } from '../branding.js';
+import { BLAZEFIRE_BRANDING, gradientStopOffset } from '../branding.js';
 
 export interface BlazefireLogoProps {
   size?: number;
@@ -38,7 +38,15 @@ export function BlazefireLogo({ size = 40, className = '' }: BlazefireLogoProps)
           gradientUnits="userSpaceOnUse"
         >
           {GRADIENT_STOPS.map((color, i) => (
-            <stop key={color} offset={i / (GRADIENT_STOPS.length - 1)} stopColor={color} />
+            // gradientStopOffset guards the single-stop denominator (a bare
+            // i / (len - 1) is Infinity for one stop — L-30, mirrors the SVG
+            // path's span guard); the key carries the index because gradient
+            // colours may repeat and a colour-only key would collide.
+            <stop
+              key={`${color}-${i}`}
+              offset={gradientStopOffset(i, GRADIENT_STOPS.length)}
+              stopColor={color}
+            />
           ))}
         </linearGradient>
         <filter id={glowId}>

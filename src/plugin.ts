@@ -118,7 +118,7 @@ export function blazefire(
   // REPLACE the user's whole config with ours.
   if (typeof first === 'function') {
     const userConfig = first
-    const ours = buildConfig({ ...DEFAULTS, ...(second ?? {}) })
+    const ours = buildConfig({ ...DEFAULTS, ...pickOptions(second) })
     return async function blazefireWrappedConfig(phase, ctx) {
       const base = await userConfig(phase, ctx)
       return mergeConfigs(base && typeof base === 'object' ? base : {}, ours)
@@ -133,10 +133,16 @@ export function blazefire(
   // Options can arrive as the whole argument or mixed into a config
   // (`blazefire({ trailingSlash: true, theme: false })`); pull them out so
   // neither intent is lost. `second` is always the options bag and wins.
+  // EVERY options input routes through pickOptions — it is the only place
+  // coerceOptionValue runs, so a raw spread would leave an interpolated
+  // `headers: 'false'` as the STRING 'false', which `opts.headers !== false`
+  // reads as ENABLED (L-26). For an options-position argument every key is
+  // ours by definition of the isNextConfig check above, so the filter itself
+  // drops nothing — it only applies the coercion.
   const options: BlazefireOptions = {
     ...DEFAULTS,
-    ...(baseIsConfig ? pickOptions(first) : (first as BlazefireOptions)),
-    ...(second ?? {}),
+    ...pickOptions(first),
+    ...pickOptions(second),
   }
   const base = baseIsConfig ? omitOptions(first) : {}
 

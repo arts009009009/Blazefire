@@ -310,6 +310,10 @@ const BLAZEFIRE_BINDING_TARGETS = [
   'import {blazefire',
   'import{ blazefire',
   'import{blazefire',
+  'import { default: blazefire',
+  'import{default:blazefire',
+  'import { default:blazefire',
+  'import{ default: blazefire',
   'const blazefire',
   'let blazefire',
   'var blazefire',
@@ -317,6 +321,10 @@ const BLAZEFIRE_BINDING_TARGETS = [
   'const {blazefire',
   'const{ blazefire',
   'const{blazefire',
+  'const { default: blazefire',
+  'const{default:blazefire',
+  'const { default:blazefire',
+  'const{ default: blazefire',
   'let { blazefire',
   'let {blazefire',
   'let{ blazefire',
@@ -378,7 +386,12 @@ export function plan(src: string): ActivationPlan {
   if (isEsm && /^\s+class\b/.test(rest)) {
     return { ok: false, reason: '`export default class` is not a Next config' }
   }
-  if (/^\s*\{?[^;]*\bas\s+default\b/.test(src.slice(Math.max(0, hit.index - 120), headEnd))) {
+  // Detect `export { x as default }` form, but skip comments/strings in the lookback.
+  // Use a larger window and exclude comments explicitly.
+  const lookbackSlice = src.slice(Math.max(0, hit.index - 200), headEnd)
+  const hasAsDefault = /^\s*\{?[^;\/]*\bas\s+default\b/.test(lookbackSlice) ||
+                       /^\s*\/\/[^\n]*\bas\s+default\b/.test(lookbackSlice)
+  if (hasAsDefault) {
     return { ok: false, reason: '`export { x as default }` form not supported' }
   }
 

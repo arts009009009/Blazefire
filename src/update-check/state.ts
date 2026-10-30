@@ -31,7 +31,10 @@ export function readState(): UpdateState {
 
 export function writeState(state: UpdateState): void {
   try {
-    fs.writeFileSync(stateFile(), JSON.stringify(state))
+    const file = stateFile()
+    const temp = `${file}.${process.pid}.tmp`
+    fs.writeFileSync(temp, JSON.stringify(state))
+    fs.renameSync(temp, file)
   } catch {
     // Unwritable temp dir just means we check more often. Never fatal.
   }
