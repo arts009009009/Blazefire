@@ -5,9 +5,12 @@ Method: static review, subsystem passes, and focused regression checks.
 
 ## Executive Summary
 
-**Status: Framework is in excellent shape.**
+**Current findings:** No open HIGH or MEDIUM findings were identified in this
+refresh. Five LOW-severity edge cases remain listed below.
 
-All HIGH-severity findings (H-1 through H-4) and all MEDIUM-severity findings (M-1 through M-13) have been **fixed with regression tests**. The test suite passes (15 suites / 170 tests), TypeScript compilation succeeds, and the codebase demonstrates strong defensive programming throughout.
+The previously reported HIGH findings (H-1 through H-4) and MEDIUM findings
+(M-1 through M-13) are marked fixed with regression tests. The checks run for
+this refresh pass: 15 test suites and TypeScript compilation.
 
 **Remaining items:** 5 verified LOW-severity findings that are edge cases or non-blocking issues. These do not affect core functionality and are documented below for tracking.
 
@@ -154,7 +157,7 @@ These are edge cases that do not block core functionality but are tracked for co
 
 ```
 ✅ npm run typecheck — PASSES
-✅ npm test -- --runInBand — ALL 15 suites / 170 tests PASS
+✅ npm test -- --runInBand — ALL 15 suites / 174 tests PASS
 ✅ All HIGH severity issues — FIXED with regression tests
 ✅ All MEDIUM severity issues — FIXED with regression tests
 ⚠️  5 LOW severity findings — Edge cases, non-blocking
