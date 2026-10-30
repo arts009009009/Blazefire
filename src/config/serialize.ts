@@ -254,7 +254,12 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     }
     if (obj instanceof Map) {
       const out: Record<string, unknown> = {}
-      for (const [k, v] of obj) defineOwn(out, String(k), toWire(v, path, seen))
+      // Sorted (see sortedByKey): Map insertion order must not reach the hash.
+      for (const [k, v] of sortedByKey(
+        [...obj].map(([mk, mv]): [string, unknown] => [String(mk), mv])
+      )) {
+        defineOwn(out, k, toWire(v, path, seen))
+      }
       return out
     }
     if (obj instanceof Set) {
@@ -262,7 +267,10 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     }
 
     const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(obj)) {
+    // Sorted (see sortedByKey): insertion order of the user's config object
+    // must not change the hash. Arrays are NOT sorted anywhere in toWire —
+    // list order (defineEnv arrays, rules, headers) is semantic.
+    for (const [k, v] of sortedByKey(Object.entries(obj))) {
       const wired = toWire(v, `${path}.${k}`, seen)
       if (wired !== undefined) defineOwn(out, k, wired)
     }

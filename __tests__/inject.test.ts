@@ -156,6 +156,63 @@ describe('blazefireLoader', () => {
     expect(result).toContain(`import "${expected}";`)
     expect(result).toContain('export const app = true')
   })
+
+  it('shifts an OBJECT-typed map and delivers code + shifted map via callback', () => {
+    const { blazefireLoader } = require('../src/runtime/turbopack-loader') as typeof import('../src/runtime/turbopack-loader')
+    const callback = jest.fn()
+    const map = { version: 3, sources: ['a.ts'], names: [], mappings: 'AAAA;AACA' }
+
+    const result = blazefireLoader.call(
+      { resourcePath: '/host/app.js', callback },
+      'export const a = 1',
+      map
+    )
+
+    // Delivered through the async channel: undefined return, (null, code, map).
+    expect(result).toBeUndefined()
+    expect(callback).toHaveBeenCalledTimes(1)
+    const [error, code, delivered] = callback.mock.calls[0] as [Error | null, string, string]
+    expect(error).toBeNull()
+    expect(code).toContain('/* blazefire-injected */')
+    expect(code).toContain('export const a = 1')
+
+    // The map shifted down ONE generated line and kept its JSON shape.
+    const parsed = JSON.parse(delivered) as typeof map
+    expect(parsed.mappings).toBe(';AAAA;AACA')
+    expect(parsed.sources).toEqual(['a.ts'])
+    expect(parsed.version).toBe(3)
+    // The bundler's own object was not mutated in place.
+    expect(map.mappings).toBe('AAAA;AACA')
+  })
+
+  it('shifts a STRING-typed map via callback', () => {
+    const { blazefireLoader } = require('../src/runtime/turbopack-loader') as typeof import('../src/runtime/turbopack-loader')
+    const callback = jest.fn()
+    const map = JSON.stringify({ version: 3, sources: ['a.ts'], mappings: 'AAAA' })
+
+    blazefireLoader.call({ resourcePath: '/host/app.js', callback }, 'export const b = 2', map)
+
+    expect(callback).toHaveBeenCalledTimes(1)
+    const [, code, delivered] = callback.mock.calls[0] as [Error | null, string, string]
+    expect(code).toContain('export const b = 2')
+    expect((JSON.parse(delivered) as { mappings: string }).mappings).toBe(';AAAA')
+  })
+
+  it('still returns shifted code when a map exists but no callback is available', () => {
+    const { blazefireLoader } = require('../src/runtime/turbopack-loader') as typeof import('../src/runtime/turbopack-loader')
+    // Documented constraint: a sync string return can carry ONLY code — the
+    // loader API has no slot for a map (maps travel through `callback`), so
+    // with no callback the shifted code goes out and the input map cannot be
+    // shifted with it. Real webpack/turbopack contexts always pass `callback`.
+    const result = blazefireLoader.call(
+      { resourcePath: '/host/app.js' },
+      'export const c = 3',
+      { version: 3, mappings: 'AAAA' }
+    )
+    expect(typeof result).toBe('string')
+    expect(result).toContain('/* blazefire-injected */')
+    expect(result).toContain('export const c = 3')
+  })
 })
 
 describe('installOverlayRuntime', () => {
