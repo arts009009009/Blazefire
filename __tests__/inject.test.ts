@@ -63,6 +63,83 @@ describe('injectStyles', () => {
     const second = injectStyles(doc)
     expect(second).toBeNull() // already present
   })
+
+  it('appends immediately with no listener when the document is already parsed', () => {
+    const addEventListener = jest.fn()
+    const doc = {
+      ...stubDocument(),
+      readyState: 'complete',
+      addEventListener,
+    } as unknown as Document
+
+    const { injectStyles } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const style = injectStyles(doc)
+    expect(style).not.toBeNull()
+    expect(doc.getElementById('blazefire-styles')).toBe(style) // landed synchronously
+    expect(addEventListener).not.toHaveBeenCalled() // nothing left to wait for
+  })
+
+  it('registers exactly ONE once-listener while head is missing during load', () => {
+    const addEventListener = jest.fn()
+    const head = {
+      children: [] as StubElement[],
+      appendChild(node: StubElement) {
+        this.children.push(node)
+      },
+    }
+    const doc = {
+      head: null as unknown,
+      getElementById(id: string) {
+        return head.children.find((c) => c.id === id) ?? null
+      },
+      createElement: () => new StubStyle(),
+      addEventListener,
+      readyState: 'loading',
+      querySelectorAll: () => [],
+    } as unknown as Document
+
+    const { injectStyles } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const first = injectStyles(doc)
+    // The style never landed (no head), so the idempotency guard cannot fire
+    // and a second call reaches the retry branch — it must NOT stack a
+    // second listener (pre-fix: one leaked listener + orphan style per call).
+    const second = injectStyles(doc)
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(addEventListener).toHaveBeenCalledTimes(1)
+    const [type, handler, options] = addEventListener.mock.calls[0] as [
+      string,
+      () => void,
+      { once: boolean },
+    ]
+    expect(type).toBe('DOMContentLoaded')
+    expect(options).toEqual({ once: true })
+
+    // The event fires once head exists: exactly one style lands, and it is
+    // the first call's element (the second call's element stays orphaned
+    // garbage, never registered, never retained by a listener).
+    ;(doc as { head: unknown }).head = head
+    handler()
+    expect(head.children.filter((c) => c.id === 'blazefire-styles')).toHaveLength(1)
+    expect(doc.getElementById('blazefire-styles')).toBe(first)
+  })
+
+  it('does not register a dead listener when loading already finished without a head', () => {
+    const addEventListener = jest.fn()
+    const doc = {
+      ...stubDocument(),
+      head: null,
+      readyState: 'complete',
+      addEventListener,
+    } as unknown as Document
+
+    const { injectStyles } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+    const style = injectStyles(doc)
+    expect(style).not.toBeNull()
+    // DOMContentLoaded has already fired: a listener would NEVER run again
+    // (the pre-fix behavior — unstyled page, silent). Nothing to retry on.
+    expect(addEventListener).not.toHaveBeenCalled()
+  })
 })
 
 describe('blazefireLoader', () => {
