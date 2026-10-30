@@ -28,4 +28,27 @@ describe('loadFrostfastBinding', () => {
     available = true
     await expect(loadFrostfastBinding(deps)).resolves.toBe(binding)
   })
+
+  it('resolves a relative FROSTFAST_NATIVE_DIR as a PATH, never as a package name', async () => {
+    const binding = {} as FrostfastBinding
+    const attempted: string[] = []
+    const deps: LoadLadderDeps = {
+      env: (name) => {
+        if (name === 'FROSTFAST_NATIVE_DIR') return 'target/release' // relative on purpose
+        if (name === 'INIT_CWD') return '/proj'
+        return undefined
+      },
+      requireNative: (absolutePath) => {
+        attempted.push(absolutePath)
+        return binding
+      },
+      resolveFrom: () => null,
+      warn: () => undefined,
+    }
+
+    await expect(loadFrostfastBinding(deps)).resolves.toBe(binding)
+    // A bare relative specifier would be resolved by require() through
+    // node_modules lookup (an npm PACKAGE), not as the path it is.
+    expect(attempted[0]).toMatch(/^\/proj\/target\/release\/frostfast\..+\.node$/)
+  })
 })

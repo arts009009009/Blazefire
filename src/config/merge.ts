@@ -22,16 +22,26 @@ import {
   type TurbopackRule,
 } from './types.js'
 
-export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextConfigLike {
-  // The webpack check runs BEFORE the empty-base shortcut: a class-based
-  // config can carry `webpack` on its prototype with zero own keys, and
-  // returning early would let the hard error (spec H-01) slip past.
-  if (base && typeof (base as { webpack?: unknown }).webpack === 'function') {
+/**
+ * Refuse a real `webpack()` hook. Reads through the prototype chain (property
+ * access, not Object.keys) so a class-based config cannot evade it, and runs
+ * BEFORE any empty-object shortcut — `webpack: undefined` (the conditional
+ * idiom) and inherited hooks behave exactly as the H-01 contract requires.
+ */
+export function assertNoWebpack(config: unknown): void {
+  if (config && typeof (config as { webpack?: unknown }).webpack === 'function') {
     throw new BlazefireConfigError(
       'Blazefire v2 is Turbopack-only: the `webpack()` config hook is not supported. ' +
         'Remove it from your config (or migrate its transform to `turbopack.rules`).'
     )
   }
+}
+
+export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextConfigLike {
+  // The webpack check runs BEFORE the empty-base shortcut: a class-based
+  // config can carry `webpack` on its prototype with zero own keys, and
+  // returning early would let the hard error (spec H-01) slip past.
+  assertNoWebpack(base)
 
   if (!base || Object.keys(base).length === 0) return ours
 

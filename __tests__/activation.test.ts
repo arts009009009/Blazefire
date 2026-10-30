@@ -226,6 +226,17 @@ describe('hook chaining (v1 bug: bare `&&` let host separators swallow the hook)
     expect(chainAfterHost('plain')).toBe(`plain && ${HOOK_COMMAND}`)
     expect(chainAfterHost('a; b')).toBe(`(a; b\n) && ${HOOK_COMMAND}`)
   })
+
+  it('keeps FD-redirection hosts flat — cmd.exe cannot parse grouping parens', () => {
+    // `2>&1` carries a bare `&`, but it is an operator, not a separator: it
+    // binds tighter than `&&` in both cmd.exe and sh. Wrapping these in
+    // `(...)` would make npm install on Windows fail outright.
+    for (const host of ['next build 2>&1', 'build >log 2>&1', 'node run &> out']) {
+      expect(chainAfterHost(host)).toBe(`${host} && ${HOOK_COMMAND}`)
+    }
+    // ...while a real background separator still groups.
+    expect(chainAfterHost('watch &')).toBe(`(watch &\n) && ${HOOK_COMMAND}`)
+  })
 })
 
 describe('bulletproofing (malformed hosts, unreadable configs, `**` workspaces)', () => {

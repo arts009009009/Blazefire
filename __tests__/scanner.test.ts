@@ -63,6 +63,27 @@ describe('scanner.plan / scanner.rewrite', () => {
     expect(result.code).toContain('blazefire(() => ({ reactStrictMode: true }))')
   })
 
+  it('wraps a NAMED function config (statement-end must not match its own first token)', () => {
+    const result = rewrite(
+      'export default function nextConfig() {\n  return { reactStrictMode: true }\n}\n'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code).toContain('blazefire(function nextConfig()')
+    expect(result.code).not.toContain('could not locate')
+  })
+
+  it('wraps CJS anonymous `function (` and async function configs', () => {
+    for (const src of [
+      'module.exports = function (phase) {\n  return {}\n}\n',
+      'export default async function nextConfig() {\n  return {}\n}\n',
+      'export default function() {\n  return {}\n}\n',
+    ]) {
+      const result = rewrite(src)
+      expect(result.ok).toBe(true)
+    }
+  })
+
   it('refuses a file with no default export', () => {
     expect(rewrite('const x = 1\n').ok).toBe(false)
   })

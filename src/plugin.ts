@@ -18,7 +18,7 @@
 import { join } from 'node:path'
 import { BLAZEFIRE_BRANDING } from './branding.js'
 import { DEFAULTS, isNextConfig, omitOptions, pickOptions } from './config/options.js'
-import { mergeConfigs } from './config/merge.js'
+import { assertNoWebpack, mergeConfigs } from './config/merge.js'
 import type { BlazefireOptions, NextConfigLike, TurbopackRules } from './config/types.js'
 import { PACKAGE_ROOT } from './package-root.js'
 import { maybeNotify } from './update-check/index.js'
@@ -126,6 +126,10 @@ export function blazefire(
   }
 
   const baseIsConfig = isNextConfig(first)
+  // Check the ORIGINAL argument: omitOptions() copies own keys only, so a
+  // prototype-level webpack() would be silently stripped before
+  // mergeConfigs could refuse it (spec H-01).
+  if (baseIsConfig) assertNoWebpack(first)
   // Options can arrive as the whole argument or mixed into a config
   // (`blazefire({ trailingSlash: true, theme: false })`); pull them out so
   // neither intent is lost. `second` is always the options bag and wins.

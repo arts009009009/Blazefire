@@ -62,10 +62,22 @@ function coerceOptionValue(key: string, value: unknown): unknown {
   return value
 }
 
+/**
+ * Every enumerable key, INCLUDING inherited ones. A config object may be
+ * carried on a prototype chain (class instance, `Object.create(shared)`), and
+ * both Next and this wrapper must see its keys — Object.keys() alone would
+ * classify it as an options bag and silently replace the whole config.
+ */
+function enumerableKeys(x: object): string[] {
+  const keys: string[] = []
+  for (const key in x) keys.push(key)
+  return keys
+}
+
 export function pickOptions(x: unknown): BlazefireOptions {
   if (!x || typeof x !== 'object') return {}
   const out: Record<string, unknown> = {}
-  for (const key of Object.keys(x)) {
+  for (const key of enumerableKeys(x)) {
     if (isOurOption(key, (x as Record<string, unknown>)[key])) {
       out[key] = coerceOptionValue(key, (x as Record<string, unknown>)[key])
     }
@@ -76,7 +88,7 @@ export function pickOptions(x: unknown): BlazefireOptions {
 export function omitOptions(x: unknown): Record<string, unknown> {
   if (!x || typeof x !== 'object') return {}
   const out: Record<string, unknown> = {}
-  for (const key of Object.keys(x)) {
+  for (const key of enumerableKeys(x)) {
     if (!isOurOption(key, (x as Record<string, unknown>)[key])) {
       out[key] = (x as Record<string, unknown>)[key]
     }
@@ -94,16 +106,17 @@ export function omitOptions(x: unknown): Record<string, unknown> {
 export function isNextConfig(x: unknown): boolean {
   if (!x || typeof x !== 'object') return false
   if (
-    Object.keys(x).some((key) => !isOurOption(key, (x as Record<string, unknown>)[key]))
+    enumerableKeys(x).some((key) => !isOurOption(key, (x as Record<string, unknown>)[key]))
   ) {
     return true
   }
   // A class instance carries its shape on the PROTOTYPE, where methods and
-  // getters are non-enumerable — Object.keys sees nothing. Guessing "options
-  // bag" here would replace the user's entire config with our defaults, so
-  // anything whose prototype is not the plain object prototype is a config.
-  // (An options bag still partitions correctly: pickOptions/omitOptions key
-  // off option NAMES, which survive the classification.)
+  // getters are non-enumerable — even for..in sees nothing. Guessing "options
+  // bag" here would drop the user's config, so anything whose prototype is not
+  // the plain object prototype is a config. (An options bag still partitions
+  // correctly: pickOptions/omitOptions key off option NAMES, which survive the
+  // classification — this only decides which side of the split the argument
+  // starts on.)
   const proto = Object.getPrototypeOf(x)
   return proto !== null && proto !== Object.prototype
 }

@@ -58,4 +58,18 @@ describe('frostfastBuild', () => {
     expect(existsSync(join(distDir, 'cache', 'graph'))).toBe(true)
     expect(project.shutdown).toHaveBeenCalledTimes(1)
   })
+
+  it('refuses a distDir that would wipe the project root or its parents', async () => {
+    ;(FrostfastProject.create as jest.Mock).mockClear()
+    const sentinel = join(projectRoot, 'package.json')
+    writeFileSync(sentinel, JSON.stringify({ name: 'precious' }))
+
+    for (const distDir of ['.', '..', join(projectRoot, '..'), projectRoot]) {
+      await expect(frostfastBuild({ dir: projectRoot, distDir })).rejects.toThrow(
+        /refusing to clean/
+      )
+      expect(FrostfastProject.create).not.toHaveBeenCalled()
+      expect(existsSync(sentinel)).toBe(true)
+    }
+  })
 })

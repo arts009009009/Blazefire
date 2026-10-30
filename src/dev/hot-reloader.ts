@@ -190,15 +190,14 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
     'build status',
     () => project.updateInfoEvents(30, controller.signal),
     (info) => {
-      const value = (info as { value?: unknown }).value ?? ({} as Record<string, unknown>)
-      if ((info as { type?: string }).type === 'start') {
+      if (info.type === 'start') {
         // Debounce: only announce BUILDING if the tick hasn't ended fast.
         if (defer) clearTimeout(defer)
         defer = setTimeout(() => {
           safeEmit({ type: 'building', source: 'frostfast' })
         }, buildingDeferMs)
         defer.unref?.()
-      } else if ((info as { type?: string }).type === 'end') {
+      } else if (info.type === 'end') {
         if (defer) {
           clearTimeout(defer)
           defer = undefined
@@ -206,12 +205,16 @@ export async function createHotReloader(options: HotReloaderOptions): Promise<Ho
         // The native issue shape is structured (severity + message); coerce
         // element-wise to the protocol's string[] so an overlay can never
         // render `[object Object]` for a real build error.
-        const typed = value as { hash?: unknown; errors?: unknown; warnings?: unknown }
+        const value = (info.value ?? {}) as {
+          hash?: unknown
+          errors?: unknown
+          warnings?: unknown
+        }
         safeEmit({
           type: 'built',
-          hash: typeof typed.hash === 'string' ? typed.hash : '',
-          errors: issueList(typed.errors),
-          warnings: issueList(typed.warnings),
+          hash: typeof value.hash === 'string' ? value.hash : '',
+          errors: issueList(value.errors),
+          warnings: issueList(value.warnings),
         })
       }
     },
