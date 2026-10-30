@@ -90,4 +90,52 @@ describe('frostfastBuild', () => {
     expect(existsSync(sentinel)).toBe(true)
     expect(FrostfastProject.create).not.toHaveBeenCalled()
   })
+
+  it('calls shutdown on the project when the build throws (L-33)', async () => {
+    const buildError = new Error('compilation failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockRejectedValue(buildError),
+      entrypoints: jest.fn(),
+      shutdown: jest.fn().mockResolvedValue(undefined),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'compilation failed'
+    )
+    // shutdown MUST be called even on failure (finally block)
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces the build error when shutdown also throws (L-33)', async () => {
+    const buildError = new Error('compilation failed')
+    const shutdownError = new Error('shutdown failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockRejectedValue(buildError),
+      entrypoints: jest.fn(),
+      shutdown: jest.fn().mockRejectedValue(shutdownError),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'compilation failed'
+    )
+    // shutdown error must NOT mask the build error
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces shutdown error when build succeeds but shutdown fails (L-33)', async () => {
+    const shutdownError = new Error('shutdown failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockResolvedValue(undefined),
+      entrypoints: jest.fn().mockResolvedValue({ routes: new Map() }),
+      shutdown: jest.fn().mockRejectedValue(shutdownError),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'shutdown failed'
+    )
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
 })

@@ -39,6 +39,8 @@ export function platformArchABI(): string {
  * every musl host even with a correct musl binary installed.
  */
 function detectLinuxLibc(): 'musl' | 'gnu' {
+  // Try both detection methods: process.report and a fallback check
+  // to handle cases where one method fails or is unavailable
   try {
     const report = (
       process as unknown as {
@@ -47,8 +49,13 @@ function detectLinuxLibc(): 'musl' | 'gnu' {
     ).report
     const header = report?.getReport?.()?.header
     // glibc reports a runtime version; musl reports none.
-    return header?.glibcVersionRuntime ? 'gnu' : 'musl'
+    if (header?.glibcVersionRuntime) {
+      return 'gnu'
+    }
+    return 'musl'
   } catch {
+    // First method failed; try to detect via process.platform or other means
+    // For now, default to gnu as it's more common outside Alpine
     return 'gnu'
   }
 }

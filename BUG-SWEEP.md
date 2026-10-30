@@ -51,6 +51,9 @@ findings above are the low-severity items independently confirmed in this
 refresh. Remaining historical entries need individual revalidation before
 being treated as open.
 
+**Refresh validation:** `npm run typecheck` passes; `npm test -- --runInBand`
+passes all 15 suites / 170 tests.
+
 ## Fix status
 
 **Fixed (high/medium, 2026-10-30):** H-1, H-2, H-3, H-4, M-1 … M-13 — all

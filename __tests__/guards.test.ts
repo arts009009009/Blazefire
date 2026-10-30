@@ -110,6 +110,12 @@ describe('mandate 3 — identity pipelines are intact', () => {
     }
   })
 
+  it('keeps version.ts in sync with package.json (L-31)', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+    const versionTs = readFileSync(join(SRC, 'version.ts'), 'utf8')
+    expect(versionTs).toContain(`export const BLAZEFIRE_VERSION = '${pkg.version}'`)
+  })
+
   it('keeps the Frostfast headers in the plugin output', async () => {
     const { buildConfig } = require('../src/plugin') as typeof import('../src/plugin')
     const config = buildConfig({
