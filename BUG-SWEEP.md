@@ -1,9 +1,55 @@
 # Blazefire v2.0 — Bug Sweep Report
 
 Date: 2026-10-30 (initial sweep 2026-10-28) · Scope: all of `src/` (4,824 LOC, 38 modules) + test suite
-Method: static deep review, six parallel subsystem passes; every finding below
-was re-verified against the source by hand, and every fix below was verified by
-`npm test` (15 suites / 152 tests) + `tsc --noEmit`.
+Method: static review, subsystem passes, and focused regression checks. The
+initial report and verification are preserved below; the current-tree refresh
+is summarized next because several findings have since been fixed or changed.
+
+## Current Sweep — 2026-10-30
+
+The current source recheck found the four HIGH findings and the MEDIUM findings
+other than M-4 fixed. M-4 was still present despite the earlier status table:
+`hookRoots` was populated before backup/config writes, so a failed backup could
+still install a persistent host hook. It is now moved after a successful config
+write and covered by a regression test.
+
+Other verified corrections made during this sweep:
+
+- Removed a dangling `quoteForCmd` export in `src/update-check/cache-purge.ts`
+  that made `tsc` fail because the symbol no longer existed.
+- Updated `updater.test.ts` to mock the asynchronous `spawn` API used by the
+  updater. The prior test mocked `spawnSync`, did not intercept the install,
+  and could launch the host package manager.
+- Added the missing `readFileSync` import to the existing local build test.
+
+### Remaining Verified Low Findings
+
+- **Scanner can double-wrap inline CommonJS plugin calls.** An expression such
+  as `module.exports = require("blazefire/plugin")(nextConfig)` is wrapped again
+  as `blazefire(require("blazefire/plugin")(nextConfig))`. See
+  `src/postinstall/scanner.ts` around the export rewrite and wrapper checks.
+- **Scanner can refuse a valid config because of a comment.** A preceding
+  comment containing `as default` can match the lookback regex intended to
+  detect `export { value as default }`. See `src/postinstall/scanner.ts` around
+  `hasAsDefault`.
+- **Project snapshot cloning drops an own `__proto__` config key.**
+  `copyConfigShape()` assigns entries into `{}`, invoking the prototype setter
+  instead of retaining that key; a later project update can therefore omit
+  caller data. See `src/compiler/project.ts` around `copyConfigShape()`.
+- **Recent malformed update state can suppress the dev prompt.**
+  `maybeNotify()` returns on `recentlyChecked()` before validating/refetching a
+  missing or invalid cached version. See `src/update-check/updater.ts` and
+  `src/update-check/feed.ts`.
+- **Manual advice treats every `.js` config as ESM.** A CommonJS project whose
+  config cannot be rewritten is shown import/export advice that is invalid for
+  its module mode. Extension alone cannot distinguish CommonJS from ESM; see
+  `src/postinstall/activation.ts` around the skipped-config advice.
+
+The original L-1 … L-33 table below is the initial inventory, not a current
+open-issue count. Multiple items have been fixed since that pass; the five
+findings above are the low-severity items independently confirmed in this
+refresh. Remaining historical entries need individual revalidation before
+being treated as open.
 
 ## Fix status
 
@@ -19,7 +65,7 @@ high and medium findings. Each has a regression test:
 | M-1 NATIVE_DIR as package | `bindings.test.ts` — relative dir resolves to an absolute path |
 | M-2 discarded fetch result | `update-check.test.ts` — "still reports a freshly fetched version when the state write fails" |
 | M-3 UA/lockfile precedence | `update-check.test.ts` — `detectPackageManager` describe |
-| M-4 hook after failed write | (verified by existing `restore` tests + code path review) |
+| M-4 hook after failed write | `activation.test.ts` — backup failure does not install a host hook |
 | M-5 unguarded emit | covered by `hot-reloader.test.ts` failure tests |
 | M-6 stream leak | `hot-reloader.test.ts` — last-unsubscribe cancellation |
 | M-7 issue marshalling | `hot-reloader.test.ts` (via emit stamping) + `issueList` unit path |
@@ -30,7 +76,9 @@ high and medium findings. Each has a regression test:
 | M-12 `2>&1` grouping | `activation.test.ts` — "keeps FD-redirection hosts flat" |
 | M-13 shebang ESM | `compiler-facade.test.ts` |
 
-**Still open:** the 33 low-severity items below (L-1 … L-33) — not yet fixed.
+**Historical inventory:** the 33 low-severity items below (L-1 … L-33), from
+the initial sweep; current status is mixed and is summarized in the refresh
+section above.
 
 Severity key: **high** = data loss, permanent breakage, or a headline guarantee
 violated · **medium** = wrong behavior on a common path · **low** = edge case,
@@ -284,7 +332,7 @@ found.
 
 ---
 
-## LOW
+## LOW — Initial Inventory
 
 | # | Location | Issue |
 |---|----------|-------|
