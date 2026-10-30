@@ -10,9 +10,9 @@
  * finally — the graph cache is always flushed before the process moves on.
  */
 
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
 import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
@@ -42,11 +42,13 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const distDir = isAbsolute(configuredDistDir)
     ? configuredDistDir
     : resolve(dir, configuredDistDir)
-  // cleanDistDir() recursively deletes the whole dist dir, so a distDir that
-  // IS or CONTAINS the project root would wipe the source tree (one typo like
-  // `distDir: '.'` away from `rm -rf <project>`). Out-of-tree dirs are fine;
-  // anything that swallows the project is refused before a single rm.
-  const insideProject = relative(distDir, dir)
+  // Compare canonical paths too: lexical checks are bypassed by a distDir
+  // symlink that points at the project root or one of its parents.
+  const [realDir, realDistDir] = await Promise.all([
+    realpath(dir),
+    realpathWithMissingTail(distDir),
+  ])
+  const insideProject = relative(realDistDir, realDir)
   if (insideProject === '' || (!insideProject.startsWith('..') && !isAbsolute(insideProject))) {
     throw new BlazefireConfigError(
       `distDir (${configuredDistDir}) resolves to ${distDir}, which is the project root or one of its parents — refusing to clean it. Choose a dedicated output directory inside the project (default: .blazefire).`
@@ -101,6 +103,30 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
       await project.shutdown()
     } catch (shutdownError) {
       if (!buildError) throw shutdownError
+    }
+  }
+}
+
+/** Resolve existing symlinked ancestors while preserving a not-yet-created tail. */
+async function realpathWithMissingTail(path: string): Promise<string> {
+  let candidate = resolve(path)
+  const missing: string[] = []
+  for (;;) {
+    try {
+      return resolve(await realpath(candidate), ...missing)
+    } catch (error) {
+      if (
+        typeof error !== 'object' ||
+        error === null ||
+        !('code' in error) ||
+        error.code !== 'ENOENT'
+      ) {
+        throw error
+      }
+      const parent = dirname(candidate)
+      if (parent === candidate) throw error
+      missing.unshift(basename(candidate))
+      candidate = parent
     }
   }
 }
