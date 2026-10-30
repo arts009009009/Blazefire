@@ -12,7 +12,7 @@ high and medium findings. Each has a regression test:
 
 | Finding | Regression test |
 |---|---|
-| H-1 distDir wipe | `build.test.ts` — "refuses a distDir that would wipe the project root" |
+| H-1 distDir wipe | `build.test.ts` — refuses project-root/parent paths and symlink aliases |
 | H-2 dead HMR streams | `hot-reloader.test.ts` — cancel/revive/restart suites |
 | H-3 prototype configs | `plugin.test.ts` — prototype webpack + `Object.create` config |
 | H-4 named function configs | `scanner.test.ts` — named/anonymous/async function forms |
@@ -59,6 +59,14 @@ typo in a config turns `blazefire build` into `rm -rf <project>`.
 **Fix:** after resolving, refuse to clean when `distDir === dir` or when
 `distDir` is not strictly inside `dir` (separator-aware prefix check on
 realpaths). Throw `BlazefireConfigError`.
+
+**Follow-up verification (2026-10-30):** a regression probe found the initial
+guard only compared lexical paths; `distDir: 'artifacts'` with
+`artifacts -> <project root>` still passed and cleanup removed the temp
+fixture's sentinel. The guard now canonicalizes the project root and the
+output path (resolving existing symlinked ancestors even when the final output
+directory does not exist). `build.test.ts` verifies the symlink alias is
+rejected before project creation or cleanup.
 
 ### H-2 · One stream error permanently kills an HMR stream, and a dead stream can never be revived
 `src/dev/hot-reloader.ts:127-151`
