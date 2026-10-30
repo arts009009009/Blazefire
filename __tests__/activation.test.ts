@@ -357,4 +357,19 @@ describe('bulletproofing (malformed hosts, unreadable configs, `**` workspaces)'
       HOOK_COMMAND
     )
   })
+
+  it('does not install a host hook when the config backup cannot be created', () => {
+    const configPath = join(projectRoot, 'next.config.js')
+    const original = 'module.exports = {}\n'
+    writeFileSync(configPath, original)
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: 'activation-failure' }))
+    writeFileSync(join(projectRoot, BACKUP_DIR), 'blocks backup directory creation')
+    mkdirSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server'), { recursive: true })
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'package.json'), '{"name":"next"}')
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server', 'next.js'), '{}\n')
+
+    expect(run(projectRoot)).toBe('skipped')
+    expect(readFileSync(configPath, 'utf8')).toBe(original)
+    expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts).toBeUndefined()
+  })
 })

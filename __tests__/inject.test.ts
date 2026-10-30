@@ -353,6 +353,198 @@ describe('installOverlayRuntime', () => {
       global.MutationObserver = RealMO
     }
   })
+
+  it('runs debounced work despite sustained mutation (max-wait, L-8)', () => {
+    const instances: Array<{ trigger(): void }> = []
+    const RealMO = global.MutationObserver
+    global.MutationObserver = class {
+      callback: MutationCallback
+      constructor(callback: MutationCallback) {
+        this.callback = callback
+        instances.push(this)
+      }
+      observe() {}
+      disconnect() {}
+      trigger() {
+        this.callback([], this as unknown as MutationObserver)
+      }
+    } as unknown as typeof MutationObserver
+
+    const queryAll = jest.fn(() => [])
+    const doc = { ...stubDocument(), querySelectorAll: queryAll } as unknown as Document
+
+    jest.useFakeTimers()
+    try {
+      const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+      const runtime = installOverlayRuntime(true, doc)
+      expect(queryAll).toHaveBeenCalledTimes(1)
+
+      // A mutation every 50ms resets the 100ms trailing timer forever — the
+      // pre-fix behavior postponed the rebrand indefinitely. Within the
+      // 500ms max-wait window nothing may run yet (trailing debounce intact)…
+      for (let i = 0; i < 10; i++) {
+        instances[0]!.trigger()
+        jest.advanceTimersByTime(50)
+      }
+      expect(queryAll).toHaveBeenCalledTimes(1)
+
+      // …but once the first schedule in the burst is 500ms old, the next
+      // reschedule must RUN instead of resetting fully.
+      for (let i = 0; i < 2; i++) {
+        instances[0]!.trigger()
+        jest.advanceTimersByTime(50)
+      }
+      expect(queryAll.mock.calls.length).toBeGreaterThan(1)
+      runtime.dispose()
+    } finally {
+      jest.useRealTimers()
+      global.MutationObserver = RealMO
+    }
+  })
+
+  it('re-scans a portal whose attachShadow lands after insertion (L-9)', () => {
+    const instances: Array<{ observe(): void; disconnect(): void }> = []
+    const RealMO = global.MutationObserver
+    global.MutationObserver = class {
+      constructor() {
+        instances.push(this)
+      }
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof MutationObserver
+
+    const styles: StubElement[] = []
+    const root = {
+      getElementById: (id: string) => styles.find((style) => style.id === id) ?? null,
+      querySelectorAll: () => [],
+      appendChild: (style: StubElement) => {
+        styles.push(style)
+      },
+    } as unknown as ShadowRoot
+    const portal = { shadowRoot: null } as unknown as Element & { shadowRoot: ShadowRoot | null }
+    const queryAll = jest.fn(() => [portal])
+    const doc = { ...stubDocument(), querySelectorAll: queryAll } as unknown as Document
+
+    jest.useFakeTimers()
+    try {
+      const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+      const runtime = installOverlayRuntime(true, doc)
+      expect(queryAll).toHaveBeenCalledTimes(1)
+      expect(styles).toHaveLength(0) // no shadowRoot — nothing to rebrand yet
+      expect(runtime.observerCount()).toBe(1) // only the portal watcher
+
+      portal.shadowRoot = root // the portal calls attachShadow() late
+      jest.advanceTimersByTime(150) // bounded retry (debounced) fires
+      expect(queryAll).toHaveBeenCalledTimes(2)
+      expect(styles).toHaveLength(1) // the late-attached root got rebranded
+      expect(runtime.observerCount()).toBe(2) // …and its dev observer attached
+      runtime.dispose()
+    } finally {
+      jest.useRealTimers()
+      global.MutationObserver = RealMO
+    }
+  })
+
+  it('bounds the shadow retry at 3 follow-ups and never schedules it in production (L-9)', () => {
+    const makeDoc = () => {
+      const portal = { shadowRoot: null } as unknown as Element
+      const queryAll = jest.fn(() => [portal])
+      return { doc: { ...stubDocument(), querySelectorAll: queryAll } as unknown as Document, queryAll }
+    }
+
+    jest.useFakeTimers()
+    try {
+      const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+
+      const prod = makeDoc()
+      const prodRuntime = installOverlayRuntime(false, prod.doc)
+      jest.advanceTimersByTime(2000)
+      expect(prod.queryAll).toHaveBeenCalledTimes(1) // production: strictly one-shot
+      prodRuntime.dispose()
+
+      const dev = makeDoc()
+      const devRuntime = installOverlayRuntime(true, dev.doc)
+      jest.advanceTimersByTime(2000)
+      // init scan + exactly 3 bounded follow-ups, then the budget is spent —
+      // a permanently shadow-less portal cannot loop forever.
+      expect(dev.queryAll).toHaveBeenCalledTimes(4)
+      devRuntime.dispose()
+    } finally {
+      jest.useRealTimers()
+    }
+  })
+
+  it('cancels a pending rebrand timer when its portal is removed (L-10)', () => {
+    const instances: Array<{ trigger(): void; disconnected: boolean }> = []
+    const RealMO = global.MutationObserver
+    global.MutationObserver = class {
+      disconnected = false
+      callback: MutationCallback
+      constructor(callback: MutationCallback) {
+        this.callback = callback
+        instances.push(this)
+      }
+      observe() {}
+      disconnect() {
+        this.disconnected = true
+      }
+      trigger() {
+        this.callback([], this as unknown as MutationObserver)
+      }
+    } as unknown as typeof MutationObserver
+
+    const textNode = { nodeType: 3, data: 'Turbopack', nextSibling: null }
+    const label = {
+      firstChild: textNode,
+      getAttribute: () => null,
+      setAttribute: () => undefined,
+    }
+    let overlayMounted = false
+    const styles: StubElement[] = []
+    const root = {
+      getElementById: (id: string) => styles.find((style) => style.id === id) ?? null,
+      querySelectorAll: (selector: string) =>
+        overlayMounted && selector === '.turbopack-text' ? [label] : [],
+      appendChild: (style: StubElement) => {
+        styles.push(style)
+      },
+    } as unknown as ShadowRoot
+    const portal = { shadowRoot: root } as unknown as Element
+    let portalPresent = true
+    const doc = {
+      ...stubDocument(),
+      querySelectorAll: jest.fn(() => (portalPresent ? [portal] : [])),
+    } as unknown as Document
+
+    jest.useFakeTimers()
+    try {
+      const { installOverlayRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+      const runtime = installOverlayRuntime(true, doc)
+      // instances[0] = root observer (created by the initial scan),
+      // instances[1] = portal watcher.
+
+      // Portal removal is detected first: its re-scan is scheduled first.
+      portalPresent = false
+      instances[1]!.trigger() // scan due at +100ms
+
+      // …then a late overlay mutation schedules a rebrand for the root
+      // (due at +150ms — AFTER the scan that removes it).
+      jest.advanceTimersByTime(50)
+      overlayMounted = true
+      instances[0]!.trigger()
+
+      jest.advanceTimersByTime(200) // scan ran at +100ms, cancelling root timer
+      expect(instances[0]!.disconnected).toBe(true)
+      expect(runtime.observerCount()).toBe(1) // portal watcher only
+      // The cancelled timer never wrote into the detached shadow tree.
+      expect(textNode.data).toBe('Turbopack')
+      expect(styles.filter((s) => s.id === 'blazefire-overlay-styles')).toHaveLength(1)
+      runtime.dispose()
+    } finally {
+      jest.useRealTimers()
+      global.MutationObserver = RealMO
+    }
+  })
 })
 
 it('keeps portal observers for late overlay updates and disconnects on removal', () => {
@@ -430,5 +622,42 @@ describe('installBlazefireRuntime', () => {
   it('is SSR-safe: null with no document', () => {
     const { installBlazefireRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
     expect(installBlazefireRuntime(undefined)).toBeNull()
+  })
+
+  it('returns the same handle for repeated installs — no stacked observer trees (L-12)', () => {
+    const created: unknown[] = []
+    const RealMO = global.MutationObserver
+    global.MutationObserver = class {
+      constructor() {
+        created.push(this)
+      }
+      observe() {}
+      disconnect() {}
+    } as unknown as typeof MutationObserver
+
+    try {
+      const { installBlazefireRuntime } = require('../src/runtime/inject') as typeof import('../src/runtime/inject')
+      const doc = stubDocument()
+
+      const first = installBlazefireRuntime(doc)
+      const second = installBlazefireRuntime(doc) // the consumer wanting the handle
+      expect(first).not.toBeNull()
+      expect(second).toBe(first) // identical instance, not a second tree
+      expect(created).toHaveLength(1) // observerCount doesn't double
+      expect(first!.observerCount()).toBe(1)
+      expect(second!.observerCount()).toBe(1)
+
+      first!.dispose()
+      // The memo cleared with dispose: a later call installs FRESH rather
+      // than handing back a dead handle.
+      const third = installBlazefireRuntime(doc)
+      expect(third).not.toBeNull()
+      expect(third).not.toBe(first)
+      expect(third!.observerCount()).toBe(1)
+      expect(created).toHaveLength(2)
+      third!.dispose()
+    } finally {
+      global.MutationObserver = RealMO
+    }
   })
 })

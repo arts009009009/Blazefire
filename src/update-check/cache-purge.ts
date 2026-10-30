@@ -292,4 +292,3 @@ function yarnCacheDir(projectRoot: string): string {
   return path.join(projectRoot, '.yarn', 'cache')
 }
 
-export { quoteForCmd }

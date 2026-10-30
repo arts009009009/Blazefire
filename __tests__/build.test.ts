@@ -56,6 +56,12 @@ describe('frostfastBuild', () => {
     )
     expect(existsSync(join(distDir, 'old-manifest'))).toBe(false)
     expect(existsSync(join(distDir, 'cache', 'graph'))).toBe(true)
+    // Marker files written by the JS side before entrypoints cross: the
+    // turbopack marker and the CJS package.json Node needs to load dist.
+    expect(readFileSync(join(distDir, 'turbopack'), 'utf8')).toBe('')
+    expect(JSON.parse(readFileSync(join(distDir, 'package.json'), 'utf8'))).toEqual({
+      type: 'commonjs',
+    })
     expect(project.shutdown).toHaveBeenCalledTimes(1)
   })
 

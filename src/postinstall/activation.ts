@@ -526,11 +526,6 @@ export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome
         continue
       }
 
-      // Only claim the host's package.json AFTER the config write succeeds:
-      // a failed backup/write leaves nothing to activate, and restore() can
-      // only undo the hook when a backup exists — claiming the root early
-      // would install an unremovable postinstall hook.
-      hookRoots.add(projectRoot)
       const backup = path.join(
         projectRoot,
         BACKUP_DIR,
@@ -546,6 +541,7 @@ export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome
       const nextSource = result.code
 
       writeAtomicSync(configPath, nextSource)
+      hookRoots.add(projectRoot)
       appendGitignoreNote(projectRoot)
       say(`activated ${relative}`)
       activated += 1

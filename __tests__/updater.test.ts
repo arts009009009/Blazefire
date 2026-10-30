@@ -1,11 +1,12 @@
-import { spawnSync } from 'node:child_process'
+import { EventEmitter } from 'node:events'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { checkForUpdate } from '../src/update-check/feed'
 import { runUpdate } from '../src/update-check/updater'
 
-jest.mock('node:child_process', () => ({ spawnSync: jest.fn() }))
+jest.mock('node:child_process', () => ({ spawn: jest.fn(), spawnSync: jest.fn() }))
 jest.mock('../src/update-check/feed', () => ({ checkForUpdate: jest.fn() }))
 
 describe('runUpdate', () => {
@@ -19,6 +20,11 @@ describe('runUpdate', () => {
       updateAvailable: true,
     })
     ;(spawnSync as jest.Mock).mockReset().mockReturnValue({ status: 1 })
+    ;(spawn as jest.Mock).mockReset().mockImplementation(() => {
+      const child = new EventEmitter()
+      queueMicrotask(() => child.emit('close', 1))
+      return child
+    })
   })
 
   afterEach(() => {
@@ -38,7 +44,7 @@ describe('runUpdate', () => {
 
     expect(messages[0]).toContain('github:team/blazefire#main')
     expect(checkForUpdate).not.toHaveBeenCalled()
-    expect(spawnSync).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('refuses malformed release versions before invoking the package manager', async () => {
@@ -50,7 +56,7 @@ describe('runUpdate', () => {
 
     await expect(runUpdate({ projectRoot, onLog: () => undefined })).resolves.toBe(1)
 
-    expect(spawnSync).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('preserves the installed package and lockfile when installation fails', async () => {
@@ -68,6 +74,6 @@ describe('runUpdate', () => {
 
     expect(existsSync(join(installedPackage, 'package.json'))).toBe(true)
     expect(existsSync(lockfile)).toBe(true)
-    expect(spawnSync).toHaveBeenCalledTimes(1)
+    expect(spawn).toHaveBeenCalledTimes(1)
   })
 })
