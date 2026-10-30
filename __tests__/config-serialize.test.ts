@@ -74,7 +74,9 @@ describe('serializeProjectConfig', () => {
     // `__proto__` setter (which would drop it from the wire entirely).
     expect(Object.prototype.hasOwnProperty.call(parsed.nextConfig, '__proto__')).toBe(true)
     expect(parsed.nextConfig.__proto__).toEqual({ marker: 'keep-me' })
-    expect(parsed.nextConfig.mapValue).toEqual({ '__proto__': 'map-marker' })
+    // (JSON.parse, not an object literal: `{'__proto__': v}` sets the
+    // prototype rather than defining an own key.)
+    expect(parsed.nextConfig.mapValue).toEqual(JSON.parse('{"__proto__":"map-marker"}'))
     // And nothing leaked onto a real prototype.
     expect(Object.getPrototypeOf(parsed.nextConfig)).toBe(Object.prototype)
     expect(({} as Record<string, unknown>).marker).toBeUndefined()
