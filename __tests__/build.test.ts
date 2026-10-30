@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadFrostfastBinding } from '../src/compiler/bindings'
@@ -71,5 +71,17 @@ describe('frostfastBuild', () => {
       expect(FrostfastProject.create).not.toHaveBeenCalled()
       expect(existsSync(sentinel)).toBe(true)
     }
+  })
+
+  it('refuses an output symlink that resolves to the project root', async () => {
+    const sentinel = join(projectRoot, 'package.json')
+    writeFileSync(sentinel, JSON.stringify({ name: 'precious' }))
+    symlinkSync(projectRoot, join(projectRoot, 'artifacts'), 'dir')
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      /refusing to clean/
+    )
+    expect(existsSync(sentinel)).toBe(true)
+    expect(FrostfastProject.create).not.toHaveBeenCalled()
   })
 })
