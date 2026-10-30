@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -9,6 +17,7 @@ import {
   isLifecycleHook,
   locateCandidates,
   restore,
+  run,
   undoHook,
 } from '../src/postinstall/activation'
 
@@ -216,5 +225,151 @@ describe('hook chaining (v1 bug: bare `&&` let host separators swallow the hook)
     // Not something chainAfterHost produces, but undoHook must still be safe.
     expect(chainAfterHost('plain')).toBe(`plain && ${HOOK_COMMAND}`)
     expect(chainAfterHost('a; b')).toBe(`(a; b\n) && ${HOOK_COMMAND}`)
+  })
+
+  it('keeps FD-redirection hosts flat — cmd.exe cannot parse grouping parens', () => {
+    // `2>&1` carries a bare `&`, but it is an operator, not a separator: it
+    // binds tighter than `&&` in both cmd.exe and sh. Wrapping these in
+    // `(...)` would make npm install on Windows fail outright.
+    for (const host of ['next build 2>&1', 'build >log 2>&1', 'node run &> out']) {
+      expect(chainAfterHost(host)).toBe(`${host} && ${HOOK_COMMAND}`)
+    }
+    // ...while a real background separator still groups.
+    expect(chainAfterHost('watch &')).toBe(`(watch &\n) && ${HOOK_COMMAND}`)
+  })
+})
+
+describe('bulletproofing (malformed hosts, unreadable configs, `**` workspaces)', () => {
+  let projectRoot: string
+
+  beforeEach(() => {
+    projectRoot = mkdtempSync(join(tmpdir(), 'blazefire-edge-'))
+  })
+
+  afterEach(() => {
+    rmSync(projectRoot, { recursive: true, force: true })
+  })
+
+  it('refuses to rewrite a package.json that is not valid JSON, byte-for-byte', () => {
+    const raw = '{ this is not json, trailing comma,, }'
+    writeFileSync(join(projectRoot, 'package.json'), raw)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'invalid-package-json' })
+    expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(raw)
+  })
+
+  it('refuses to rewrite a package.json that is valid JSON but not an object', () => {
+    const raw = '["not", "a", "package"]'
+    writeFileSync(join(projectRoot, 'package.json'), raw)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'invalid-package-json' })
+    expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(raw)
+  })
+
+  it('leaves a non-string postinstall script untouched', () => {
+    // `postinstall: 42` is a host bug — silently turning it into a shell
+    // command would rewrite data we don't own.
+    const raw = JSON.stringify({ scripts: { postinstall: 42 } }, null, 2)
+    writeFileSync(join(projectRoot, 'package.json'), raw)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'host-script-invalid' })
+    expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(raw)
+    expect(undoHook(projectRoot)).toEqual({ changed: false })
+  })
+
+  it('leaves a non-object scripts field untouched', () => {
+    const raw = JSON.stringify({ scripts: 'nope' }, null, 2)
+    writeFileSync(join(projectRoot, 'package.json'), raw)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'host-script-invalid' })
+    expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(raw)
+  })
+
+  it('keeps a CRLF package.json as CRLF throughout (never mixed endings)', () => {
+    const original = '{\r\n  "name": "crlf-demo",\r\n  "scripts": {}\r\n}\r\n'
+    writeFileSync(join(projectRoot, 'package.json'), original)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    const out = readFileSync(join(projectRoot, 'package.json'), 'utf8')
+    expect(out.replace(/\r\n/g, '')).not.toContain('\n') // no bare LF anywhere
+    expect(out.endsWith('\r\n')).toBe(true)
+    expect(JSON.parse(out).scripts.postinstall).toBe(HOOK_COMMAND)
+  })
+
+  it('hooks a BOM-prefixed package.json and keeps the BOM', () => {
+    // npm tolerates a UTF-8 BOM; JSON.parse alone does not. Windows-authored
+    // package.json files must not silently lose their hook.
+    const original = '\uFEFF{\n  "name": "bom-demo",\n  "scripts": {}\n}\n'
+    writeFileSync(join(projectRoot, 'package.json'), original)
+
+    expect(ensureHook(projectRoot)).toEqual({ status: 'changed' })
+    const out = readFileSync(join(projectRoot, 'package.json'), 'utf8')
+    expect(out.charCodeAt(0)).toBe(0xfeff)
+    expect(JSON.parse(out.slice(1)).scripts.postinstall).toBe(HOOK_COMMAND)
+
+    expect(undoHook(projectRoot).changed).toBe(true)
+    const undone = readFileSync(join(projectRoot, 'package.json'), 'utf8')
+    expect(undone.charCodeAt(0)).toBe(0xfeff)
+    expect(JSON.parse(undone.slice(1)).scripts.postinstall).toBeUndefined()
+  })
+
+  it('never treats a dependency as a workspace through a `**` pattern', () => {
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: 'root', workspaces: ['**'] })
+    )
+    mkdirSync(join(projectRoot, 'packages', 'app'), { recursive: true })
+    writeFileSync(join(projectRoot, 'packages', 'app', 'package.json'), '{"name":"app"}')
+    writeFileSync(join(projectRoot, 'packages', 'app', 'next.config.js'), 'module.exports = {}\n')
+
+    mkdirSync(join(projectRoot, 'node_modules', 'some-dep'), { recursive: true })
+    writeFileSync(join(projectRoot, 'node_modules', 'some-dep', 'package.json'), '{"name":"dep"}')
+    writeFileSync(
+      join(projectRoot, 'node_modules', 'some-dep', 'next.config.js'),
+      'module.exports = {}\n'
+    )
+
+    const { configs } = locateCandidates(projectRoot)
+    expect(configs.some((config) => config.includes('node_modules'))).toBe(false)
+    expect(configs.some((config) => config.includes(join('packages', 'app')))).toBe(true)
+  })
+
+  it('keeps activating the remaining configs when one is unreadable', () => {
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: 'iso' }))
+    // A DIRECTORY named next.config.js makes readFileSync throw EISDIR for
+    // every user (including root, where chmod 000 would not) — a reliable
+    // stand-in for a corrupt/unreadable config.
+    mkdirSync(join(projectRoot, 'next.config.js'))
+    writeFileSync(
+      join(projectRoot, 'next.config.mjs'),
+      'const nextConfig = { a: 1 }\nexport default nextConfig\n'
+    )
+    // Minimal resolvable Next.js so hasInstalledNext passes.
+    mkdirSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server'), { recursive: true })
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'package.json'), '{"name":"next"}')
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server', 'next.js'), '{}\n')
+
+    expect(run(projectRoot)).toBe('activated')
+    expect(readFileSync(join(projectRoot, 'next.config.mjs'), 'utf8')).toContain(
+      'export default blazefire(nextConfig)'
+    )
+    expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts.postinstall).toBe(
+      HOOK_COMMAND
+    )
+  })
+
+  it('does not install a host hook when the config backup cannot be created', () => {
+    const configPath = join(projectRoot, 'next.config.js')
+    const original = 'module.exports = {}\n'
+    writeFileSync(configPath, original)
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: 'activation-failure' }))
+    writeFileSync(join(projectRoot, BACKUP_DIR), 'blocks backup directory creation')
+    mkdirSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server'), { recursive: true })
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'package.json'), '{"name":"next"}')
+    writeFileSync(join(projectRoot, 'node_modules', 'next', 'dist', 'server', 'next.js'), '{}\n')
+
+    expect(run(projectRoot)).toBe('skipped')
+    expect(readFileSync(configPath, 'utf8')).toBe(original)
+    expect(JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).scripts).toBeUndefined()
   })
 })

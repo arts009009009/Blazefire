@@ -21,6 +21,21 @@ import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { BlazefireConfigError } from './types.js'
 
+/**
+ * Own-property write that bypasses the `__proto__` setter on Object.prototype.
+ * Plain `obj[key] = value` with key `__proto__` swaps the object's prototype
+ * instead of adding a key, so the value would silently vanish from what
+ * crosses into Rust (or corrupt a merged rules map).
+ */
+export function defineOwn<T>(target: Record<string, T>, key: string, value: T): void {
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
+}
+
 /** Decomposition of a RegExp — regexes cannot cross napi natively (v1 convention, kept). */
 export type SerializedPattern =
   | { type: 'regex'; value: { source: string; flags: string } }
@@ -34,6 +49,20 @@ export function serializePattern(p: string | RegExp): SerializedPattern {
   return { type: 'glob', value: p }
 }
 
+/**
+ * Deterministic key order for anything that reaches the hash (H-08).
+ * JSON.stringify preserves insertion order, so two content-equal configs with
+ * different key order would hash differently — the change gate would fire for
+ * nothing, and a persistent cache key built from `process.env` iteration
+ * (whose order is not stable across machines) would never be stable. Compare
+ * in UTF-16 code-unit order — NOT localeCompare, which is locale-dependent
+ * and would make the hash machine-dependent again. Arrays/Sets are NEVER
+ * sorted: their order is semantic (defineEnv arrays, rule arrays).
+ */
+function sortedByKey<T>(entries: Array<[string, T]>): Array<[string, T]> {
+  return entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+}
+
 /** env crosses as flat [{name, value}] tuples — never recursive marshalling. */
 export interface RustifiedEnvVar {
   name: string
@@ -41,7 +70,9 @@ export interface RustifiedEnvVar {
 }
 
 export function rustifyEnv(env: Record<string, string | undefined>): RustifiedEnvVar[] {
-  return Object.entries(env).map(([name, value]) => ({ name, value }))
+  // Sorted by name (why: sortedByKey above) — env is usually built by
+  // iterating `process.env`, whose order differs between machines/runs.
+  return sortedByKey(Object.entries(env)).map(([name, value]) => ({ name, value }))
 }
 
 /** The JS-side view of the config fields that cross into the Rust project graph. */
@@ -69,6 +100,56 @@ function normalizePathOnWindows(p: string): string {
   return p.replace(/\\/g, '/')
 }
 
+/**
+ * Rewrite the two number literals JSON silently changes (-0 → `0`,
+ * NaN → `null`) onto their own round-trip form, recursively, so the guard
+ * below can compare the original against `JSON.parse(JSON.stringify(...))`
+ * without those serializable number LITERALS false-positiving as
+ * "not JSON-serializable". EVERYTHING else is passed through untouched:
+ *
+ *  - function/symbol VALUES and undefined-valued keys survive here, so the
+ *    round-trip still drops them and the deep-equal check still throws;
+ *  - only PLAIN objects are rebuilt — Date/Map/Set/RegExp/class instances
+ *    are kept as-is (their prototypes already fail isDeepStrictEqual against
+ *    the parsed round-trip, exactly as before);
+ *  - enumerable symbol KEYS are re-declared: JSON drops them from `round`,
+ *    and re-declaring keeps them visible to the comparison (they threw
+ *    before, they throw after). They cannot go through defineOwn (string
+ *    keys only), hence defineProperty;
+ *  - no cycle guard: a cycle overflows the recursion, and the RangeError is
+ *    caught by the same `catch` that handles JSON.stringify's
+ *    circular-structure TypeError — same actionable error either way.
+ */
+function canonicalizeJsonNumbers(value: unknown): unknown {
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) return null
+    if (Object.is(value, -0)) return 0
+    return value
+  }
+  if (Array.isArray(value)) return value.map((entry) => canonicalizeJsonNumbers(entry))
+  if (value !== null && typeof value === 'object') {
+    const proto = Object.getPrototypeOf(value)
+    if (proto !== Object.prototype && proto !== null) return value // non-plain: compare as-is
+    const rec = value as Record<string | symbol, unknown>
+    const out: Record<string, unknown> = {}
+    for (const key of Object.keys(rec)) {
+      defineOwn(out, key, canonicalizeJsonNumbers(rec[key]))
+    }
+    for (const key of Object.getOwnPropertySymbols(rec)) {
+      if (Object.prototype.propertyIsEnumerable.call(rec, key)) {
+        Object.defineProperty(out, key, {
+          value: canonicalizeJsonNumbers(rec[key]),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        })
+      }
+    }
+    return out
+  }
+  return value // string/boolean/null/bigint/function/symbol — JSON semantics untouched
+}
+
 /** Zero/normalize the fields the Rust side can never read (functions, FS paths). */
 function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...nextConfig }
@@ -87,24 +168,32 @@ function normalizeNextConfig(nextConfig: Record<string, unknown>): Record<string
   // Loader options must round-trip through JSON identically or the Rust side
   // rejects them at project construction (v1 serializability guard, kept —
   // deep-equality catches functions, Dates, Maps, dropped undefined keys).
+  // The original is canonicalized through JSON's number semantics first:
+  // JSON cannot represent -0 or NaN (it writes `0`/`null`), so those two
+  // serializable number literals would otherwise be rejected by their OWN
+  // round-trip — `{ retryDelay: -0 }` is not "not JSON-serializable".
+  // canonicalizeJsonNumbers rewrites nothing else, so genuinely-lossy values
+  // still mismatch the round-trip below and throw, as they always did.
   const turbopack = out.turbopack as
     | { rules?: Record<string, Array<{ options?: unknown }>> }
     | undefined
   for (const [glob, rules] of Object.entries(turbopack?.rules ?? {})) {
     for (const rule of rules) {
       if (rule.options === undefined) continue
+      let canonical: unknown
       let round: unknown
       try {
-        round = JSON.parse(JSON.stringify(rule.options))
+        canonical = canonicalizeJsonNumbers(rule.options)
+        round = JSON.parse(JSON.stringify(canonical))
       } catch {
-        // A function/BigInt/symbol/circular options value: JSON.stringify
-        // throws or yields `undefined`. Report the ACTIONABLE error, not a
-        // cryptic SyntaxError about the token `u`.
+        // A function/BigInt/symbol/circular options value: the recursion
+        // overflows, or JSON.stringify throws or yields `undefined`. Report
+        // the ACTIONABLE error, not a cryptic SyntaxError about the token `u`.
         throw new BlazefireConfigError(
           `turbopack.rules["${glob}"] loader options are not JSON-serializable`
         )
       }
-      if (!isDeepStrictEqual(rule.options, round)) {
+      if (!isDeepStrictEqual(canonical, round)) {
         throw new BlazefireConfigError(
           `turbopack.rules["${glob}"] loader options are not JSON-serializable`
         )
@@ -165,7 +254,12 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     }
     if (obj instanceof Map) {
       const out: Record<string, unknown> = {}
-      for (const [k, v] of obj) out[String(k)] = toWire(v, path, seen)
+      // Sorted (see sortedByKey): Map insertion order must not reach the hash.
+      for (const [k, v] of sortedByKey(
+        [...obj].map(([mk, mv]): [string, unknown] => [String(mk), mv])
+      )) {
+        defineOwn(out, k, toWire(v, path, seen))
+      }
       return out
     }
     if (obj instanceof Set) {
@@ -173,9 +267,12 @@ function toWire(value: unknown, path: string, seen: Set<object>): unknown {
     }
 
     const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(obj)) {
+    // Sorted (see sortedByKey): insertion order of the user's config object
+    // must not change the hash. Arrays are NOT sorted anywhere in toWire —
+    // list order (defineEnv arrays, rules, headers) is semantic.
+    for (const [k, v] of sortedByKey(Object.entries(obj))) {
       const wired = toWire(v, `${path}.${k}`, seen)
-      if (wired !== undefined) out[k] = wired
+      if (wired !== undefined) defineOwn(out, k, wired)
     }
     return out
   } finally {

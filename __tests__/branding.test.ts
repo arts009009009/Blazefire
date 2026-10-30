@@ -9,6 +9,7 @@ import {
   blazefireOverlayStyles,
   blazefireStyles,
   flameDataUri,
+  gradientStopOffset,
   logoDataUri,
 } from '../src/branding'
 import { LOGO_DATA_URI } from '../src/generated/logo-data'

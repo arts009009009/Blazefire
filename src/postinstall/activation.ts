@@ -16,7 +16,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { PACKAGE_ROOT } from '../package-root.js'
-import { rewrite, SNIPPET } from './scanner.js'
+import { CJS_REQUIRE, rewrite, SNIPPET } from './scanner.js'
 
 export const CONFIG_NAMES = [
   'next.config.js',
@@ -37,6 +37,8 @@ type HookStatus =
   | { status: 'already-active' }
   | { status: 'changed' }
   | { status: 'no-package-json' }
+  | { status: 'invalid-package-json' }
+  | { status: 'host-script-invalid' }
 
 function say(text: string): void {
   process.stdout.write(`[Blazefire] ${text}\n`)
@@ -104,6 +106,9 @@ function listWorkspaces(packageRoot: string): string[] {
   return [...results]
 }
 
+/** Directories a workspace `**` expansion must never descend into. */
+const PRUNED_WORKSPACE_DIRS = new Set(['node_modules', '.git', '.next'])
+
 function expandWorkspacePattern(packageRoot: string, pattern: string): string[] {
   const segments = pattern.split(/[\\/]+/).filter(Boolean)
   const matches: string[] = []
@@ -124,7 +129,13 @@ function expandWorkspacePattern(packageRoot: string, pattern: string): string[] 
         return
       }
       for (const entry of entries) {
-        if (entry.isDirectory()) visit(path.join(dir, entry.name), index)
+        // A root-level `**` must never descend into dependency or build
+        // output trees: a dependency containing its own package.json +
+        // next.config.js would otherwise be "discovered" as a workspace and
+        // activated (writing into node_modules, wiped on the next install).
+        if (entry.isDirectory() && !PRUNED_WORKSPACE_DIRS.has(entry.name)) {
+          visit(path.join(dir, entry.name), index)
+        }
       }
       return
     }
@@ -180,7 +191,18 @@ function writeAtomicSync(target: string, contents: string | Buffer): void {
     path.dirname(target),
     `.${path.basename(target)}.${process.pid}.tmp`
   )
+  // Preserve the original file mode by copying it before writing
+  let originalMode: number | undefined
+  try {
+    const stat = fs.statSync(target)
+    originalMode = stat.mode
+  } catch {
+    // File doesn't exist yet, use default mode
+  }
   fs.writeFileSync(temp, contents)
+  if (originalMode !== undefined) {
+    fs.chmodSync(temp, originalMode)
+  }
   fs.renameSync(temp, target)
 }
 
@@ -188,15 +210,20 @@ export function locateCandidates(start: string): {
   configs: string[]
   packageRoots: string[]
 } {
-  const seenPackageRoots = new Set<string>()
+  // Dedupe by CONFIG PATH, never by directory: a project can legitimately
+  // carry several next.config.* files (Next only reads one, but which one is
+  // version-dependent — wrapping every candidate is the only way to guarantee
+  // the file that actually runs is wrapped). packageRoots stays parallel to
+  // configs; the same root appearing twice is harmless downstream (hookRoots
+  // and restore both dedupe).
+  const seenConfigs = new Set<string>()
   const packageRoots: string[] = []
   const configs: string[] = []
 
   const collect = (configPath: string): void => {
-    const projectRoot = path.dirname(configPath)
-    if (seenPackageRoots.has(projectRoot)) return
-    seenPackageRoots.add(projectRoot)
-    packageRoots.push(projectRoot)
+    if (seenConfigs.has(configPath)) return
+    seenConfigs.add(configPath)
+    packageRoots.push(path.dirname(configPath))
     configs.push(configPath)
   }
 
@@ -224,18 +251,40 @@ export function ensureHook(packageRoot: string): HookStatus {
   const packageJsonPath = path.join(packageRoot, 'package.json')
   if (!fs.existsSync(packageJsonPath)) return { status: 'no-package-json' }
 
-  const contents = fs.readFileSync(packageJsonPath, 'utf8')
+  const raw = fs.readFileSync(packageJsonPath, 'utf8')
+  // A Windows-authored package.json may start with a UTF-8 BOM, which
+  // JSON.parse rejects (npm itself strips it) — strip for parsing, put it
+  // back on write so the file stays byte-familiar to its author.
+  const hadBom = raw.charCodeAt(0) === 0xfeff
+  const contents = hadBom ? raw.slice(1) : raw
   let parsed: Record<string, unknown> & { scripts?: Record<string, string> }
   try {
     parsed = JSON.parse(contents) as never
   } catch {
-    return { status: 'no-package-json' }
+    return { status: 'invalid-package-json' }
+  }
+  // Valid JSON but not a package.json shape (an array, a bare string, …) —
+  // rewriting it would REPLACE the whole document with a scripts object.
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { status: 'invalid-package-json' }
+  }
+  if (
+    parsed.scripts !== undefined &&
+    parsed.scripts !== null &&
+    (typeof parsed.scripts !== 'object' || Array.isArray(parsed.scripts))
+  ) {
+    return { status: 'host-script-invalid' }
   }
 
   const eol = contents.includes('\r\n') ? '\r\n' : '\n'
   const scripts = { ...(parsed.scripts ?? {}) }
 
   const existing = scripts.postinstall
+  if (existing !== undefined && existing !== null && typeof existing !== 'string') {
+    // `postinstall: 42` is a host bug we must not silently rewrite into a
+    // shell command — leave the file byte-for-byte alone.
+    return { status: 'host-script-invalid' }
+  }
   if (!existing) {
     scripts.postinstall = HOOK_COMMAND
   } else if (!isLifecycleHook(existing)) {
@@ -253,7 +302,15 @@ export function ensureHook(packageRoot: string): HookStatus {
   }
 
   const trailingNewline = contents.endsWith('\n')
-  const next = `${JSON.stringify({ ...parsed, scripts }, null, 2)}${trailingNewline ? eol : ''}`
+  // Preserve indentation style: detect tabs vs spaces from the original file
+  // by checking if it contains tabs before any content
+  const hasTabs = /^[^\S\n]*\t/.test(contents)
+  const indentSize = hasTabs ? undefined : 2
+  
+  // `.replace(/\n/g, eol)` normalises stringify's structural newlines so a
+  // CRLF package.json comes back as CRLF throughout (never mixed).
+  const body = JSON.stringify({ ...parsed, scripts }, null, indentSize).replace(/\n/g, eol)
+  const next = `${hadBom ? '\uFEFF' : ''}${body}${trailingNewline ? eol : ''}`
   writeAtomicSync(packageJsonPath, next)
   say(`activated the host hook in ${path.relative(process.cwd(), packageJsonPath) || packageJsonPath}`)
   return { status: 'changed' }
@@ -266,11 +323,16 @@ export function undoHook(packageRoot: string): {
   const packageJsonPath = path.join(packageRoot, 'package.json')
   if (!fs.existsSync(packageJsonPath)) return { changed: false }
 
-  const contents = fs.readFileSync(packageJsonPath, 'utf8')
+  const raw = fs.readFileSync(packageJsonPath, 'utf8')
+  const hadBom = raw.charCodeAt(0) === 0xfeff
+  const contents = hadBom ? raw.slice(1) : raw
   let parsed: Record<string, unknown> & { scripts?: Record<string, string> }
   try {
     parsed = JSON.parse(contents) as never
   } catch {
+    return { changed: false }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return { changed: false }
   }
 
@@ -279,6 +341,9 @@ export function undoHook(packageRoot: string): {
 
   const postinstall = scripts.postinstall
   if (!postinstall) return { changed: false }
+  // A non-string script is a host bug; `.replace` on it would throw and abort
+  // the rest of a multi-project restore. Leave it alone.
+  if (typeof postinstall !== 'string') return { changed: false }
 
   const previousScripts = { ...scripts }
   const eol = contents.includes('\r\n') ? '\r\n' : '\n'
@@ -291,7 +356,8 @@ export function undoHook(packageRoot: string): {
   else scripts.postinstall = withoutHost
 
   const trailingNewline = contents.endsWith('\n')
-  const next = `${JSON.stringify({ ...parsed, scripts }, null, 2)}${trailingNewline ? eol : ''}`
+  const body = JSON.stringify({ ...parsed, scripts }, null, 2).replace(/\n/g, eol)
+  const next = `${hadBom ? '\uFEFF' : ''}${body}${trailingNewline ? eol : ''}`
   writeAtomicSync(packageJsonPath, next)
   return { changed: true, previousScripts }
 }
@@ -308,8 +374,14 @@ export function isLifecycleHook(value: string): boolean {
  * error), and a `#` comment swallows the rest of the line. `&&`, `||` and
  * `|` are left-associative at equal/tighter precedence and already bind the
  * appended hook correctly, so scripts carrying only those stay untouched.
+ *
+ * FD redirections (`2>&1`, `&>log`, `>&2`) carry a bare `&` too, but it is
+ * an OPERATOR, not a statement separator: it binds tighter than `&&` in both
+ * cmd.exe and POSIX sh, so flat chaining is safe there — and grouping a
+ * cmd-compatible script would emit `(...)` parens cmd.exe cannot parse at
+ * all (npm runs scripts through cmd.exe on Windows by default).
  */
-const NEEDS_GROUPING = /(^|[^&])&([^&]|$)|;|#|\n/
+const NEEDS_GROUPING = /(^|[^&<>])&([^&>]|$)|;|#|\n/
 
 /**
  * Append our lifecycle hook to a host script.
@@ -375,7 +447,12 @@ function appendGitignoreNote(projectRoot: string): void {
   const wanted = `/${BACKUP_DIR}`
   if (gitignoreHasEntry(contents, BACKUP_DIR)) return
   if (contents.length > 0 && !contents.endsWith('\n')) contents += '\n'
-  writeAtomicSync(target, `${contents}${wanted}\n`)
+  try {
+    writeAtomicSync(target, `${contents}${wanted}\n`)
+  } catch {
+    // A read-only .gitignore is cosmetic — the config write already succeeded
+    // and must not be reported as skipped because this failed.
+  }
 }
 
 /**
@@ -429,47 +506,64 @@ export function run(start = process.cwd(), options: RunOptions = {}): RunOutcome
       continue
     }
 
-    const source = fs.readFileSync(configPath, 'utf8')
-    const result = rewrite(source)
-    if (!result.ok) {
-      if (/already wrapped/.test(result.reason)) {
-        say(`skipped ${relative} — already activated`)
-        hookRoots.add(projectRoot)
-        alreadyActive += 1
+    // One unreadable/unwritable config must never abort the batch (or the
+    // install that spawned us) — report it and keep going.
+    try {
+      const source = fs.readFileSync(configPath, 'utf8')
+      const result = rewrite(source)
+      if (!result.ok) {
+        if (/already wrapped/.test(result.reason)) {
+          say(`skipped ${relative} — already activated`)
+          hookRoots.add(projectRoot)
+          alreadyActive += 1
+          continue
+        }
+        say(`skipped ${relative} — ${result.reason}`)
+        // Provide the appropriate snippet based on the config file extension
+        const isEsm = /\.(m?ts|m?js)$/.test(configPath) && !/\.cjs$/.test(configPath)
+        const snippet = isEsm ? SNIPPET : CJS_REQUIRE + '\nmodule.exports = blazefire(nextConfig)'
+        say(`add this next to your config manually:\n  ${snippet}`)
         continue
       }
-      say(`skipped ${relative} — ${result.reason}`)
-      say(`add this next to your config manually:\n  ${SNIPPET}`)
+
+      const backup = path.join(
+        projectRoot,
+        BACKUP_DIR,
+        `${path.basename(configPath)}.${new Date()
+          .toISOString()
+          .replace(/[:.]/g, '-')}.original`
+      )
+      if (!fs.existsSync(backup)) {
+        fs.mkdirSync(path.dirname(backup), { recursive: true })
+        fs.copyFileSync(configPath, backup)
+      }
+
+      const nextSource = result.code
+
+      writeAtomicSync(configPath, nextSource)
+      hookRoots.add(projectRoot)
+      appendGitignoreNote(projectRoot)
+      say(`activated ${relative}`)
+      activated += 1
+    } catch (error) {
+      say(`skipped ${relative} — ${(error as Error)?.message ?? error}`)
       continue
     }
-
-    hookRoots.add(projectRoot)
-    const backup = path.join(
-      projectRoot,
-      BACKUP_DIR,
-      `${path.basename(configPath)}.${new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')}.original`
-    )
-    if (!fs.existsSync(backup)) {
-      fs.mkdirSync(path.dirname(backup), { recursive: true })
-      fs.copyFileSync(configPath, backup)
-    }
-
-    const nextSource = result.code
-
-    writeAtomicSync(configPath, nextSource)
-    appendGitignoreNote(projectRoot)
-    say(`activated ${relative}`)
-    activated += 1
   }
 
   for (const packageRoot of hookRoots) {
-    const hook = ensureHook(packageRoot)
-    if (hook.status === 'no-package-json') {
-      say(
-        `skipped host hook in ${path.relative(process.cwd(), packageRoot) || packageRoot} — package.json missing`
-      )
+    const label = path.relative(process.cwd(), packageRoot) || packageRoot
+    try {
+      const hook = ensureHook(packageRoot)
+      if (hook.status === 'no-package-json') {
+        say(`skipped host hook in ${label} — package.json missing`)
+      } else if (hook.status === 'invalid-package-json') {
+        say(`skipped host hook in ${label} — package.json is not valid JSON`)
+      } else if (hook.status === 'host-script-invalid') {
+        say(`skipped host hook in ${label} — scripts.postinstall is not a string`)
+      }
+    } catch (error) {
+      say(`skipped host hook in ${label} — ${(error as Error)?.message ?? error}`)
     }
   }
 
@@ -490,45 +584,52 @@ export function restore(start = process.cwd()): boolean {
 
   let restoredAny = false
   for (const projectRoot of new Set(packageRoots)) {
-    const backupRoot = path.join(projectRoot, BACKUP_DIR)
-    let entries: string[]
+    // A single unreadable backup must not abort restoration of the others
+    // (multi-project/workspace restores run in one loop).
     try {
-      entries = fs.readdirSync(backupRoot)
-    } catch {
-      continue
-    }
-
-    const originals = entries
-      .filter(
-        (entry) =>
-          entry.endsWith('.original') &&
-          CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
-      )
-      .sort((a, b) => a.localeCompare(b))
-
-    const firstBackupByConfig = new Map<string, string>()
-    for (const entry of originals) {
-      const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
-      if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
-    }
-
-    let restoredProject = false
-    for (const [base, entry] of firstBackupByConfig) {
-      const target = path.join(projectRoot, base)
-      if (!fs.existsSync(target)) {
-        say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+      const backupRoot = path.join(projectRoot, BACKUP_DIR)
+      let entries: string[]
+      try {
+        entries = fs.readdirSync(backupRoot)
+      } catch {
         continue
       }
 
-      const content = fs.readFileSync(path.join(backupRoot, entry))
-      writeAtomicSync(target, content)
-      say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
-      restoredProject = true
-    }
+      const originals = entries
+        .filter(
+          (entry) =>
+            entry.endsWith('.original') &&
+            CONFIG_NAMES.some((name) => entry.startsWith(`${name}.`))
+        )
+        .sort((a, b) => a.localeCompare(b))
 
-    if (restoredProject) {
-      undoHook(projectRoot)
-      restoredAny = true
+      const firstBackupByConfig = new Map<string, string>()
+      for (const entry of originals) {
+        const base = CONFIG_NAMES.find((name) => entry.startsWith(`${name}.`))
+        if (base && !firstBackupByConfig.has(base)) firstBackupByConfig.set(base, entry)
+      }
+
+      let restoredProject = false
+      for (const [base, entry] of firstBackupByConfig) {
+        const target = path.join(projectRoot, base)
+        if (!fs.existsSync(target)) {
+          say(`skipped ${base} — the live config is missing; refusing to resurrect it`)
+          continue
+        }
+
+        const content = fs.readFileSync(path.join(backupRoot, entry))
+        writeAtomicSync(target, content)
+        say(`restored ${base} from ${path.relative(process.cwd(), backupRoot) || backupRoot}`)
+        restoredProject = true
+      }
+
+      if (restoredProject) {
+        undoHook(projectRoot)
+        restoredAny = true
+      }
+    } catch (error) {
+      const label = path.relative(process.cwd(), projectRoot) || projectRoot
+      say(`skipped restore in ${label} — ${(error as Error)?.message ?? error}`)
     }
   }
 

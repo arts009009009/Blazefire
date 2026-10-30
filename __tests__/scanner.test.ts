@@ -63,6 +63,27 @@ describe('scanner.plan / scanner.rewrite', () => {
     expect(result.code).toContain('blazefire(() => ({ reactStrictMode: true }))')
   })
 
+  it('wraps a NAMED function config (statement-end must not match its own first token)', () => {
+    const result = rewrite(
+      'export default function nextConfig() {\n  return { reactStrictMode: true }\n}\n'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code).toContain('blazefire(function nextConfig()')
+    expect(result.code).not.toContain('could not locate')
+  })
+
+  it('wraps CJS anonymous `function (` and async function configs', () => {
+    for (const src of [
+      'module.exports = function (phase) {\n  return {}\n}\n',
+      'export default async function nextConfig() {\n  return {}\n}\n',
+      'export default function() {\n  return {}\n}\n',
+    ]) {
+      const result = rewrite(src)
+      expect(result.ok).toBe(true)
+    }
+  })
+
   it('refuses a file with no default export', () => {
     expect(rewrite('const x = 1\n').ok).toBe(false)
   })
@@ -117,5 +138,93 @@ export default config
   it('SNIPPET matches the emitted import + wrap shape', () => {
     expect(SNIPPET).toContain(ESM_IMPORT)
     expect(SNIPPET).toContain('blazefire(nextConfig)')
+  })
+})
+
+describe('scanner edge cases (bulletproofing)', () => {
+  it('does not inject a duplicate ESM binding when the import already exists', () => {
+    // The half-paste state: our manual advice says "add this import", the
+    // wrap step was never done. A second `import blazefire` = SyntaxError.
+    const config = `import blazefire from "blazefire/plugin";
+const nextConfig = { reactStrictMode: true }
+export default nextConfig
+`
+    const result = rewrite(config)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code.match(/import blazefire from/g)).toHaveLength(1)
+    expect(result.code).toContain('export default blazefire(nextConfig)')
+  })
+
+  it('does not inject a duplicate CJS binding when the require already exists', () => {
+    const config = `const blazefire = require("blazefire/plugin");
+const nextConfig = { reactStrictMode: true }
+module.exports = nextConfig
+`
+    const result = rewrite(config)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code.match(/require\("blazefire\/plugin"\)/g)).toHaveLength(1)
+    expect(result.code).toContain('module.exports = blazefire(nextConfig)')
+  })
+
+  it('still inserts the import when a similarly-named binding exists', () => {
+    const config = `import blazefireExtended from "./helper"
+const nextConfig = { a: 1 }
+export default nextConfig
+`
+    const result = rewrite(config)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code).toContain(ESM_IMPORT)
+    expect(result.code).toContain('export default blazefire(nextConfig)')
+  })
+
+  it('refuses a config already applied through an intermediate const', () => {
+    const config = `import blazefire from "blazefire/plugin"
+const nextConfig = blazefire({ reactStrictMode: true })
+export default nextConfig
+`
+    const result = rewrite(config)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.reason).toMatch(/already wrapped/)
+  })
+
+  it('refuses `export defaultConfig` (named export, not a default one)', () => {
+    const result = rewrite('const defaultConfig = { a: 1 }\nexport defaultConfig\n')
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.reason).toMatch(/no top-level/)
+  })
+
+  it('refuses a file that only assigns module.exports properties', () => {
+    // Wrapping would emit `blazefire(.env = …)` — a SyntaxError injection.
+    const result = rewrite('module.exports.env = { a: 1 }\n')
+    expect(result.ok).toBe(false)
+  })
+
+  it('skips a module.exports look-alike and wraps the real assignment', () => {
+    const config = `module.exports.loadConfig = () => ({})
+module.exports = { reactStrictMode: true }
+`
+    const result = rewrite(config)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code).toContain('module.exports = blazefire({ reactStrictMode: true })')
+    expect(result.code).not.toContain('blazefire(.loadConfig')
+  })
+
+  it('keeps a UTF-8 BOM in front of the wrapped config', () => {
+    const result = rewrite('\uFEFFexport default { a: 1 }\n')
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.code.startsWith('\uFEFF')).toBe(true)
+    expect(result.code).toContain('export default blazefire({ a: 1 })')
+  })
+
+  it('refuses an empty or comment-only config with a clear reason', () => {
+    expect(rewrite('').ok).toBe(false)
+    expect(rewrite('// nothing here yet\n').ok).toBe(false)
   })
 })

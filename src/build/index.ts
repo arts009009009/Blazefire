@@ -10,13 +10,14 @@
  * finally — the graph cache is always flushed before the process moves on.
  */
 
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { loadFrostfastBinding } from '../compiler/bindings.js'
 import { FrostfastProject, getRouteNames } from '../compiler/project.js'
 import { rustifyEnv } from '../config/serialize.js'
 import type { RustifiedEnvVar } from '../config/serialize.js'
+import { BlazefireConfigError } from '../config/types.js'
 
 export interface BuildInput {
   dir: string
@@ -41,6 +42,18 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
   const distDir = isAbsolute(configuredDistDir)
     ? configuredDistDir
     : resolve(dir, configuredDistDir)
+  // Compare canonical paths too: lexical checks are bypassed by a distDir
+  // symlink that points at the project root or one of its parents.
+  const [realDir, realDistDir] = await Promise.all([
+    realpath(dir),
+    realpathWithMissingTail(distDir),
+  ])
+  const insideProject = relative(realDistDir, realDir)
+  if (insideProject === '' || (!insideProject.startsWith('..') && !isAbsolute(insideProject))) {
+    throw new BlazefireConfigError(
+      `distDir (${configuredDistDir}) resolves to ${distDir}, which is the project root or one of its parents — refusing to clean it. Choose a dedicated output directory inside the project (default: .blazefire).`
+    )
+  }
   // Unique per build so successive builds are distinguishable (deployment
   // ID / cache keys). A version-derived default made every build identical.
   const buildId = input.buildId ?? randomUUID()
@@ -61,7 +74,11 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     isPersistentCachingEnabled: true,
   })
 
-  let buildError: unknown
+  // An explicit boolean, NOT the error value: napi promises can reject with
+  // ANY value, and a falsy rejection (`undefined`, `''`) would leave
+  // `buildError` falsy — letting the finally throw the shutdown error INSTEAD
+  // of the real failure that got us here.
+  let failed = false
   try {
     // Rust writes every output file; JS only consumes manifests (v1 truth,
     // preserved — this is where the framework stays out of the hot path).
@@ -81,7 +98,7 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
 
     return { distDir, routes, durationMs: Date.now() - started }
   } catch (error) {
-    buildError = error
+    failed = true
     throw error
   } finally {
     // Always flush + release the graph, even on failure — but never let a
@@ -89,7 +106,31 @@ export async function frostfastBuild(input: BuildInput): Promise<BuildResult> {
     try {
       await project.shutdown()
     } catch (shutdownError) {
-      if (!buildError) throw shutdownError
+      if (!failed) throw shutdownError
+    }
+  }
+}
+
+/** Resolve existing symlinked ancestors while preserving a not-yet-created tail. */
+async function realpathWithMissingTail(path: string): Promise<string> {
+  let candidate = resolve(path)
+  const missing: string[] = []
+  for (;;) {
+    try {
+      return resolve(await realpath(candidate), ...missing)
+    } catch (error) {
+      if (
+        typeof error !== 'object' ||
+        error === null ||
+        !('code' in error) ||
+        error.code !== 'ENOENT'
+      ) {
+        throw error
+      }
+      const parent = dirname(candidate)
+      if (parent === candidate) throw error
+      missing.unshift(basename(candidate))
+      candidate = parent
     }
   }
 }

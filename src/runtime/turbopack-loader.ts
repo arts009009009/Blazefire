@@ -37,7 +37,9 @@ export function runtimeEntryPath(): string {
 export function blazefireLoader(
   this: LoaderContextLike,
   source: string,
-  map?: string
+  // webpack/turbopack hand the input map as an OBJECT (loader API) or a
+  // STRING depending on the stage; both shapes reach us in practice.
+  map?: string | object
 ): string | void {
   if (source.includes(INJECT_MARKER)) return source
 
@@ -51,21 +53,46 @@ export function blazefireLoader(
 
   const code = `import ${JSON.stringify(specifier)}; ${INJECT_MARKER}\n${source}`
 
-  if (map && typeof this.callback === 'function') {
-    this.callback(null, code, shiftMapDownOneLine(map))
-    return
+  if (map) {
+    if (typeof this.callback === 'function') {
+      this.callback(null, code, shiftMapDownOneLine(map))
+      return
+    }
+    // No async channel: a sync string return can carry ONLY code — the loader
+    // API has no slot for a map (maps travel exclusively through `callback`).
+    // We must still prepend (that is the whole point of this loader), so with
+    // an input map present the unshifted map stays attached upstream and
+    // bootstrap stack frames land one generated line off. There is nothing
+    // safe to deliver here but the shifted code, so the constraint is
+    // documented rather than papered over; real webpack/turbopack loader
+    // contexts always provide `callback`, so this branch only exists for
+    // bare/test contexts. (Fixing the map shape itself is what matters — see
+    // shiftMapDownOneLine: an OBJECT map used to throw, and the caller
+    // swallowed it.)
   }
   return code
 }
 
-/** Nudge a source-map v3 `mappings` field down by one generated line. */
-function shiftMapDownOneLine(map: string): string {
+/**
+ * Nudge a source-map v3 `mappings` field down by one generated line.
+ *
+ * The bundler may pass the map pre-parsed (webpack's loader API hands objects)
+ * or as a JSON string. Both shapes must shift: passing an object made
+ * JSON.parse throw, and the bare catch returned the map UNSHIFTED alongside
+ * shifted code — every bootstrap stack frame off by one, silently.
+ */
+function shiftMapDownOneLine(map: string | object): string {
   try {
-    const parsed = JSON.parse(map) as { mappings?: unknown }
+    // Clone object maps: never mutate the bundler's own map object in place.
+    const parsed = (typeof map === 'object' && map !== null
+      ? { ...map }
+      : JSON.parse(String(map))) as { mappings?: unknown }
     if (typeof parsed.mappings === 'string') parsed.mappings = `;${parsed.mappings}`
     return JSON.stringify(parsed)
   } catch {
-    return map
+    // Malformed string map: pass it through untouched rather than dropping it
+    // (an unshiftable map beats an absent one). Object maps never reach here.
+    return typeof map === 'string' ? map : JSON.stringify(map)
   }
 }
 

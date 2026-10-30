@@ -9,6 +9,7 @@ import {
   CHECK_INTERVAL_MS,
   checkForUpdate,
   compareVersions,
+  detectPackageManager,
   isValidVersion,
   isSafeSpec,
   purgeCachedInstall,
@@ -99,6 +100,30 @@ describe('throttle state', () => {
     }
   })
 
+  it('still reports a freshly fetched version when the state write fails', async () => {
+    // A directory at the state path makes every write silently fail (EISDIR)
+    // while reads return {}. The fetch itself succeeded — throwing the RESULT
+    // away because bookkeeping failed would leave the updater permanently
+    // stuck on a stale version.
+    rmSync(stateFile(), { force: true })
+    mkdirSync(stateFile())
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ tag_name: 'v3.0.0' }),
+    } as Response)
+
+    try {
+      await expect(checkForUpdate()).resolves.toMatchObject({
+        latest: '3.0.0',
+        updateAvailable: true,
+      })
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+    } finally {
+      fetchSpy.mockRestore()
+      rmSync(stateFile(), { recursive: true, force: true })
+    }
+  })
+
   afterAll(() => {
     try {
       rmSync(stateFile(), { force: true })
@@ -134,6 +159,40 @@ describe('package-manager helpers', () => {
 
   it('specTarget names the package', () => {
     expect(specTarget('2.1.0')).toBe('blazefire@2.1.0')
+  })
+})
+
+describe('detectPackageManager', () => {
+  let dir: string
+  const originalUa = process.env.npm_config_user_agent
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'blazefire-pm-'))
+  })
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+    if (originalUa === undefined) delete process.env.npm_config_user_agent
+    else process.env.npm_config_user_agent = originalUa
+  })
+
+  it('prefers the project lockfile over a foreign user agent, in BOTH directions', () => {
+    // `npx` reports an npm UA inside a pnpm/yarn project...
+    writeFileSync(join(dir, 'yarn.lock'), '')
+    process.env.npm_config_user_agent = 'npm/10.9.2 node/v22.14.0 linux x64'
+    expect(detectPackageManager(dir)).toBe('yarn')
+
+    // ...and `pnpm dlx`/`bunx` report their own UA inside an npm project.
+    // Running the UA's manager against the other lockfile forks it.
+    rmSync(join(dir, 'yarn.lock'))
+    writeFileSync(join(dir, 'package-lock.json'), '{}')
+    process.env.npm_config_user_agent = 'pnpm/9.0.0 npm/? node/v22.14.0 linux x64'
+    expect(detectPackageManager(dir)).toBe('npm')
+  })
+
+  it('falls back to the user agent when no lockfile names a manager', () => {
+    process.env.npm_config_user_agent = 'pnpm/9.0.0 npm/? node/v22.14.0 linux x64'
+    expect(detectPackageManager(dir)).toBe('pnpm')
   })
 })
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadFrostfastBinding } from '../src/compiler/bindings'
@@ -56,6 +56,86 @@ describe('frostfastBuild', () => {
     )
     expect(existsSync(join(distDir, 'old-manifest'))).toBe(false)
     expect(existsSync(join(distDir, 'cache', 'graph'))).toBe(true)
+    // Marker files written by the JS side before entrypoints cross: the
+    // turbopack marker and the CJS package.json Node needs to load dist.
+    expect(readFileSync(join(distDir, 'turbopack'), 'utf8')).toBe('')
+    expect(JSON.parse(readFileSync(join(distDir, 'package.json'), 'utf8'))).toEqual({
+      type: 'commonjs',
+    })
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a distDir that would wipe the project root or its parents', async () => {
+    ;(FrostfastProject.create as jest.Mock).mockClear()
+    const sentinel = join(projectRoot, 'package.json')
+    writeFileSync(sentinel, JSON.stringify({ name: 'precious' }))
+
+    for (const distDir of ['.', '..', join(projectRoot, '..'), projectRoot]) {
+      await expect(frostfastBuild({ dir: projectRoot, distDir })).rejects.toThrow(
+        /refusing to clean/
+      )
+      expect(FrostfastProject.create).not.toHaveBeenCalled()
+      expect(existsSync(sentinel)).toBe(true)
+    }
+  })
+
+  it('refuses an output symlink that resolves to the project root', async () => {
+    const sentinel = join(projectRoot, 'package.json')
+    writeFileSync(sentinel, JSON.stringify({ name: 'precious' }))
+    symlinkSync(projectRoot, join(projectRoot, 'artifacts'), 'dir')
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      /refusing to clean/
+    )
+    expect(existsSync(sentinel)).toBe(true)
+    expect(FrostfastProject.create).not.toHaveBeenCalled()
+  })
+
+  it('calls shutdown on the project when the build throws (L-33)', async () => {
+    const buildError = new Error('compilation failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockRejectedValue(buildError),
+      entrypoints: jest.fn(),
+      shutdown: jest.fn().mockResolvedValue(undefined),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'compilation failed'
+    )
+    // shutdown MUST be called even on failure (finally block)
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces the build error when shutdown also throws (L-33)', async () => {
+    const buildError = new Error('compilation failed')
+    const shutdownError = new Error('shutdown failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockRejectedValue(buildError),
+      entrypoints: jest.fn(),
+      shutdown: jest.fn().mockRejectedValue(shutdownError),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'compilation failed'
+    )
+    // shutdown error must NOT mask the build error
+    expect(project.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces shutdown error when build succeeds but shutdown fails (L-33)', async () => {
+    const shutdownError = new Error('shutdown failed')
+    project = {
+      writeAllEntrypointsToDisk: jest.fn().mockResolvedValue(undefined),
+      entrypoints: jest.fn().mockResolvedValue({ routes: new Map() }),
+      shutdown: jest.fn().mockRejectedValue(shutdownError),
+    }
+    ;(FrostfastProject.create as jest.Mock).mockResolvedValue(project)
+
+    await expect(frostfastBuild({ dir: projectRoot, distDir: 'artifacts' })).rejects.toThrow(
+      'shutdown failed'
+    )
     expect(project.shutdown).toHaveBeenCalledTimes(1)
   })
 })

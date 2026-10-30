@@ -167,7 +167,12 @@ function startsNewStatement(src: string, i: number): boolean {
 function statementEnd(src: string, start: number): number {
   let i = start
   let depth = 0
-  let atLineStart = true
+  // `start` sits mid-line (just after `export default` / `module.exports =`),
+  // so the expression's FIRST token must never be tested as a new statement —
+  // doing so made `export default function nextConfig() {}` match `function\s`
+  // and end the statement at its own start (empty expression, false
+  // "could not locate the config expression").
+  let atLineStart = false
   while (i < src.length) {
     const c = src[i]!
     if (c === '"' || c === "'" || c === '`') {
@@ -249,24 +254,104 @@ function findTopLevelLineComment(src: string, from: number, to: number): number 
   return -1
 }
 
+/** Identifier-continuation check — a word-boundary guard for matched targets. */
+function isIdentifierChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_$]/.test(ch)
+}
+
+/**
+ * The top-level statement plan() should wrap, skipping look-alikes that match
+ * a target only as a PREFIX:
+ *
+ *   `export defaultConfig`    — a named export, not a default one
+ *   `module.exports.env = …`  — a property assignment, not the config export
+ *
+ * Property assignments are skipped (rather than refused) so a later real
+ * `module.exports = …` is still found.
+ */
+function findDefaultExport(src: string): { index: number; token: string } | null {
+  let searchFrom = 0
+  for (;;) {
+    const hit = findTopLevel(src.slice(searchFrom), ['export default', 'module.exports'])
+    if (!hit) return null
+
+    const at = searchFrom + hit.index
+    const after = at + hit.token.length
+    if (hit.token === 'export default') {
+      if (!isIdentifierChar(src[after])) return { index: at, token: hit.token }
+      searchFrom = after // e.g. `export defaultConfig` — keep looking
+      continue
+    }
+    let i = after
+    while (i < src.length && /[ \t\r\n]/.test(src[i]!)) i += 1
+    if (src[i] === '=' && src[i + 1] !== '=') return { index: at, token: hit.token }
+    searchFrom = after
+  }
+}
+
 /**
  * Is there a *second* top-level default export at or after `from`?
  * A property assignment (`module.exports.env = …`) is not a reassignment.
  */
 function hasAnotherDefaultExport(src: string, from: number): boolean {
-  let searchFrom = from
+  return findDefaultExport(src.slice(from)) !== null
+}
+
+/**
+ * Every shape that DECLARES the top-level identifier `blazefire` (spacing
+ * variants included — `import blazefire`, `import * as blazefire`,
+ * `import { blazefire`, `const blazefire`, destructured CJS, …).
+ */
+const BLAZEFIRE_BINDING_TARGETS = [
+  'import blazefire',
+  'import * as blazefire',
+  'import*as blazefire',
+  'import { blazefire',
+  'import {blazefire',
+  'import{ blazefire',
+  'import{blazefire',
+  'import { default: blazefire',
+  'import{default:blazefire',
+  'import { default:blazefire',
+  'import{ default: blazefire',
+  'const blazefire',
+  'let blazefire',
+  'var blazefire',
+  'const { blazefire',
+  'const {blazefire',
+  'const{ blazefire',
+  'const{blazefire',
+  'const { default: blazefire',
+  'const{default:blazefire',
+  'const { default:blazefire',
+  'const{ default: blazefire',
+  'let { blazefire',
+  'let {blazefire',
+  'let{ blazefire',
+  'let{blazefire',
+  'var { blazefire',
+  'var {blazefire',
+  'var{ blazefire',
+  'var{blazefire',
+]
+
+/**
+ * Does this file already DECLARE `blazefire` at the top level? If so the
+ * import must NOT be injected again — a duplicate binding is a SyntaxError
+ * that would break the project on its very next boot. This is reachable
+ * through our own advice: the manual SNIPPET tells people to paste the import
+ * first, and a half-followed paste leaves exactly this state.
+ * Nested declarations are deliberately invisible (they cannot collide with a
+ * top-level import).
+ */
+function hasExistingBinding(src: string): boolean {
+  let searchFrom = 0
   for (;;) {
-    const hit = findTopLevel(src.slice(searchFrom), ['export default', 'module.exports'])
+    const hit = findTopLevel(src.slice(searchFrom), BLAZEFIRE_BINDING_TARGETS)
     if (!hit) return false
-
-    const at = searchFrom + hit.index
-    if (hit.token === 'export default') return true
-
-    let i = at + hit.token.length
-    while (i < src.length && /[ \t\r\n]/.test(src[i]!)) i += 1
-    if (src[i] === '=' && src[i + 1] !== '=') return true
-
-    searchFrom = at + hit.token.length
+    const after = searchFrom + hit.index + hit.token.length
+    if (!isIdentifierChar(src[after])) return true
+    searchFrom = after
   }
 }
 
@@ -275,6 +360,8 @@ export type ActivationPlan =
   | {
       ok: true
       isEsm: boolean
+      /** False when the config already declares `blazefire` (never double-declare). */
+      needsImport: boolean
       insertAt: number
       exprStart: number
       exprEnd: number
@@ -283,7 +370,7 @@ export type ActivationPlan =
     }
 
 export function plan(src: string): ActivationPlan {
-  const hit = findTopLevel(src, ['export default', 'module.exports'])
+  const hit = findDefaultExport(src)
   if (!hit) return { ok: false, reason: 'no top-level `export default` found' }
 
   const isEsm = hit.token === 'export default'
@@ -299,7 +386,12 @@ export function plan(src: string): ActivationPlan {
   if (isEsm && /^\s+class\b/.test(rest)) {
     return { ok: false, reason: '`export default class` is not a Next config' }
   }
-  if (/^\s*\{?[^;]*\bas\s+default\b/.test(src.slice(Math.max(0, hit.index - 120), headEnd))) {
+  // Detect `export { x as default }` form, but skip comments/strings in the lookback.
+  // Use a larger window and exclude comments explicitly.
+  const lookbackSlice = src.slice(Math.max(0, hit.index - 200), headEnd)
+  const hasAsDefault = /^\s*\{?[^;\/]*\bas\s+default\b/.test(lookbackSlice) ||
+                       /^\s*\/\/[^\n]*\bas\s+default\b/.test(lookbackSlice)
+  if (hasAsDefault) {
     return { ok: false, reason: '`export { x as default }` form not supported' }
   }
 
@@ -339,6 +431,19 @@ export function plan(src: string): ActivationPlan {
     return { ok: false, reason: 'config is already wrapped in blazefire()' }
   }
 
+  // A manual `blazefire(...)` call BEFORE the export means the wrapper was
+  // already applied (possibly stored in an intermediate const) — wrapping the
+  // reference again would double-inject headers and turbopack rules at
+  // runtime. (Depth-0 only: strings, comments and nested bodies don't count.)
+  const preWrap = findTopLevel(src.slice(0, exprStart), ['blazefire(', 'blazefire ('])
+  if (preWrap && (preWrap.index === 0 || !isIdentifierChar(src[preWrap.index - 1]))) {
+    return { ok: false, reason: 'config is already wrapped in blazefire()' }
+  }
+
+  // An existing top-level declaration of `blazefire` means the import line
+  // must not be injected a second time (duplicate binding = SyntaxError).
+  const needsImport = !hasExistingBinding(src)
+
   // `mid` already carries the `export default` / `module.exports =` keyword
   // verbatim, so the replacement is ONLY the call.
   const replacement = `blazefire(${expression})${semicolon ? ';' : ''}`
@@ -354,6 +459,7 @@ export function plan(src: string): ActivationPlan {
   return {
     ok: true,
     isEsm,
+    needsImport,
     insertAt,
     exprStart,
     exprEnd,
@@ -376,5 +482,7 @@ export function rewrite(src: string): RewriteResult {
   const head = src.slice(0, p.insertAt)
   const mid = src.slice(p.insertAt, p.exprStart)
   const tail = src.slice(p.exprEnd)
-  return { ok: true, code: head + p.line + eol + mid + p.replacement + tail }
+  // Only declare the import when the file doesn't already carry it.
+  const declaration = p.needsImport ? `${p.line}${eol}` : ''
+  return { ok: true, code: head + declaration + mid + p.replacement + tail }
 }

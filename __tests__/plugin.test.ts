@@ -88,6 +88,30 @@ describe('blazefire()', () => {
     ).toThrow(BlazefireConfigError)
   })
 
+  it('throws for a PROTOTYPE-level webpack() on a class config (H-01 cannot be evaded)', () => {
+    class WithWebpack {
+      reactStrictMode = true // own field: omitOptions() would copy only this
+      webpack(): Record<string, unknown> {
+        return {}
+      }
+    }
+    expect(() => blazefire(new WithWebpack() as unknown as NextConfigLike)).toThrow(
+      BlazefireConfigError
+    )
+  })
+
+  it('keeps a config carried on a prototype chain instead of treating it as options', () => {
+    // Shared config base: no own keys, everything inherited. Object.keys()
+    // sees nothing, so this used to be classified as an options bag and the
+    // whole config was silently dropped.
+    const proto = { output: 'standalone' as const }
+    const config = Object.create(proto) as NextConfigLike
+
+    const merged = blazefire(config)
+    expect(merged.output).toBe('standalone')
+    expect(merged.env?.NEXT_PUBLIC_BLAZEFIRE).toBe('true')
+  })
+
   it('preserves host headers(), redirects(), rewrites() via merge', async () => {
     const merged = blazefire({
       headers: async () => [{ source: '/x', headers: [{ key: 'X-1', value: '1' }] }],

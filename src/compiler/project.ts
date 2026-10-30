@@ -4,8 +4,12 @@
  * Responsibilities (and nothing more — no wrapper cruft, mandate 3):
  *  - construct the native project with compact, hash-keyed config (H-08)
  *  - expose the incremental graph's event streams as AsyncIterables that
- *    ALWAYS dispose their RootTask (v1 required manual disposal in every
- *    consumer's finally; here it cannot be forgotten)
+ *    dispose their RootTask: deterministically on every explicit path
+ *    (completion, throw, .return(), abort) and best-effort at GC via a
+ *    FinalizationRegistry backstop when a consumer abandons an iterator
+ *    mid-iteration without calling .return() (v1 required manual disposal
+ *    in every consumer's finally; here it cannot be forgotten on the
+ *    explicit paths, and leaked only if the iterator itself is dropped)
  *  - strip discarded issues before any JS consumer sees them (H-09)
  */
 
@@ -80,6 +84,34 @@ interface NormalizedSnapshot extends SerializedProjectConfig {
   }
 }
 
+/**
+ * Snapshot fields retained in `parsed` must be OURS, not the caller's
+ * (L-29): `parsed` feeds the next update's merge, so aliasing the caller's
+ * objects lets an in-place mutation of an UN-passed field silently flow into
+ * the next serialization — a phantom native update whose `partial.nextConfig`
+ * reflects out-of-band mutation the caller never sent.
+ *
+ * Copies plain objects/arrays recursively; everything else (functions —
+ * which a nextConfig legitimately contains and `structuredClone` would throw
+ * on — class instances, symbols, …) passes through by reference, which is
+ * fine because the retained copy only needs VALUE stability for hashing.
+ */
+function copyConfigShape(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(copyConfigShape)
+  if (isPlainRecord(value)) {
+    const out: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value)) out[key] = copyConfigShape(entry)
+    return out
+  }
+  return value
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
 function snapshot(input: {
   rootPath: string
   projectPath: string
@@ -91,7 +123,17 @@ function snapshot(input: {
   nextConfig: Record<string, unknown>
 }): NormalizedSnapshot {
   const serialized = serializeProjectConfig(input)
-  return { ...serialized, parsed: input }
+  // Deep-copy the reference-typed fields BEFORE retaining them; the caller
+  // still owns the originals and may mutate them in place later (L-29).
+  return {
+    ...serialized,
+    parsed: {
+      ...input,
+      env: copyConfigShape(input.env) as Record<string, string | undefined>,
+      defineEnv: copyConfigShape(input.defineEnv) as Record<string, RustifiedEnvVar[]>,
+      nextConfig: copyConfigShape(input.nextConfig) as Record<string, unknown>,
+    },
+  }
 }
 
 export function getRouteNames(entrypoints: NapiEntrypoints): string[] {
@@ -190,8 +232,13 @@ export class FrostfastProject {
 
   /**
    * Push a partial update into the Rust graph. The config half is
-   * hash-gated: when nothing observable changed, the marshalling and the
-   * napi call are BOTH skipped (spec H-08).
+   * hash-gated: when nothing observable changed, no napi call is issued
+   * (spec H-08). NOTE the gate only skips the SEND — the re-merge and
+   * serializeProjectConfig() (toWire walk + JSON.stringify + sha256) still
+   * run on every call, because the gate must hash the MERGED config to know
+   * whether anything observable changed. That is still the H-08 win: the
+   * expensive half is the native round-trip (graph reconfigure), not the
+   * stringify.
    *
    * @returns true when a native update was issued, false when skipped.
    */
@@ -259,7 +306,9 @@ export class FrostfastProject {
   }
 
   // -------------------------------------------------------------------------
-  // Event streams: AsyncIterables that dispose their RootTask unconditionally.
+  // Event streams: AsyncIterables that dispose their RootTask —
+  // deterministically on explicit completion/throw/.return()/abort, and
+  // best-effort at GC for abandoned iterators (L-22, see #stream).
   // -------------------------------------------------------------------------
 
   /** Route-graph changes. */
@@ -295,14 +344,33 @@ export class FrostfastProject {
       (callback) =>
         this.#binding.projectUpdateInfoSubscribe(this.handle, aggregationMs, callback),
       (payload) => {
-        if (payload === null || payload === undefined) {
+        // H-09 invariant: the defensive strip runs on EVERY payload before a
+        // JS consumer sees it — this stream used to pass `message.value`
+        // (the issue-bearing half: errors/warnings ride along here) through
+        // raw. Strip the wrapper exactly like entrypointEvents does; the
+        // null/undefined passthrough means the empty-payload guard below
+        // still fires after stripping.
+        const stripped = stripDiscardedIssues(
+          payload as NapiUpdateMessage & IssueBearingPayload,
+          this.issuePolicy
+        )
+        if (stripped === null || stripped === undefined) {
           throw new Error('Frostfast emitted an empty update-info message')
         }
-        const message = payload as NapiUpdateMessage
+        const message: NapiUpdateMessage = stripped
         if (message.updateType !== 'start' && message.updateType !== 'end') {
           throw new Error(`Frostfast emitted an unknown update type: ${message.updateType}`)
         }
-        return { type: message.updateType, value: message.value }
+        // The mapping only forwards `type` and `value`, so a wrapper-only
+        // strip would be unobservable here — strip `value` too, since it is
+        // the field that actually carries issues to consumers.
+        return {
+          type: message.updateType,
+          value: stripDiscardedIssues(
+            message.value as IssueBearingPayload | undefined,
+            this.issuePolicy
+          ),
+        }
       },
       signal
     )
@@ -372,6 +440,23 @@ export class FrostfastProject {
     }
 
     const task = subscribe(callback)
+    // Idempotent disposal: the finally below and the GC backstop must never
+    // double-dispose the native RootTask.
+    let disposed = false
+    const dispose = (): void => {
+      if (disposed) return
+      disposed = true
+      this.#binding.rootTaskDispose(task)
+    }
+    // GC backstop (L-22): a consumer that obtains this iterator and drops it
+    // mid-iteration WITHOUT calling .return() parks this generator at `yield`
+    // forever — the native RootTask and the callback's closure into this
+    // frame would leak. The token below is captured only by this frame, so
+    // it becomes garbage exactly when the abandoned frame does; the registry
+    // then disposes the task. Explicit paths unregister first, so their
+    // disposal stays deterministic and the backstop never fires twice.
+    const gcToken = {}
+    abandonedStreamCleanup.register(gcToken, dispose, gcToken)
     try {
       while (true) {
         if (signal?.aborted) break
@@ -384,12 +469,22 @@ export class FrostfastProject {
         yield map(event.payload)
       }
     } finally {
+      abandonedStreamCleanup.unregister(gcToken)
       closed = true
       waiting = undefined
-      this.#binding.rootTaskDispose(task)
+      dispose()
     }
   }
 }
+
+/**
+ * Last-resort cleanup for ABANDONED stream iterators (L-22). The callback
+ * runs only after the parked generator frame is collected; explicit
+ * consumption paths unregister before disposing, so this never races them.
+ */
+const abandonedStreamCleanup = new FinalizationRegistry<() => void>((dispose) =>
+  dispose()
+)
 
 const STREAM_ABORTED: unique symbol = Symbol('frostfast.stream-aborted')
 type StreamEvent = { error: Error | null; payload: unknown }

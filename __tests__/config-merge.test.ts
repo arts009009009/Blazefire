@@ -21,6 +21,31 @@ describe('mergeConfigs', () => {
     expect(merged.poweredByHeader).toBe(false)
   })
 
+  it('does not let a __proto__ glob corrupt the merged turbopack rules', () => {
+    const evilRules: Record<string, unknown> = {}
+    Object.defineProperty(evilRules, '__proto__', {
+      value: [{ loader: '/tmp/evil-loader.js' }],
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+
+    const merged = mergeConfigs(
+      { turbopack: { rules: { '**/*.ts': [{ loader: '/tmp/a.js' }] } } } as unknown as NextConfigLike,
+      { turbopack: { rules: evilRules } } as unknown as NextConfigLike
+    )
+
+    const rules = merged.turbopack!.rules as Record<string, unknown>
+    // Plain assignment would have swapped the rules object's prototype for
+    // the loader array instead of adding a glob.
+    expect(Object.getPrototypeOf(rules)).toBe(Object.prototype)
+    expect(Object.prototype.hasOwnProperty.call(rules, '__proto__')).toBe(true)
+    expect(rules.__proto__).toEqual([{ loader: '/tmp/evil-loader.js' }])
+    expect(({} as Record<string, unknown>).loader).toBeUndefined()
+    // The real glob is untouched.
+    expect(rules['**/*.ts']).toEqual([{ loader: '/tmp/a.js' }])
+  })
+
   it('concatenates headers instead of replacing them', () => {
     const merged = mergeConfigs(
       {
