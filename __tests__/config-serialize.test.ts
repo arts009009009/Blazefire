@@ -55,6 +55,31 @@ describe('serializeProjectConfig', () => {
     expect(parsed.distDir).toBe('.next/cache')
   })
 
+  it('carries a literal __proto__ key as data (no prototype swap, no silent drop)', () => {
+    const nextConfig: Record<string, unknown> = { normal: 1 }
+    Object.defineProperty(nextConfig, '__proto__', {
+      value: { marker: 'keep-me' },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+    const mapValue = new Map<unknown, unknown>([['__proto__', 'map-marker']])
+
+    const snapshot = serializeProjectConfig(baseConfig({ nextConfig: { ...nextConfig, mapValue } }))
+    const parsed = JSON.parse(snapshot.json) as {
+      nextConfig: Record<string, unknown>
+    }
+
+    // The key survives as an OWN key instead of invoking the Object.prototype
+    // `__proto__` setter (which would drop it from the wire entirely).
+    expect(Object.prototype.hasOwnProperty.call(parsed.nextConfig, '__proto__')).toBe(true)
+    expect(parsed.nextConfig.__proto__).toEqual({ marker: 'keep-me' })
+    expect(parsed.nextConfig.mapValue).toEqual({ '__proto__': 'map-marker' })
+    // And nothing leaked onto a real prototype.
+    expect(Object.getPrototypeOf(parsed.nextConfig)).toBe(Object.prototype)
+    expect(({} as Record<string, unknown>).marker).toBeUndefined()
+  })
+
   it('rustifies env into flat name/value tuples', () => {
     expect(rustifyEnv({ A: '1', B: undefined })).toEqual([
       { name: 'A', value: '1' },
