@@ -99,11 +99,12 @@ function isCiEnv(): boolean {
 }
 
 function canPrompt(): boolean {
+  const skip = process.env[SKIP_ENV]
   return (
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true &&
     !isCiEnv() &&
-    process.env[SKIP_ENV] !== '1'
+    !(skip === '1' || skip?.toLowerCase() === 'true' || skip?.toLowerCase() === 'yes')
   )
 }
 

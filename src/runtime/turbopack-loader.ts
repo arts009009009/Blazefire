@@ -37,7 +37,9 @@ export function runtimeEntryPath(): string {
 export function blazefireLoader(
   this: LoaderContextLike,
   source: string,
-  map?: string
+  // webpack/turbopack hand the input map as an OBJECT (loader API) or a
+  // STRING depending on the stage; both shapes reach us in practice.
+  map?: string | object
 ): string | void {
   if (source.includes(INJECT_MARKER)) return source
 

@@ -338,14 +338,33 @@ export class FrostfastProject {
       (callback) =>
         this.#binding.projectUpdateInfoSubscribe(this.handle, aggregationMs, callback),
       (payload) => {
-        if (payload === null || payload === undefined) {
+        // H-09 invariant: the defensive strip runs on EVERY payload before a
+        // JS consumer sees it — this stream used to pass `message.value`
+        // (the issue-bearing half: errors/warnings ride along here) through
+        // raw. Strip the wrapper exactly like entrypointEvents does; the
+        // null/undefined passthrough means the empty-payload guard below
+        // still fires after stripping.
+        const stripped = stripDiscardedIssues(
+          payload as NapiUpdateMessage,
+          this.issuePolicy
+        )
+        if (stripped === null || stripped === undefined) {
           throw new Error('Frostfast emitted an empty update-info message')
         }
-        const message = payload as NapiUpdateMessage
+        const message = stripped
         if (message.updateType !== 'start' && message.updateType !== 'end') {
           throw new Error(`Frostfast emitted an unknown update type: ${message.updateType}`)
         }
-        return { type: message.updateType, value: message.value }
+        // The mapping only forwards `type` and `value`, so a wrapper-only
+        // strip would be unobservable here — strip `value` too, since it is
+        // the field that actually carries issues to consumers.
+        return {
+          type: message.updateType,
+          value: stripDiscardedIssues(
+            message.value as IssueBearingPayload | undefined,
+            this.issuePolicy
+          ),
+        }
       },
       signal
     )
