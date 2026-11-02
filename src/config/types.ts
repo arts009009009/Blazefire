@@ -50,7 +50,7 @@ export type TurbopackRules = Record<string, TurbopackRule[]>
 
 export interface TurbopackConfig {
   root?: string
-  rules?: TurbopackRules
+  rules?: Record<string, unknown>
   resolveAlias?: Record<string, string | string[]>
   resolveExtensions?: string[]
   [key: string]: unknown
