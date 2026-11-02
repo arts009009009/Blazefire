@@ -60,9 +60,11 @@ export type TurbopackRules = Record<string, TurbopackRuleCollection>
 export interface TurbopackConfig {
   root?: string
   rules?: TurbopackRules
-  resolveAlias?: Record<string, string | string[]>
+  resolveAlias?: Record<
+    string,
+    false | string | string[] | Record<string, false | string | string[]>
+  >
   resolveExtensions?: string[]
-  [key: string]: unknown
 }
 
 /**
@@ -74,7 +76,6 @@ export interface NextConfigLike {
   headers?: ListProvider<HeaderRule>
   redirects?: ListProvider<RedirectRule>
   turbopack?: TurbopackConfig
-  [key: string]: unknown
 }
 
 export class BlazefireConfigError extends Error {
