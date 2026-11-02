@@ -126,6 +126,28 @@ describe('mergeConfigs', () => {
     ])
   })
 
+  it('preserves a single host turbopack rule config when appending loaders', () => {
+    const merged = mergeConfigs(
+      {
+        turbopack: {
+          rules: {
+            '**/next*.js': { loaders: ['/host-loader.js'], as: '*.js' },
+          },
+        },
+      },
+      {
+        turbopack: {
+          rules: { '**/next*.js': [{ loader: '/blazefire-loader.js' }] },
+        },
+      }
+    )
+
+    expect(merged.turbopack?.rules?.['**/next*.js']).toEqual([
+      { loaders: ['/host-loader.js'], as: '*.js' },
+      { loader: '/blazefire-loader.js' },
+    ])
+  })
+
   it('wraps when the blazefire half replaces a scalar with the same value', () => {
     const merged = mergeConfigs({ poweredByHeader: false } as NextConfigLike, {
       poweredByHeader: false,

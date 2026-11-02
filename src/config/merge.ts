@@ -19,7 +19,7 @@ import {
   type ListProvider,
   type NextConfigLike,
   type HeaderRule,
-  type TurbopackRule,
+  type TurbopackRules,
 } from './types.js'
 
 /**
@@ -65,7 +65,7 @@ export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextCo
   // Shallow-merge so `turbopack.root` (etc.) survives; only `rules` needs a
   // deeper merge because both sides may define globs.
   if (base.turbopack || ours.turbopack) {
-    const rules: Record<string, unknown> = { ...(base.turbopack?.rules || {}) }
+    const rules: TurbopackRules = { ...(base.turbopack?.rules || {}) }
     for (const [glob, oursRules] of Object.entries(ours.turbopack?.rules || {})) {
       // defineProperty, not `=`: a glob literally named `__proto__` would
       // otherwise hit Object.prototype's setter and swap the object's
@@ -83,7 +83,7 @@ export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextCo
         : oursRules === undefined
           ? []
           : [oursRules]
-      defineOwn(rules, glob, [...existingRules, ...addedRules])
+      defineOwn<TurbopackRules[string]>(rules, glob, [...existingRules, ...addedRules])
     }
 
     out.turbopack = {
