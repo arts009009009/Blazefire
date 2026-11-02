@@ -63,7 +63,11 @@ describe('mandate 1 — no legacy bundler bloat', () => {
   })
 
   it('has no pages-router surface', () => {
-    const offenders = sourceFiles.filter((f) => /getServerSideProps|\/pages\//.test(f))
+    const offenders = sourceFiles.filter(
+      (f) =>
+        /getServerSideProps|getStaticProps/.test(readFileSync(f, 'utf8')) ||
+        /\/pages\//.test(f)
+    )
     expect(offenders.map(relative)).toEqual([])
   })
 })
@@ -104,6 +108,12 @@ describe('mandate 3 — identity pipelines are intact', () => {
     for (const module of ['semver', 'state', 'feed', 'pm', 'cache-purge', 'updater']) {
       expect(existsSync(join(SRC, 'update-check', `${module}.ts`))).toBe(true)
     }
+  })
+
+  it('keeps version.ts in sync with package.json (L-31)', () => {
+    const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
+    const versionTs = readFileSync(join(SRC, 'version.ts'), 'utf8')
+    expect(versionTs).toContain(`export const BLAZEFIRE_VERSION = '${pkg.version}'`)
   })
 
   it('keeps the Frostfast headers in the plugin output', async () => {

@@ -11,7 +11,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { PackageManager } from './pm.js'
-import { quoteForCmd } from './pm.js'
 import { spawnSync } from 'node:child_process'
 
 function removePath(target: string): boolean {
@@ -150,7 +149,7 @@ function purgeBun(projectRoot: string): string[] {
 // That keeps a FAILED update non-destructive (the working install survives).
 
 function purgeYarnClassicCache(cacheDir: string): string[] {
-  return globRemove(cacheDir, (entry) => /^blazefire/i.test(entry))
+  return globRemove(cacheDir, (entry) => /^(blazefire|npm-blazefire-|@blazefire)/i.test(entry))
 }
 
 function purgeYarnBerryCache(cacheDir: string): string[] {
@@ -175,7 +174,44 @@ function pnpmStoreDir(projectRoot: string): string | null {
 
 function purgePnpmStore(projectRoot: string): string[] {
   const store = pnpmStoreDir(projectRoot)
-  return store ? globRemove(store, (entry) => /blazefire/i.test(entry)) : []
+  if (!store) return []
+  
+  // pnpm store has a specific structure: <store>/<version>/<hash>/package
+  // We need to recursively scan for blazefire packages
+  const removed: string[] = []
+  try {
+    const walk = (dir: string): void => {
+      let entries: string[]
+      try {
+        entries = fs.readdirSync(dir)
+      } catch {
+        return
+      }
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry)
+        const stat = fs.statSync(fullPath)
+        if (stat.isDirectory()) {
+          walk(fullPath)
+        } else if (entry === 'package.json') {
+          // Check if this is a blazefire package
+          try {
+            const pkg = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as { name?: string }
+            if (pkg.name && /^blazefire/i.test(pkg.name)) {
+              const pkgDir = path.dirname(fullPath)
+              if (removePath(pkgDir)) removed.push(pkgDir)
+            }
+          } catch {
+            // Ignore invalid package.json
+          }
+        }
+      }
+    }
+    walk(store)
+  } catch {
+    // Fall back to simple glob if walk fails
+    return globRemove(store, (entry) => /blazefire/i.test(entry))
+  }
+  return removed
 }
 
 function purgeBunCache(): string[] {
@@ -256,4 +292,3 @@ function yarnCacheDir(projectRoot: string): string {
   return path.join(projectRoot, '.yarn', 'cache')
 }
 
-export { quoteForCmd }

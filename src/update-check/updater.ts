@@ -6,7 +6,7 @@
  *   2. never block (the dev-time check is fire-and-forget)
  *   3. never nag (TTY-only, non-CI, one prompt per 24h window)
  */
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { checkForUpdate } from './feed.js'
 import { isValidVersion } from './semver.js'
 import { purgeCachedInstall } from './cache-purge.js'
@@ -66,19 +66,23 @@ export async function runUpdate(options: RunUpdateOptions = {}): Promise<number>
     purgeCachedInstall(manager, projectRoot, { cachesOnly: true })
 
     const { command, args } = updateCommand(manager, latest)
-    const result = spawnSync(command, args, {
+    const child = spawn(command, args, {
       cwd: projectRoot,
       stdio: 'inherit',
       shell: process.platform === 'win32',
     })
 
-    const code = result.status ?? 1
+    // Use a promise wrapper so we don't block the event loop
+    const code = await new Promise<number>((resolve) => {
+      child.on('close', (exitCode) => resolve(exitCode ?? 1))
+      child.on('error', () => resolve(1))
+    })
+
     if (code === 0) {
       writeState({ lastCheck: Date.now(), latestVersion: latest })
       log('updated — restart your dev server to pick it up')
     } else {
-      const detail = result.error ? `: ${result.error.message}` : ''
-      log(`update failed (exit ${code})${detail}`)
+      log(`update failed (exit ${code})`)
     }
     return code
   } catch (error) {
@@ -99,11 +103,12 @@ function isCiEnv(): boolean {
 }
 
 function canPrompt(): boolean {
+  const skip = process.env[SKIP_ENV]
   return (
     process.stdin.isTTY === true &&
     process.stdout.isTTY === true &&
     !isCiEnv() &&
-    process.env[SKIP_ENV] !== '1'
+    !(skip === '1' || skip?.toLowerCase() === 'true' || skip?.toLowerCase() === 'yes')
   )
 }
 
@@ -121,17 +126,28 @@ function promptYesNo(question: string): Promise<boolean> {
       cleanup()
       resolve(false)
     }
+    const onError = (): void => {
+      cleanup()
+      resolve(false)
+    }
     const cleanup = (): void => {
       process.stdin.off('data', onData)
       process.stdin.off('end', onEnd)
+      process.stdin.off('error', onError)
       process.stdin.setRawMode?.(false)
       process.stdin.pause()
     }
     process.stdin.on('data', onData)
     process.stdin.on('end', onEnd)
+    process.stdin.on('error', onError)
     process.stdin.setRawMode?.(true)
     process.stdin.resume()
     ask()
+    // Add timeout to prevent hanging forever
+    setTimeout(() => {
+      cleanup()
+      resolve(false)
+    }, 10000)
   })
 }
 

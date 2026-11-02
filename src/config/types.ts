@@ -46,14 +46,25 @@ export interface TurbopackRule {
   options?: Record<string, unknown>
 }
 
-export type TurbopackRules = Record<string, TurbopackRule[]>
+export interface TurbopackRuleConfig {
+  loaders?: Array<string | TurbopackRule>
+  as?: string
+  condition?: unknown
+  type?: string
+}
+
+export type TurbopackRuleEntry = string | TurbopackRule | TurbopackRuleConfig
+export type TurbopackRuleCollection = TurbopackRuleConfig | TurbopackRuleEntry[]
+export type TurbopackRules = Record<string, TurbopackRuleCollection>
 
 export interface TurbopackConfig {
   root?: string
   rules?: TurbopackRules
-  resolveAlias?: Record<string, string | string[]>
+  resolveAlias?: Record<
+    string,
+    false | string | string[] | Record<string, false | string | string[]>
+  >
   resolveExtensions?: string[]
-  [key: string]: unknown
 }
 
 /**
@@ -65,7 +76,6 @@ export interface NextConfigLike {
   headers?: ListProvider<HeaderRule>
   redirects?: ListProvider<RedirectRule>
   turbopack?: TurbopackConfig
-  [key: string]: unknown
 }
 
 export class BlazefireConfigError extends Error {

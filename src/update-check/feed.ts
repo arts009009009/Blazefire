@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PACKAGE_ROOT } from '../package-root.js'
 import { compareVersions, isValidVersion } from './semver.js'
-import { readState, writeState } from './state.js'
+import { CHECK_INTERVAL_MS, readState, writeState } from './state.js'
 
 const REQUEST_TIMEOUT_MS = 4000
 
@@ -96,7 +96,16 @@ export async function checkForUpdate(): Promise<CheckResult> {
   if (!recentlyCheckedWithLatest()) {
     const latest = await fetchLatestVersion()
     if (!latest) return { current, latest: null, updateAvailable: false }
+    // Use the fetched value DIRECTLY: writeState is best-effort (it swallows
+    // every error — unwritable state files are common in shared /tmp), and a
+    // failed write must only cost an extra fetch later, never throw away a
+    // successful result or report a stale version.
     writeState({ lastCheck: Date.now(), latestVersion: latest })
+    return {
+      current,
+      latest,
+      updateAvailable: compareVersions(current, latest) < 0,
+    }
   }
 
   const { latestVersion } = readState()
@@ -117,6 +126,6 @@ function recentlyCheckedWithLatest(): boolean {
   // A FUTURE lastCheck (clock set backward after a check) must not freeze
   // updates until wall-clock catches up — treat it as a cold window.
   const age = Date.now() - state.lastCheck
-  if (age < 0 || age >= 24 * 60 * 60 * 1000) return false
+  if (age < 0 || age >= CHECK_INTERVAL_MS) return false
   return typeof state.latestVersion === 'string' && isValidVersion(state.latestVersion)
 }

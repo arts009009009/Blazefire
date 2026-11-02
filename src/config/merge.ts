@@ -13,26 +13,37 @@
  *  - everything else (rewrites, images, experimental…): untouched.
  */
 
+import { defineOwn } from './serialize.js'
 import {
   BlazefireConfigError,
   type ListProvider,
   type NextConfigLike,
   type HeaderRule,
-  type TurbopackRule,
+  type TurbopackRules,
 } from './types.js'
 
-export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextConfigLike {
-  if (!base || Object.keys(base).length === 0) return ours
-
-  // Only a REAL webpack hook is fatal. Testing the value (not key presence)
-  // means `webpack: undefined` — the common conditional idiom — and an
-  // inherited `webpack` property no longer refuse to build.
-  if (typeof (base as { webpack?: unknown }).webpack === 'function') {
+/**
+ * Refuse a real `webpack()` hook. Reads through the prototype chain (property
+ * access, not Object.keys) so a class-based config cannot evade it, and runs
+ * BEFORE any empty-object shortcut — `webpack: undefined` (the conditional
+ * idiom) and inherited hooks behave exactly as the H-01 contract requires.
+ */
+export function assertNoWebpack(config: unknown): void {
+  if (config && typeof (config as { webpack?: unknown }).webpack === 'function') {
     throw new BlazefireConfigError(
       'Blazefire v2 is Turbopack-only: the `webpack()` config hook is not supported. ' +
         'Remove it from your config (or migrate its transform to `turbopack.rules`).'
     )
   }
+}
+
+export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextConfigLike {
+  // The webpack check runs BEFORE the empty-base shortcut: a class-based
+  // config can carry `webpack` on its prototype with zero own keys, and
+  // returning early would let the hard error (spec H-01) slip past.
+  assertNoWebpack(base)
+
+  if (!base || Object.keys(base).length === 0) return ours
 
   const out: NextConfigLike = { ...base, ...ours }
 
@@ -54,15 +65,31 @@ export function mergeConfigs(base: NextConfigLike, ours: NextConfigLike): NextCo
   // Shallow-merge so `turbopack.root` (etc.) survives; only `rules` needs a
   // deeper merge because both sides may define globs.
   if (base.turbopack || ours.turbopack) {
-    const rules = { ...(base.turbopack?.rules || {}) }
+    const rules: TurbopackRules = { ...(base.turbopack?.rules || {}) }
     for (const [glob, oursRules] of Object.entries(ours.turbopack?.rules || {})) {
-      rules[glob] = [...(rules[glob] || []), ...oursRules]
+      // defineProperty, not `=`: a glob literally named `__proto__` would
+      // otherwise hit Object.prototype's setter and swap the object's
+      // prototype instead of adding a rule.
+      const existing = Object.prototype.hasOwnProperty.call(rules, glob)
+        ? rules[glob]
+        : undefined
+      const existingRules = Array.isArray(existing)
+        ? existing
+        : existing === undefined
+          ? []
+          : [existing]
+      const addedRules = Array.isArray(oursRules)
+        ? oursRules
+        : oursRules === undefined
+          ? []
+          : [oursRules]
+      defineOwn<TurbopackRules[string]>(rules, glob, [...existingRules, ...addedRules])
     }
 
     out.turbopack = {
       ...(base.turbopack || {}),
       ...(ours.turbopack || {}),
-      rules: rules as Record<string, TurbopackRule[]>,
+      rules,
     }
   }
 

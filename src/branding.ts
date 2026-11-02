@@ -154,18 +154,28 @@ html { color-scheme: dark; }
 }
 
 /**
+ * SVG/React `<stop>` offset for index `i` of a gradient with `count` stops.
+ *
+ * A single stop has no neighbour to interpolate against; without the guard
+ * `i / (count - 1)` yields Infinity (React) or NaN (string) — the SVG path
+ * always guarded this, the React logo component did not (L-30). Shared here
+ * so both surfaces compute offsets from the SAME rule.
+ */
+export function gradientStopOffset(i: number, count: number): number {
+  const span = count - 1
+  return span > 0 ? i / span : 0
+}
+
+/**
  * Self-contained SVG flame — the fallback mark when the PNG asset is absent.
  * The gradient stays in sync with `logo.gradient` by construction.
  */
 export function flameDataUri(branding: Branding = BLAZEFIRE_BRANDING): string {
   const g = branding.logo.gradient
-  // A single stop has no second stop to interpolate against; every stop gets
-  // offset 0 rather than emitting offset="NaN".
-  const span = g.length - 1
   const stops = g
     .map(
       (colour, i) =>
-        `<stop offset="${(span > 0 ? i / span : 0).toFixed(3)}" stop-color="${colour}"/>`
+        `<stop offset="${gradientStopOffset(i, g.length).toFixed(3)}" stop-color="${colour}"/>`
     )
     .join('')
 
